@@ -1,0 +1,273 @@
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
+import type { Farmer, UsageEntry } from '@/types';
+import { format } from 'date-fns';
+import { Plus, Trash2, Edit2, X, Check, Droplets } from 'lucide-react';
+
+const getMonth = (date: string) => format(new Date(date), 'MMMM yyyy');
+
+const UsagePage: React.FC = () => {
+  const { user } = useAuth();
+  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [entries, setEntries] = useState<UsageEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editEntry, setEditEntry] = useState<UsageEntry | null>(null);
+  const [filterFarmer, setFilterFarmer] = useState('');
+  const [toast, setToast] = useState('');
+
+  const [form, setForm] = useState({
+    farmer_id: '',
+    date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+    hours: '',
+    minutes: '',
+    rate_per_hour: '100',
+  });
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+  const loadData = async () => {
+    setLoading(true);
+    const { data: f } = await supabase.from('farmers').select('*').eq('is_deleted', false).order('name');
+    const { data: e } = await supabase.from('usage_entries').select('*').order('date', { ascending: false });
+    setFarmers(f || []);
+    setEntries(e || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const calcAmount = (hours: number, mins: number, rate: number) => {
+    return parseFloat(((hours + mins / 60) * rate).toFixed(2));
+  };
+
+  const openAdd = () => {
+    setEditEntry(null);
+    setForm({ farmer_id: '', date: format(new Date(), "yyyy-MM-dd'T'HH:mm"), hours: '', minutes: '', rate_per_hour: '100' });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const openEdit = (e: UsageEntry) => {
+    setEditEntry(e);
+    setForm({
+      farmer_id: e.farmer_id,
+      date: format(new Date(e.date), "yyyy-MM-dd'T'HH:mm"),
+      hours: e.hours.toString(),
+      minutes: e.minutes.toString(),
+      rate_per_hour: e.rate_per_hour.toString(),
+    });
+    setFormError('');
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.farmer_id) { setFormError('Kisan select karo'); return; }
+    const h = parseInt(form.hours || '0');
+    const m = parseInt(form.minutes || '0');
+    const rate = parseFloat(form.rate_per_hour || '100');
+    if (h === 0 && m === 0) { setFormError('Hours ya minutes bharo'); return; }
+    if (m > 59) { setFormError('Minutes 0-59 ke beech hone chahiye'); return; }
+    if (rate <= 0) { setFormError('Rate valid hona chahiye'); return; }
+
+    const total_minutes = h * 60 + m;
+    const amount = calcAmount(h, m, rate);
+    const dateObj = new Date(form.date);
+    const month = getMonth(form.date);
+
+    setSaving(true);
+    setFormError('');
+
+    const payload = {
+      farmer_id: form.farmer_id,
+      date: dateObj.toISOString(),
+      hours: h,
+      minutes: m,
+      total_minutes,
+      amount,
+      rate_per_hour: rate,
+      month,
+      created_by: user?.id,
+      created_by_email: user?.email,
+    };
+
+    if (editEntry) {
+      const { error } = await supabase.from('usage_entries').update(payload).eq('id', editEntry.id);
+      if (error) { setFormError('Update nahi hua'); setSaving(false); return; }
+      showToast('Entry update ho gayi ✓');
+    } else {
+      const { error } = await supabase.from('usage_entries').insert(payload);
+      if (error) { setFormError('Entry save nahi hui'); setSaving(false); return; }
+      showToast('Entry save ho gayi ✓');
+    }
+
+    setSaving(false);
+    setShowForm(false);
+    loadData();
+  };
+
+  const handleDelete = async (e: UsageEntry) => {
+    if (!confirm('Yeh entry delete karna chahte ho?')) return;
+    await supabase.from('usage_entries').delete().eq('id', e.id);
+    showToast('Entry delete ho gayi');
+    loadData();
+  };
+
+  const farmerMap = Object.fromEntries(farmers.map(f => [f.id, f.name]));
+
+  const filtered = entries.filter(e => {
+    if (filterFarmer && e.farmer_id !== filterFarmer) return false;
+    return true;
+  });
+
+  const liveAmount = () => {
+    const h = parseInt(form.hours || '0');
+    const m = parseInt(form.minutes || '0');
+    const r = parseFloat(form.rate_per_hour || '100');
+    if ((h > 0 || m > 0) && r > 0) return `₹${calcAmount(h, m, r).toFixed(2)}`;
+    return null;
+  };
+
+  return (
+    <div className="p-4 max-w-2xl mx-auto">
+      {toast && (
+        <div className="fixed top-16 left-4 right-4 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
+          <Check size={16} /> {toast}
+        </div>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-gray-900 text-lg">{editEntry ? 'Entry Edit karo' : 'Pani Entry karo'}</h2>
+              <button onClick={() => setShowForm(false)}><X size={20} className="text-gray-400" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Kisan *</label>
+                <select value={form.farmer_id} onChange={e => setForm(p => ({ ...p, farmer_id: e.target.value }))}
+                  className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  style={{ borderColor: '#e5e2dc' }}>
+                  <option value="">-- Kisan chunein --</option>
+                  {farmers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Date & Time</label>
+                <input type="datetime-local" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))}
+                  className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ borderColor: '#e5e2dc' }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Hours</label>
+                  <input type="number" min="0" value={form.hours} onChange={e => setForm(p => ({ ...p, hours: e.target.value }))}
+                    placeholder="0"
+                    className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ borderColor: '#e5e2dc' }} />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Minutes</label>
+                  <input type="number" min="0" max="59" value={form.minutes} onChange={e => setForm(p => ({ ...p, minutes: e.target.value }))}
+                    placeholder="0"
+                    className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ borderColor: '#e5e2dc' }} />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Rate (₹/hour)</label>
+                <input type="number" min="1" value={form.rate_per_hour} onChange={e => setForm(p => ({ ...p, rate_per_hour: e.target.value }))}
+                  className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                  style={{ borderColor: '#e5e2dc' }} />
+              </div>
+              {liveAmount() && (
+                <div className="bg-blue-50 px-4 py-3 rounded-xl">
+                  <div className="text-sm text-blue-600">Amount: <strong className="text-lg">{liveAmount()}</strong></div>
+                </div>
+              )}
+              {formError && <div className="text-red-500 text-sm">{formError}</div>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowForm(false)}
+                className="flex-1 py-3 rounded-xl border font-medium text-gray-600" style={{ borderColor: '#e5e2dc' }}>
+                Cancel
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 py-3 rounded-xl text-white font-semibold disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+                {saving ? 'Save ho raha...' : 'Save karo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-4 pt-2">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Pani Entries</h1>
+          <p className="text-sm text-gray-500">{filtered.length} entries</p>
+        </div>
+        <button onClick={openAdd}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-medium text-sm"
+          style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+          <Plus size={16} /> Pani Entry karo
+        </button>
+      </div>
+
+      {/* Filter by farmer */}
+      <div className="mb-3">
+        <select value={filterFarmer} onChange={e => setFilterFarmer(e.target.value)}
+          className="w-full px-4 py-3 rounded-xl border text-sm bg-white outline-none"
+          style={{ borderColor: '#e5e2dc' }}>
+          <option value="">Sabhi Kisan</option>
+          {farmers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-10 text-gray-400">Load ho raha hai...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">Koi entry nahi hai</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(e => (
+            <div key={e.id} className="bg-white rounded-2xl p-4 border shadow-sm" style={{ borderColor: '#e5e2dc' }}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-900">{farmerMap[e.farmer_id] || 'Unknown'}</div>
+                  <div className="text-sm text-gray-500 mt-0.5">
+                    {format(new Date(e.date), 'dd MMM yyyy, hh:mm a')}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="flex items-center gap-1 text-sm text-blue-600">
+                      <Droplets size={14} /> {e.hours}h {e.minutes}m
+                    </span>
+                    <span className="text-sm font-bold text-gray-900">₹{Number(e.amount).toLocaleString('en-IN')}</span>
+                    <span className="text-xs text-gray-400">@₹{e.rate_per_hour}/hr</span>
+                  </div>
+                  {e.created_by_email && (
+                    <div className="text-xs text-gray-400 mt-1">Entry by: {e.created_by_email}</div>
+                  )}
+                </div>
+                <div className="flex gap-1 ml-2">
+                  <button onClick={() => openEdit(e)} className="p-2 rounded-lg text-blue-500 hover:bg-blue-50">
+                    <Edit2 size={15} />
+                  </button>
+                  <button onClick={() => handleDelete(e)} className="p-2 rounded-lg text-red-400 hover:bg-red-50">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UsagePage;
