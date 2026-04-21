@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Farmer, UsageEntry } from '@/types';
-import { format } from 'date-fns';
-import { Plus, Trash2, Edit2, X, Check, Droplets } from 'lucide-react';
+import { format, parse } from 'date-fns';
+import { Plus, Trash2, Edit2, X, Check, Droplets, ChevronDown, ChevronUp } from 'lucide-react';
 
 const getMonth = (date: string) => format(new Date(date), 'MMMM yyyy');
 
@@ -14,7 +14,8 @@ const UsagePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editEntry, setEditEntry] = useState<UsageEntry | null>(null);
-  const [filterFarmer, setFilterFarmer] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
   const [toast, setToast] = useState('');
 
   const [form, setForm] = useState({
@@ -35,14 +36,39 @@ const UsagePage: React.FC = () => {
     const { data: e } = await supabase.from('usage_entries').select('*').order('date', { ascending: false });
     setFarmers(f || []);
     setEntries(e || []);
+
+    // Default to current month if it has entries, else latest month
+    const currentMonth = format(new Date(), 'MMMM yyyy');
+    const months = [...new Set((e || []).map((x: UsageEntry) => x.month))];
+    if (months.includes(currentMonth)) setSelectedMonth(currentMonth);
+    else if (months.length > 0) setSelectedMonth(months[0]);
+    else setSelectedMonth(currentMonth);
+
     setLoading(false);
   };
 
   useEffect(() => { loadData(); }, []);
 
-  const calcAmount = (hours: number, mins: number, rate: number) => {
-    return parseFloat(((hours + mins / 60) * rate).toFixed(2));
-  };
+  // All unique months sorted descending
+  const allMonths = [...new Set(entries.map(e => e.month))].sort((a, b) => {
+    const da = parse(a, 'MMMM yyyy', new Date());
+    const db = parse(b, 'MMMM yyyy', new Date());
+    return db.getTime() - da.getTime();
+  });
+
+  // Entries filtered by selected month
+  const monthEntries = selectedMonth
+    ? entries.filter(e => e.month === selectedMonth)
+    : entries;
+
+  // Group by farmer
+  const grouped = farmers.map(f => ({
+    farmer: f,
+    entries: monthEntries.filter(e => e.farmer_id === f.id),
+  })).filter(g => g.entries.length > 0);
+
+  const calcAmount = (hours: number, mins: number, rate: number) =>
+    parseFloat(((hours + mins / 60) * rate).toFixed(2));
 
   const openAdd = () => {
     setEditEntry(null);
@@ -75,7 +101,6 @@ const UsagePage: React.FC = () => {
 
     const total_minutes = h * 60 + m;
     const amount = calcAmount(h, m, rate);
-    const dateObj = new Date(form.date);
     const month = getMonth(form.date);
 
     setSaving(true);
@@ -83,15 +108,9 @@ const UsagePage: React.FC = () => {
 
     const payload = {
       farmer_id: form.farmer_id,
-      date: dateObj.toISOString(),
-      hours: h,
-      minutes: m,
-      total_minutes,
-      amount,
-      rate_per_hour: rate,
-      month,
-      created_by: user?.id,
-      created_by_email: user?.email,
+      date: new Date(form.date).toISOString(),
+      hours: h, minutes: m, total_minutes, amount, rate_per_hour: rate, month,
+      created_by: user?.id, created_by_email: user?.email,
     };
 
     if (editEntry) {
@@ -116,13 +135,6 @@ const UsagePage: React.FC = () => {
     loadData();
   };
 
-  const farmerMap = Object.fromEntries(farmers.map(f => [f.id, f.name]));
-
-  const filtered = entries.filter(e => {
-    if (filterFarmer && e.farmer_id !== filterFarmer) return false;
-    return true;
-  });
-
   const liveAmount = () => {
     const h = parseInt(form.hours || '0');
     const m = parseInt(form.minutes || '0');
@@ -130,6 +142,9 @@ const UsagePage: React.FC = () => {
     if ((h > 0 || m > 0) && r > 0) return `₹${calcAmount(h, m, r).toFixed(2)}`;
     return null;
   };
+
+  const toggleFarmer = (id: string) =>
+    setExpandedFarmer(prev => prev === id ? null : id);
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -139,6 +154,7 @@ const UsagePage: React.FC = () => {
         </div>
       )}
 
+      {/* Add/Edit Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -166,15 +182,13 @@ const UsagePage: React.FC = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Hours</label>
                   <input type="number" min="0" value={form.hours} onChange={e => setForm(p => ({ ...p, hours: e.target.value }))}
-                    placeholder="0"
-                    className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0" className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ borderColor: '#e5e2dc' }} />
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Minutes</label>
                   <input type="number" min="0" max="59" value={form.minutes} onChange={e => setForm(p => ({ ...p, minutes: e.target.value }))}
-                    placeholder="0"
-                    className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0" className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ borderColor: '#e5e2dc' }} />
                 </div>
               </div>
@@ -206,10 +220,11 @@ const UsagePage: React.FC = () => {
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between mb-4 pt-2">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Pani Entries</h1>
-          <p className="text-sm text-gray-500">{filtered.length} entries</p>
+          <p className="text-sm text-gray-500">{monthEntries.length} entries</p>
         </div>
         <button onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-medium text-sm"
@@ -218,52 +233,89 @@ const UsagePage: React.FC = () => {
         </button>
       </div>
 
-      {/* Filter by farmer */}
-      <div className="mb-3">
-        <select value={filterFarmer} onChange={e => setFilterFarmer(e.target.value)}
+      {/* Month Filter */}
+      <div className="mb-4">
+        <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
           className="w-full px-4 py-3 rounded-xl border text-sm bg-white outline-none"
           style={{ borderColor: '#e5e2dc' }}>
-          <option value="">Sabhi Kisan</option>
-          {farmers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          <option value="">Sabhi Months</option>
+          {allMonths.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
       </div>
 
       {loading ? (
         <div className="text-center py-10 text-gray-400">Load ho raha hai...</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">Koi entry nahi hai</div>
+      ) : grouped.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">
+          {selectedMonth ? `${selectedMonth} mein koi entry nahi` : 'Koi entry nahi hai'}
+        </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(e => (
-            <div key={e.id} className="bg-white rounded-2xl p-4 border shadow-sm" style={{ borderColor: '#e5e2dc' }}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-900">{farmerMap[e.farmer_id] || 'Unknown'}</div>
-                  <div className="text-sm text-gray-500 mt-0.5">
-                    {format(new Date(e.date), 'dd MMM yyyy, hh:mm a')}
+        <div className="space-y-3">
+          {grouped.map(({ farmer, entries: fEntries }) => {
+            const totalHours = Math.floor(fEntries.reduce((s, e) => s + e.total_minutes, 0) / 60);
+            const totalMins = fEntries.reduce((s, e) => s + e.total_minutes, 0) % 60;
+            const totalAmt = fEntries.reduce((s, e) => s + Number(e.amount), 0);
+            const isOpen = expandedFarmer === farmer.id;
+
+            return (
+              <div key={farmer.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
+                {/* Farmer Header — click to expand */}
+                <button
+                  onClick={() => toggleFarmer(farmer.id)}
+                  className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                      style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+                      {farmer.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{farmer.name}</div>
+                      <div className="text-xs text-gray-400">{fEntries.length} entries · {totalHours}h {totalMins}m</div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className="flex items-center gap-1 text-sm text-blue-600">
-                      <Droplets size={14} /> {e.hours}h {e.minutes}m
-                    </span>
-                    <span className="text-sm font-bold text-gray-900">₹{Number(e.amount).toLocaleString('en-IN')}</span>
-                    <span className="text-xs text-gray-400">@₹{e.rate_per_hour}/hr</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="font-bold text-gray-900">₹{totalAmt.toLocaleString('en-IN')}</div>
+                    </div>
+                    {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
                   </div>
-                  {e.created_by_email && (
-                    <div className="text-xs text-gray-400 mt-1">Entry by: {e.created_by_email}</div>
-                  )}
-                </div>
-                <div className="flex gap-1 ml-2">
-                  <button onClick={() => openEdit(e)} className="p-2 rounded-lg text-blue-500 hover:bg-blue-50">
-                    <Edit2 size={15} />
-                  </button>
-                  <button onClick={() => handleDelete(e)} className="p-2 rounded-lg text-red-400 hover:bg-red-50">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+                </button>
+
+                {/* Entries List — shown when expanded */}
+                {isOpen && (
+                  <div className="border-t" style={{ borderColor: '#f0ede8' }}>
+                    {fEntries.map((e, idx) => (
+                      <div key={e.id} className={`px-4 py-3 flex items-start justify-between ${idx < fEntries.length - 1 ? 'border-b' : ''}`}
+                        style={{ borderColor: '#f5f5f4' }}>
+                        <div className="flex-1">
+                          <div className="text-sm text-gray-600">{format(new Date(e.date), 'dd MMM yyyy, hh:mm a')}</div>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="flex items-center gap-1 text-sm text-blue-600">
+                              <Droplets size={13} /> {e.hours}h {e.minutes}m
+                            </span>
+                            <span className="text-sm font-bold text-gray-900">₹{Number(e.amount).toLocaleString('en-IN')}</span>
+                            <span className="text-xs text-gray-400">@₹{e.rate_per_hour}/hr</span>
+                          </div>
+                          {e.created_by_email && (
+                            <div className="text-xs text-gray-400 mt-0.5">by: {e.created_by_email}</div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <button onClick={() => openEdit(e)} className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50">
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(e)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
