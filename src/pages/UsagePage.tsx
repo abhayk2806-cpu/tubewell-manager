@@ -32,7 +32,7 @@ const UsagePage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const { data: f } = await supabase.from('farmers').select('*').eq('is_deleted', false).order('name');
+    const { data: f } = await supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name');
     const { data: e } = await supabase.from('usage_entries').select('*').order('date', { ascending: false });
     setFarmers(f || []);
     setEntries(e || []);

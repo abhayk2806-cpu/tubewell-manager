@@ -38,7 +38,7 @@ const PaymentsPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     const [{ data: f }, { data: p }, { data: u }, { data: mc }] = await Promise.all([
-      supabase.from('farmers').select('*').eq('is_deleted', false).order('name'),
+      supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name'),
       supabase.from('payments').select('*').order('date', { ascending: false }),
       supabase.from('usage_entries').select('farmer_id, amount, month'),
       supabase.from('month_closings').select('farmer_id, month'),

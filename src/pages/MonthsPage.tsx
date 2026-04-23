@@ -14,18 +14,33 @@ const MonthsPage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
+
     const [{ data: f }, { data: e }, { data: p }] = await Promise.all([
-      supabase.from('farmers').select('*').eq('is_deleted', false).order('name'),
+      // Only ACTIVE farmers (not deleted, not disabled)
+      supabase.from('farmers')
+        .select('*')
+        .eq('is_deleted', false)
+        .eq('is_disabled', false)
+        .order('name'),
       supabase.from('usage_entries').select('*').order('date', { ascending: false }),
       supabase.from('payments').select('*').order('date', { ascending: false }),
     ]);
-    setFarmers(f || []);
-    setEntries(e || []);
-    setPayments(p || []);
+
+    const activeFarmers = f || [];
+    const activeFarmerIds = new Set(activeFarmers.map((x: Farmer) => x.id));
+
+    // KEY FIX: only include entries and payments from ACTIVE farmers
+    const activeEntries = (e || []).filter((x: UsageEntry) => activeFarmerIds.has(x.farmer_id));
+    const activePayments = (p || []).filter((x: Payment) => activeFarmerIds.has(x.farmer_id));
+
+    setFarmers(activeFarmers);
+    setEntries(activeEntries);
+    setPayments(activePayments);
 
     const current = format(new Date(), 'MMMM yyyy');
-    const months = [...new Set((e || []).map((x: UsageEntry) => x.month))];
+    const months = [...new Set(activeEntries.map((x: UsageEntry) => x.month))];
     setSelectedMonth(months.includes(current) ? current : (months[0] || current));
+
     setLoading(false);
   };
 
@@ -39,8 +54,10 @@ const MonthsPage: React.FC = () => {
 
   const farmerMap = Object.fromEntries(farmers.map(f => [f.id, f.name]));
 
-  // FIXED: Remaining = month usage - payments WHERE for_month = this month
-  // (not payments by date, because a farmer may pay April dues in May)
+  // Correct month data calculation
+  // - Usage: entries where month = selectedMonth AND farmer is active
+  // - Paid: payments where for_month = selectedMonth AND farmer is active
+  // - Remaining: capped at 0 per farmer, then summed
   const getMonthData = (month: string, farmerId?: string) => {
     const monthEntries = entries.filter(e =>
       e.month === month && (!farmerId || e.farmer_id === farmerId)
@@ -48,11 +65,14 @@ const MonthsPage: React.FC = () => {
     const totalMinutes = monthEntries.reduce((s, e) => s + e.total_minutes, 0);
     const totalAmount = monthEntries.reduce((s, e) => s + Number(e.amount), 0);
 
-    // KEY FIX: filter payments by for_month (not payment date)
+    // Use for_month (correct allocation, not payment date)
     const monthPayments = payments.filter(p =>
       p.for_month === month && (!farmerId || p.farmer_id === farmerId)
     );
     const totalPaid = monthPayments.reduce((s, p) => s + Number(p.amount), 0);
+
+    // Remaining capped at 0
+    const remaining = Math.max(0, totalAmount - totalPaid);
 
     return {
       entries: monthEntries,
@@ -62,7 +82,7 @@ const MonthsPage: React.FC = () => {
       totalMins: totalMinutes % 60,
       totalAmount,
       totalPaid,
-      remaining: Math.max(0, totalAmount - totalPaid),
+      remaining,
     };
   };
 
@@ -70,11 +90,14 @@ const MonthsPage: React.FC = () => {
     ? getMonthData(selectedMonth, filterFarmer || undefined)
     : null;
 
-  // Farmer breakdown (only shown when no farmer filter active)
-  const farmerBreakdown = farmers.map(f => ({
-    ...f,
-    ...getMonthData(selectedMonth, f.id),
-  })).filter(f => f.entries.length > 0);
+  // Farmer breakdown (only when "Sabhi Kisan" selected)
+  const farmerBreakdown = farmers
+    .map(f => ({ ...f, ...getMonthData(selectedMonth, f.id) }))
+    .filter(f => f.entries.length > 0);
+
+  const recoveryPct = overallData && overallData.totalAmount > 0
+    ? Math.min(100, Math.round((overallData.totalPaid / overallData.totalAmount) * 100))
+    : 0;
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -91,8 +114,10 @@ const MonthsPage: React.FC = () => {
           className="w-full px-4 py-3 rounded-xl border text-base bg-white outline-none appearance-none"
           style={{ borderColor: '#e5e2dc' }}
         >
-          {allMonths.length === 0 && <option value="">-- Koi data nahi --</option>}
-          {allMonths.map(m => <option key={m} value={m}>{m}</option>)}
+          {allMonths.length === 0
+            ? <option value="">-- Koi data nahi --</option>
+            : allMonths.map(m => <option key={m} value={m}>{m}</option>)
+          }
         </select>
         <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
       </div>
@@ -117,7 +142,7 @@ const MonthsPage: React.FC = () => {
       ) : (
         <div className="space-y-4">
 
-          {/* Summary Cards */}
+          {/* Summary Cards — these are now accurate */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-2xl p-4 border shadow-sm" style={{ borderColor: '#e5e2dc' }}>
               <div className="text-xs text-gray-500 mb-1">Total Hours</div>
@@ -132,7 +157,7 @@ const MonthsPage: React.FC = () => {
               </div>
             </div>
             <div className="bg-white rounded-2xl p-4 border shadow-sm" style={{ borderColor: '#e5e2dc' }}>
-              <div className="text-xs text-gray-500 mb-1">Collected (for this month)</div>
+              <div className="text-xs text-gray-500 mb-1">Collected (is month ke liye)</div>
               <div className="text-xl font-bold text-green-600">
                 ₹{overallData.totalPaid.toLocaleString('en-IN')}
               </div>
@@ -145,32 +170,23 @@ const MonthsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Collection Progress Bar */}
+          {/* Progress Bar */}
           {overallData.totalAmount > 0 && (
             <div className="bg-white rounded-2xl p-4 border shadow-sm" style={{ borderColor: '#e5e2dc' }}>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-600">Collection Progress</span>
-                <span className="font-semibold">
-                  {Math.min(100, Math.round((overallData.totalPaid / overallData.totalAmount) * 100))}%
-                </span>
+                <span className="font-semibold">{recoveryPct}%</span>
               </div>
               <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-green-500 rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, (overallData.totalPaid / overallData.totalAmount) * 100)}%`
-                  }}
+                  style={{ width: `${recoveryPct}%` }}
                 />
               </div>
-              {overallData.totalPaid > overallData.totalAmount && (
-                <div className="text-xs text-blue-500 mt-1">
-                  ₹{(overallData.totalPaid - overallData.totalAmount).toLocaleString('en-IN')} extra paid
-                </div>
-              )}
             </div>
           )}
 
-          {/* Farmer Breakdown (only if no farmer filter) */}
+          {/* Farmer Breakdown (only when no farmer filter) */}
           {!filterFarmer && (
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
               <div className="px-4 py-3 border-b font-semibold text-gray-800" style={{ borderColor: '#e5e2dc' }}>
@@ -240,7 +256,7 @@ const MonthsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Payments for this month */}
+          {/* Payments Section */}
           {overallData.payments.length > 0 && (
             <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
               <div className="px-4 py-3 border-b font-semibold text-gray-800" style={{ borderColor: '#e5e2dc' }}>

@@ -4,6 +4,7 @@ export interface Farmer {
   mobile: string;
   notes: string;
   is_deleted: boolean;
+  is_disabled: boolean;
   created_at: string;
 }
 
@@ -27,7 +28,7 @@ export interface Payment {
   farmer_id: string;
   amount: number;
   date: string;
-  for_month: string;       // which month this payment is for (e.g. "April 2026")
+  for_month: string;
   created_by: string;
   created_by_email: string;
   created_at: string;

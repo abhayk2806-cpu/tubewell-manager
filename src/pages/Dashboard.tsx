@@ -26,7 +26,7 @@ const Dashboard: React.FC = () => {
     setLoading(true);
 
     const [{ data: farmersData }, { data: usageData }, { data: paymentData }] = await Promise.all([
-      supabase.from('farmers').select('*').eq('is_deleted', false).order('name'),
+      supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name'),
       supabase.from('usage_entries').select('farmer_id, amount, month, date'),
       supabase.from('payments').select('farmer_id, amount, date, for_month'),
     ]);
