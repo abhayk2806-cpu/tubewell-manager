@@ -19,18 +19,25 @@ const BackupPage: React.FC = () => {
   const handleExport = async () => {
     setLoading(true);
     try {
-      const [{ data: farmers }, { data: usage }, { data: payments }] = await Promise.all([
+      const [
+        { data: farmers },
+        { data: usage },
+        { data: payments },
+        { data: month_closings },
+      ] = await Promise.all([
         supabase.from('farmers').select('*').order('name'),
         supabase.from('usage_entries').select('*').order('date'),
         supabase.from('payments').select('*').order('date'),
+        supabase.from('month_closings').select('*').order('closed_at'),
       ]);
 
       const backup: BackupData = {
-        version: '1.0',
+        version: '2.0',
         exported_at: new Date().toISOString(),
         farmers: farmers || [],
         usage_entries: usage || [],
         payments: payments || [],
+        month_closings: month_closings || [],
       };
 
       const json = JSON.stringify(backup, null, 2);
@@ -41,7 +48,12 @@ const BackupPage: React.FC = () => {
       a.download = `tubewell-backup-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast(`Backup download ho gaya! ${farmers?.length || 0} farmers, ${usage?.length || 0} entries, ${payments?.length || 0} payments`);
+
+      showToast(
+        `Backup ready! ${farmers?.length || 0} farmers, ` +
+        `${usage?.length || 0} entries, ${payments?.length || 0} payments, ` +
+        `${month_closings?.length || 0} closings`
+      );
     } catch {
       showToast('Backup fail hua. Dobara try karo.', 'error');
     }
@@ -56,9 +68,11 @@ const BackupPage: React.FC = () => {
       try {
         const data = JSON.parse(ev.target?.result as string) as BackupData;
         if (!data.farmers || !data.usage_entries || !data.payments) {
-          showToast('Invalid backup file format', 'error');
+          showToast('Invalid backup file. Sahi file select karo.', 'error');
           return;
         }
+        // month_closings optional (for backward compatibility with v1 backups)
+        if (!data.month_closings) data.month_closings = [];
         setImportPreview(data);
       } catch {
         showToast('File read nahi hua. Valid JSON hona chahiye.', 'error');
@@ -69,16 +83,23 @@ const BackupPage: React.FC = () => {
 
   const handleImport = async () => {
     if (!importPreview) return;
-    if (!confirm(`${importMode === 'replace' ? 'SAARA data delete hokar replace hoga!' : 'Data merge hoga.'} Continue?`)) return;
+    if (!confirm(
+      importMode === 'replace'
+        ? 'SAARA existing data DELETE hokar backup se REPLACE hoga! Yeh undo nahi ho sakta. Continue?'
+        : 'Backup data existing data ke saath MERGE hoga. Continue?'
+    )) return;
 
     setImporting(true);
     try {
       if (importMode === 'replace') {
+        // Delete in reverse FK order
+        await supabase.from('month_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await supabase.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await supabase.from('usage_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         await supabase.from('farmers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
       }
 
+      // Upsert all tables (insert or update by id)
       if (importPreview.farmers.length > 0) {
         await supabase.from('farmers').upsert(importPreview.farmers, { onConflict: 'id' });
       }
@@ -88,10 +109,18 @@ const BackupPage: React.FC = () => {
       if (importPreview.payments.length > 0) {
         await supabase.from('payments').upsert(importPreview.payments, { onConflict: 'id' });
       }
+      if (importPreview.month_closings && importPreview.month_closings.length > 0) {
+        await supabase.from('month_closings').upsert(importPreview.month_closings, { onConflict: 'id' });
+      }
 
-      showToast(`Import successful! ${importPreview.farmers.length} farmers, ${importPreview.usage_entries.length} entries restore ho gaye ✓`);
+      showToast(
+        `Import complete! ` +
+        `${importPreview.farmers.length} farmers, ` +
+        `${importPreview.usage_entries.length} entries, ` +
+        `${importPreview.payments.length} payments restore ho gaye ✓`
+      );
       setImportPreview(null);
-    } catch (err) {
+    } catch {
       showToast('Import fail hua. Dobara try karo.', 'error');
     }
     setImporting(false);
@@ -100,14 +129,16 @@ const BackupPage: React.FC = () => {
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-4">
       {toast && (
-        <div className={`fixed top-16 left-4 right-4 z-50 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 ${toastType === 'error' ? 'bg-red-600' : 'bg-green-600'}`}>
+        <div className={`fixed top-16 left-4 right-4 z-50 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 ${
+          toastType === 'error' ? 'bg-red-600' : 'bg-green-600'
+        }`}>
           <Check size={16} /> {toast}
         </div>
       )}
 
       <div className="pt-2">
         <h1 className="text-xl font-bold text-gray-900">Backup & Restore</h1>
-        <p className="text-sm text-gray-500">Data safe rakhna zaroori hai</p>
+        <p className="text-sm text-gray-500">Data safe rakhna zaroori hai — regularly backup karo</p>
       </div>
 
       {/* Export Section */}
@@ -118,7 +149,7 @@ const BackupPage: React.FC = () => {
           </div>
           <div>
             <h2 className="font-semibold text-gray-900">Backup Data</h2>
-            <p className="text-xs text-gray-500">Saara data JSON mein download karo</p>
+            <p className="text-xs text-gray-500">Saara data JSON file mein download karo</p>
           </div>
         </div>
         <button
@@ -128,10 +159,10 @@ const BackupPage: React.FC = () => {
           style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}
         >
           <Download size={18} />
-          {loading ? 'Backup ho raha hai...' : 'Backup Data Download karo'}
+          {loading ? 'Backup ho raha hai...' : 'Backup Download karo'}
         </button>
         <p className="text-xs text-gray-400 mt-2 text-center">
-          Farmers, pani entries aur payments — sab included hoga
+          Farmers, pani entries, payments aur month closings — sab included
         </p>
       </div>
 
@@ -147,18 +178,22 @@ const BackupPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Import Mode */}
+        {/* Import Mode Toggle */}
         <div className="flex gap-2">
           <button
             onClick={() => setImportMode('merge')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${importMode === 'merge' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+              importMode === 'merge' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'
+            }`}
             style={importMode !== 'merge' ? { borderColor: '#e5e2dc' } : {}}
           >
             Merge karo
           </button>
           <button
             onClick={() => setImportMode('replace')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${importMode === 'replace' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600'}`}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-all ${
+              importMode === 'replace' ? 'bg-red-600 text-white border-red-600' : 'bg-white text-gray-600'
+            }`}
             style={importMode !== 'replace' ? { borderColor: '#e5e2dc' } : {}}
           >
             Replace karo
@@ -169,7 +204,8 @@ const BackupPage: React.FC = () => {
           <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
             <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
             <p className="text-xs text-red-600">
-              <strong>Warning:</strong> Replace mode mein saara existing data delete ho jayega aur backup se replace hoga. Yeh undo nahi ho sakta.
+              <strong>Warning:</strong> Replace mode mein saara existing data delete ho jayega
+              aur backup se replace hoga. Yeh undo nahi ho sakta.
             </p>
           </div>
         )}
@@ -177,23 +213,30 @@ const BackupPage: React.FC = () => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Backup JSON File</label>
           <input
-            type="file"
-            accept=".json"
+            type="file" accept=".json"
             onChange={handleFileChange}
             className="w-full text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 cursor-pointer"
           />
         </div>
 
-        {/* Preview */}
+        {/* Backup Preview */}
         {importPreview && (
           <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1">
             <div className="font-medium text-gray-700 text-sm mb-2 flex items-center gap-2">
               <Database size={14} /> Backup Preview
             </div>
-            <div className="text-xs text-gray-600">📅 Exported: {new Date(importPreview.exported_at).toLocaleString('en-IN')}</div>
+            <div className="text-xs text-gray-600">
+              📅 Exported: {new Date(importPreview.exported_at).toLocaleString('en-IN')}
+            </div>
+            <div className="text-xs text-gray-600">
+              Version: {importPreview.version || 'v1'}
+            </div>
             <div className="text-xs text-gray-600">👨‍🌾 Farmers: {importPreview.farmers.length}</div>
             <div className="text-xs text-gray-600">💧 Pani Entries: {importPreview.usage_entries.length}</div>
             <div className="text-xs text-gray-600">💰 Payments: {importPreview.payments.length}</div>
+            <div className="text-xs text-gray-600">
+              ✅ Month Closings: {importPreview.month_closings?.length || 0}
+            </div>
           </div>
         )}
 
@@ -201,10 +244,16 @@ const BackupPage: React.FC = () => {
           onClick={handleImport}
           disabled={!importPreview || importing}
           className="w-full py-3 rounded-xl text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-40 transition-all active:scale-95"
-          style={{ background: importMode === 'replace' ? 'linear-gradient(135deg, #dc2626, #b91c1c)' : 'linear-gradient(135deg, #16a34a, #15803d)' }}
+          style={{
+            background: importMode === 'replace'
+              ? 'linear-gradient(135deg, #dc2626, #b91c1c)'
+              : 'linear-gradient(135deg, #16a34a, #15803d)'
+          }}
         >
           <Upload size={18} />
-          {importing ? 'Import ho raha hai...' : `${importMode === 'replace' ? 'Replace karke' : 'Merge karke'} Import karo`}
+          {importing
+            ? 'Import ho raha hai...'
+            : `${importMode === 'replace' ? 'Replace karke' : 'Merge karke'} Import karo`}
         </button>
       </div>
     </div>

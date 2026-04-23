@@ -27,6 +27,7 @@ export interface Payment {
   farmer_id: string;
   amount: number;
   date: string;
+  for_month: string;       // which month this payment is for (e.g. "April 2026")
   created_by: string;
   created_by_email: string;
   created_at: string;
@@ -48,10 +49,20 @@ export interface MonthSummary {
   entries: UsageEntry[];
 }
 
+export interface MonthClosing {
+  id: string;
+  farmer_id: string;
+  month: string;
+  closed_at: string;
+  closed_by: string;
+  closed_by_email: string;
+}
+
 export interface BackupData {
   version: string;
   exported_at: string;
   farmers: Farmer[];
   usage_entries: UsageEntry[];
   payments: Payment[];
+  month_closings: MonthClosing[];
 }
