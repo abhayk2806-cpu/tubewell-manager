@@ -57,7 +57,8 @@ const MonthsPage: React.FC = () => {
   // Correct month data calculation
   // - Usage: entries where month = selectedMonth AND farmer is active
   // - Paid: payments where for_month = selectedMonth AND farmer is active
-  // - Remaining: capped at 0 per farmer, then summed
+  // - Remaining: PER-FARMER max(0,...) then summed — prevents overpayment by one farmer
+  //   from masking underpayment by another
   const getMonthData = (month: string, farmerId?: string) => {
     const monthEntries = entries.filter(e =>
       e.month === month && (!farmerId || e.farmer_id === farmerId)
@@ -65,14 +66,25 @@ const MonthsPage: React.FC = () => {
     const totalMinutes = monthEntries.reduce((s, e) => s + e.total_minutes, 0);
     const totalAmount = monthEntries.reduce((s, e) => s + Number(e.amount), 0);
 
-    // Use for_month (correct allocation, not payment date)
     const monthPayments = payments.filter(p =>
       p.for_month === month && (!farmerId || p.farmer_id === farmerId)
     );
     const totalPaid = monthPayments.reduce((s, p) => s + Number(p.amount), 0);
 
-    // Remaining capped at 0
-    const remaining = Math.max(0, totalAmount - totalPaid);
+    // Per-farmer remaining (correct when viewing a single farmer)
+    let remaining: number;
+    if (farmerId) {
+      // Single farmer view: direct max(0,...)
+      remaining = Math.max(0, totalAmount - totalPaid);
+    } else {
+      // All-farmers view: sum per-farmer dues to avoid cross-farmer offset
+      const uniqueFarmerIds = [...new Set(monthEntries.map(e => e.farmer_id))];
+      remaining = uniqueFarmerIds.reduce((sum, fid) => {
+        const fUsage = monthEntries.filter(e => e.farmer_id === fid).reduce((s, e) => s + Number(e.amount), 0);
+        const fPaid = monthPayments.filter(p => p.farmer_id === fid).reduce((s, p) => s + Number(p.amount), 0);
+        return sum + Math.max(0, fUsage - fPaid);
+      }, 0);
+    }
 
     return {
       entries: monthEntries,

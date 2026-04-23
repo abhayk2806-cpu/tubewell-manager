@@ -34,8 +34,11 @@ const UsagePage: React.FC = () => {
     setLoading(true);
     const { data: f } = await supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name');
     const { data: e } = await supabase.from('usage_entries').select('*').order('date', { ascending: false });
+    const activeFarmerIds = new Set((f || []).map((x) => x.id));
+    // Only show entries from active (non-deleted, non-disabled) farmers
+    const activeEntries = (e || []).filter((x) => activeFarmerIds.has(x.farmer_id));
     setFarmers(f || []);
-    setEntries(e || []);
+    setEntries(activeEntries);
 
     // Default to current month if it has entries, else latest month
     const currentMonth = format(new Date(), 'MMMM yyyy');

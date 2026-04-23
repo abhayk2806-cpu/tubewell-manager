@@ -44,9 +44,13 @@ const PaymentsPage: React.FC = () => {
       supabase.from('month_closings').select('farmer_id, month'),
     ]);
 
+    const activeFarmerIds = new Set((f || []).map((x) => x.id));
+    // Filter usage to active farmers only (affects month dropdown & FIFO calculations)
+    const activeUsage = (u || []).filter((x) => activeFarmerIds.has(x.farmer_id));
+
     setFarmers(f || []);
     setPayments(p || []);
-    setRawUsage(u || []);
+    setRawUsage(activeUsage);
     setClosedMonths(mc || []);
 
     // Default selected month: current month if it has any usage/payments, else latest
