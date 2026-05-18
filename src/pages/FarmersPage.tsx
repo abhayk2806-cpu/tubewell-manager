@@ -1,9 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Farmer, FarmerSummary } from '@/types';
-import { Plus, Search, Trash2, Edit2, RotateCcw, X, Check, EyeOff, Eye } from 'lucide-react';
+import {
+  Plus, Search, Trash2, Edit2, RotateCcw, X, Check, EyeOff, Eye, MessageCircle,
+} from 'lucide-react';
+import { normalizeWhatsAppNumber, formatWhatsAppDisplay } from '@/lib/whatsapp';
 
 type FarmerTab = 'active' | 'disabled' | 'deleted';
+
+// Form state shape — whatsapp_number is the raw user input (we normalize on save).
+// whatsapp_consent is a local boolean derived from whether whatsapp_consent_at is set.
+interface FarmerForm {
+  name: string;
+  mobile: string;
+  notes: string;
+  whatsapp_number: string;
+  whatsapp_enabled: boolean;
+  whatsapp_consent: boolean;
+}
+
+const EMPTY_FORM: FarmerForm = {
+  name: '',
+  mobile: '',
+  notes: '',
+  whatsapp_number: '',
+  whatsapp_enabled: false,
+  whatsapp_consent: false,
+};
 
 const FarmersPage: React.FC = () => {
   const [farmers, setFarmers] = useState<FarmerSummary[]>([]);
@@ -16,7 +39,7 @@ const FarmersPage: React.FC = () => {
   const [targetFarmer, setTargetFarmer] = useState<Farmer | null>(null);
   const [toast, setToast] = useState('');
 
-  const [form, setForm] = useState({ name: '', mobile: '', notes: '' });
+  const [form, setForm] = useState<FarmerForm>(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -45,6 +68,9 @@ const FarmersPage: React.FC = () => {
       return {
         ...f,
         is_disabled: f.is_disabled ?? false,
+        whatsapp_number: f.whatsapp_number ?? null,
+        whatsapp_enabled: f.whatsapp_enabled ?? false,
+        whatsapp_consent_at: f.whatsapp_consent_at ?? null,
         total_usage_amount: usage,
         total_paid: paid,
         total_due: Math.max(0, usage - paid),
@@ -59,27 +85,88 @@ const FarmersPage: React.FC = () => {
   // ── Form handlers ──────────────────────────────────────────
   const openAdd = () => {
     setEditFarmer(null);
-    setForm({ name: '', mobile: '', notes: '' });
+    setForm(EMPTY_FORM);
     setFormError('');
     setShowForm(true);
   };
 
   const openEdit = (f: Farmer) => {
     setEditFarmer(f);
-    setForm({ name: f.name, mobile: f.mobile || '', notes: f.notes || '' });
+    setForm({
+      name: f.name,
+      mobile: f.mobile || '',
+      notes: f.notes || '',
+      whatsapp_number: f.whatsapp_number || '',
+      whatsapp_enabled: !!f.whatsapp_enabled,
+      whatsapp_consent: !!f.whatsapp_consent_at,
+    });
     setFormError('');
     setShowForm(true);
   };
 
+  // Live-normalized WhatsApp preview (computed on every render of the modal)
+  const normalizedPreview = normalizeWhatsAppNumber(form.whatsapp_number);
+  const numberInputDirty = form.whatsapp_number.trim().length > 0;
+  const numberInvalid = numberInputDirty && !normalizedPreview;
+
   const handleSave = async () => {
-    if (!form.name.trim()) { setFormError('Kisan ka naam bharna zaroori hai'); return; }
+    if (!form.name.trim()) {
+      setFormError('Kisan ka naam bharna zaroori hai');
+      return;
+    }
+
+    // WhatsApp validation — only enforced when toggle is ON
+    let normalizedNumber: string | null = null;
+    if (numberInputDirty) {
+      normalizedNumber = normalizeWhatsAppNumber(form.whatsapp_number);
+      if (!normalizedNumber) {
+        setFormError('WhatsApp number sahi nahi hai — 10-digit India ka mobile number daalo (6/7/8/9 se shuru)');
+        return;
+      }
+    }
+
+    if (form.whatsapp_enabled) {
+      if (!normalizedNumber) {
+        setFormError('WhatsApp enable karne ke liye valid 10-digit number bharna zaroori hai');
+        return;
+      }
+      if (!form.whatsapp_consent) {
+        setFormError('WhatsApp enable karne ke liye farmer ka consent zaroori hai — checkbox tick karo');
+        return;
+      }
+    }
+
     setSaving(true);
     setFormError('');
-    const payload = { name: form.name.trim(), mobile: form.mobile.trim(), notes: form.notes.trim() };
+
+    // Build whatsapp_consent_at:
+    //   - If checkbox checked AND farmer already had a consent timestamp → keep existing (don't overwrite original consent date)
+    //   - If checkbox checked AND no previous timestamp → set to NOW
+    //   - If checkbox unchecked → null
+    let consentAt: string | null = null;
+    if (form.whatsapp_consent) {
+      consentAt = editFarmer?.whatsapp_consent_at ?? new Date().toISOString();
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      mobile: form.mobile.trim(),
+      notes: form.notes.trim(),
+      whatsapp_number: normalizedNumber,    // may be null if user left it blank
+      whatsapp_enabled: form.whatsapp_enabled,
+      whatsapp_consent_at: consentAt,
+    };
+
     const { error } = editFarmer
       ? await supabase.from('farmers').update(payload).eq('id', editFarmer.id)
       : await supabase.from('farmers').insert(payload);
-    if (error) { setFormError('Save nahi hua. Dobara try karo.'); setSaving(false); return; }
+
+    if (error) {
+      setFormError('Save nahi hua. Dobara try karo.');
+      setSaving(false);
+      return;
+    }
+
     showToast(editFarmer ? 'Kisan update ho gaya ✓' : 'Kisan add ho gaya ✓');
     setSaving(false);
     setShowForm(false);
@@ -156,8 +243,8 @@ const FarmersPage: React.FC = () => {
 
       {/* Add/Edit Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 my-4">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-gray-900 text-lg">
                 {editFarmer ? 'Kisan Edit karo' : 'Kisan Add karo'}
@@ -195,6 +282,94 @@ const FarmersPage: React.FC = () => {
                   style={{ borderColor: '#e5e2dc' }}
                 />
               </div>
+
+              {/* ───── WhatsApp section ──────────────────────── */}
+              <div className="pt-3 mt-2 border-t" style={{ borderColor: '#e5e2dc' }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageCircle size={16} className="text-green-600" />
+                  <span className="text-sm font-semibold text-gray-800">WhatsApp Notifications</span>
+                  <span className="text-[10px] text-gray-400">(optional)</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-2.5">
+                  Agar kisan ke paas WhatsApp hai, toh pani entry aur payment pe automatic message bhej sakte ho. Smartphone nahi hai? Yeh khali chhod do.
+                </p>
+
+                {/* Number input */}
+                <div>
+                  <label className="text-sm font-medium text-gray-700">WhatsApp Number</label>
+                  <input
+                    value={form.whatsapp_number}
+                    onChange={e => setForm(p => ({ ...p, whatsapp_number: e.target.value }))}
+                    placeholder="10 digits — e.g. 9876543210"
+                    type="tel"
+                    inputMode="tel"
+                    className="w-full mt-1 px-4 py-3 rounded-xl border text-base outline-none focus:ring-2 focus:ring-green-500"
+                    style={{ borderColor: numberInvalid ? '#f87171' : '#e5e2dc' }}
+                  />
+                  {normalizedPreview && (
+                    <div className="text-[11px] text-green-700 mt-1.5 flex items-center gap-1">
+                      <Check size={12} /> Will send to: {formatWhatsAppDisplay(normalizedPreview)}
+                    </div>
+                  )}
+                  {numberInvalid && (
+                    <div className="text-[11px] text-red-500 mt-1.5">
+                      Number sahi nahi hai. 10-digit India ka mobile chahiye (6/7/8/9 se shuru).
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggle: enable WhatsApp messages */}
+                <div className="flex items-center justify-between mt-3 py-2">
+                  <div className="flex-1 pr-3">
+                    <div className="text-sm font-medium text-gray-800">WhatsApp messages enable karo</div>
+                    <div className="text-[11px] text-gray-500">
+                      Toggle off rakhoge toh number save rahega lekin koi message nahi jaayega.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, whatsapp_enabled: !p.whatsapp_enabled }))}
+                    aria-pressed={form.whatsapp_enabled}
+                    aria-label="Toggle WhatsApp messaging"
+                    className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                      form.whatsapp_enabled ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                        form.whatsapp_enabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Consent checkbox — only meaningful when toggle is on */}
+                <label
+                  className={`flex items-start gap-2.5 mt-1 p-2.5 rounded-lg cursor-pointer transition-colors ${
+                    form.whatsapp_enabled
+                      ? 'bg-green-50 hover:bg-green-100'
+                      : 'bg-gray-50 opacity-60'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.whatsapp_consent}
+                    onChange={e => setForm(p => ({ ...p, whatsapp_consent: e.target.checked }))}
+                    disabled={!form.whatsapp_enabled}
+                    className="mt-0.5 accent-green-600"
+                  />
+                  <span className="text-xs text-gray-700 leading-snug">
+                    Farmer ne WhatsApp messages ke liye haan boli hai.
+                    {editFarmer?.whatsapp_consent_at && form.whatsapp_consent && (
+                      <span className="block text-[10px] text-gray-400 mt-0.5">
+                        Pehle se record hai: {new Date(editFarmer.whatsapp_consent_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              </div>
+              {/* ───── end WhatsApp section ──────────────────── */}
+
               {formError && <div className="text-red-500 text-sm">{formError}</div>}
             </div>
             <div className="flex gap-2">
@@ -339,8 +514,16 @@ const FarmersPage: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-gray-900">{f.name}</span>
+                    {f.whatsapp_enabled && f.whatsapp_number && (
+                      <span
+                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100"
+                        title={`WhatsApp: ${formatWhatsAppDisplay(f.whatsapp_number)}`}
+                      >
+                        <MessageCircle size={12} className="text-green-600" />
+                      </span>
+                    )}
                     {f.is_disabled && (
                       <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
                         Disabled

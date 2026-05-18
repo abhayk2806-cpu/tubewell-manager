@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { BackupData } from '@/types';
-import { Download, Upload, AlertTriangle, Check, Database } from 'lucide-react';
+import { Download, Upload, AlertTriangle, Check, Database, MessageCircle } from 'lucide-react';
+
+// Backup format version history:
+//   v1.0 — initial (farmers, usage_entries, payments)
+//   v2.0 — added month_closings + for_month on payments
+//   v2.1 — added whatsapp_message_templates + whatsapp_log (Track A)
+//
+// The importer accepts ANY of these versions. Missing fields default to empty arrays.
+const CURRENT_BACKUP_VERSION = '2.1';
 
 const BackupPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -24,20 +32,26 @@ const BackupPage: React.FC = () => {
         { data: usage },
         { data: payments },
         { data: month_closings },
+        { data: wa_templates },
+        { data: wa_log },
       ] = await Promise.all([
         supabase.from('farmers').select('*').order('name'),
         supabase.from('usage_entries').select('*').order('date'),
         supabase.from('payments').select('*').order('date'),
         supabase.from('month_closings').select('*').order('closed_at'),
+        supabase.from('whatsapp_message_templates').select('*').order('template_type'),
+        supabase.from('whatsapp_log').select('*').order('sent_at'),
       ]);
 
       const backup: BackupData = {
-        version: '2.0',
+        version: CURRENT_BACKUP_VERSION,
         exported_at: new Date().toISOString(),
         farmers: farmers || [],
         usage_entries: usage || [],
         payments: payments || [],
         month_closings: month_closings || [],
+        whatsapp_message_templates: wa_templates || [],
+        whatsapp_log: wa_log || [],
       };
 
       const json = JSON.stringify(backup, null, 2);
@@ -52,7 +66,8 @@ const BackupPage: React.FC = () => {
       showToast(
         `Backup ready! ${farmers?.length || 0} farmers, ` +
         `${usage?.length || 0} entries, ${payments?.length || 0} payments, ` +
-        `${month_closings?.length || 0} closings`
+        `${month_closings?.length || 0} closings, ` +
+        `${wa_templates?.length || 0} templates, ${wa_log?.length || 0} WA logs`
       );
     } catch {
       showToast('Backup fail hua. Dobara try karo.', 'error');
@@ -71,8 +86,12 @@ const BackupPage: React.FC = () => {
           showToast('Invalid backup file. Sahi file select karo.', 'error');
           return;
         }
-        // month_closings optional (for backward compatibility with v1 backups)
+        // Backward compat: optional fields default to empty arrays.
+        // v1.0 backups won't have month_closings.
+        // v2.0 backups won't have whatsapp_message_templates / whatsapp_log.
         if (!data.month_closings) data.month_closings = [];
+        if (!data.whatsapp_message_templates) data.whatsapp_message_templates = [];
+        if (!data.whatsapp_log) data.whatsapp_log = [];
         setImportPreview(data);
       } catch {
         showToast('File read nahi hua. Valid JSON hona chahiye.', 'error');
@@ -92,11 +111,17 @@ const BackupPage: React.FC = () => {
     setImporting(true);
     try {
       if (importMode === 'replace') {
-        // Delete in reverse FK order
-        await supabase.from('month_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('payments').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('usage_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('farmers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        // Delete in reverse FK order:
+        // whatsapp_log → month_closings → payments → usage_entries (all reference farmers)
+        // → whatsapp_message_templates (independent) → farmers (root)
+        // The '00000000-0000-0000-0000-000000000000' sentinel works because no real UUID matches.
+        const NEVER_MATCH = '00000000-0000-0000-0000-000000000000';
+        await supabase.from('whatsapp_log').delete().neq('id', NEVER_MATCH);
+        await supabase.from('month_closings').delete().neq('id', NEVER_MATCH);
+        await supabase.from('payments').delete().neq('id', NEVER_MATCH);
+        await supabase.from('usage_entries').delete().neq('id', NEVER_MATCH);
+        await supabase.from('whatsapp_message_templates').delete().neq('id', NEVER_MATCH);
+        await supabase.from('farmers').delete().neq('id', NEVER_MATCH);
       }
 
       // Upsert all tables (insert or update by id)
@@ -112,12 +137,28 @@ const BackupPage: React.FC = () => {
       if (importPreview.month_closings && importPreview.month_closings.length > 0) {
         await supabase.from('month_closings').upsert(importPreview.month_closings, { onConflict: 'id' });
       }
+      // WhatsApp templates: upsert on template_type (UNIQUE) instead of id.
+      // Reason: same logical row ('usage_entry' / 'payment_received') may have a different
+      // UUID in source vs destination DB. Conflicting on template_type ensures the row text
+      // is updated rather than a duplicate row attempted (which would violate UNIQUE).
+      if (importPreview.whatsapp_message_templates && importPreview.whatsapp_message_templates.length > 0) {
+        await supabase
+          .from('whatsapp_message_templates')
+          .upsert(importPreview.whatsapp_message_templates, { onConflict: 'template_type' });
+      }
+      // WhatsApp log: upsert on id (each row is a distinct historical send event).
+      if (importPreview.whatsapp_log && importPreview.whatsapp_log.length > 0) {
+        await supabase
+          .from('whatsapp_log')
+          .upsert(importPreview.whatsapp_log, { onConflict: 'id' });
+      }
 
       showToast(
         `Import complete! ` +
         `${importPreview.farmers.length} farmers, ` +
         `${importPreview.usage_entries.length} entries, ` +
-        `${importPreview.payments.length} payments restore ho gaye ✓`
+        `${importPreview.payments.length} payments, ` +
+        `${(importPreview.whatsapp_log || []).length} WhatsApp logs restore ho gaye ✓`
       );
       setImportPreview(null);
     } catch {
@@ -149,7 +190,7 @@ const BackupPage: React.FC = () => {
           </div>
           <div>
             <h2 className="font-semibold text-gray-900">Backup Data</h2>
-            <p className="text-xs text-gray-500">Saara data JSON file mein download karo</p>
+            <p className="text-xs text-gray-500">Saara data JSON file mein download karo (version {CURRENT_BACKUP_VERSION})</p>
           </div>
         </div>
         <button
@@ -162,7 +203,7 @@ const BackupPage: React.FC = () => {
           {loading ? 'Backup ho raha hai...' : 'Backup Download karo'}
         </button>
         <p className="text-xs text-gray-400 mt-2 text-center">
-          Farmers, pani entries, payments aur month closings — sab included
+          Farmers, pani entries, payments, month closings, WhatsApp templates aur logs — sab included
         </p>
       </div>
 
@@ -174,7 +215,7 @@ const BackupPage: React.FC = () => {
           </div>
           <div>
             <h2 className="font-semibold text-gray-900">Import / Restore</h2>
-            <p className="text-xs text-gray-500">Purana backup file upload karo</p>
+            <p className="text-xs text-gray-500">Purana backup file upload karo (v1, v2, v2.1 — sab supported)</p>
           </div>
         </div>
 
@@ -205,7 +246,7 @@ const BackupPage: React.FC = () => {
             <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
             <p className="text-xs text-red-600">
               <strong>Warning:</strong> Replace mode mein saara existing data delete ho jayega
-              aur backup se replace hoga. Yeh undo nahi ho sakta.
+              aur backup se replace hoga (WhatsApp templates aur logs bhi). Yeh undo nahi ho sakta.
             </p>
           </div>
         )}
@@ -230,12 +271,22 @@ const BackupPage: React.FC = () => {
             </div>
             <div className="text-xs text-gray-600">
               Version: {importPreview.version || 'v1'}
+              {importPreview.version === '1.0' && ' (old format — month_closings will be empty)'}
+              {importPreview.version === '2.0' && ' (no WhatsApp data)'}
             </div>
             <div className="text-xs text-gray-600">👨‍🌾 Farmers: {importPreview.farmers.length}</div>
             <div className="text-xs text-gray-600">💧 Pani Entries: {importPreview.usage_entries.length}</div>
             <div className="text-xs text-gray-600">💰 Payments: {importPreview.payments.length}</div>
             <div className="text-xs text-gray-600">
               ✅ Month Closings: {importPreview.month_closings?.length || 0}
+            </div>
+            <div className="text-xs text-gray-600 flex items-center gap-1">
+              <MessageCircle size={11} className="text-green-600" />
+              WhatsApp Templates: {importPreview.whatsapp_message_templates?.length || 0}
+            </div>
+            <div className="text-xs text-gray-600 flex items-center gap-1">
+              <MessageCircle size={11} className="text-green-600" />
+              WhatsApp Logs: {importPreview.whatsapp_log?.length || 0}
             </div>
           </div>
         )}

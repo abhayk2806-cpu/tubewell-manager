@@ -8,6 +8,7 @@ import {
   Wallet,
   CalendarDays,
   Database,
+  Settings,
   LogOut,
 } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/payments', label: 'Paisa', icon: Wallet },
   { to: '/months', label: 'Month', icon: CalendarDays },
   { to: '/backup', label: 'Backup', icon: Database },
+  { to: '/settings', label: 'Setup', icon: Settings },
 ];
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -61,14 +63,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t z-40" style={{ borderColor: '#e5e2dc' }}>
-        <div className="flex items-center justify-around px-2 py-2">
+        <div className="flex items-center justify-around px-1 py-2">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === '/'}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl transition-all ${
+                `flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-xl transition-all ${
                   isActive
                     ? 'text-blue-600'
                     : 'text-gray-400 hover:text-gray-600'

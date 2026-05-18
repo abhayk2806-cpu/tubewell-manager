@@ -854,3 +854,315 @@ Red (danger): linear-gradient(135deg, #dc2626, #b91c1c)
 **Total DB migrations:** 4.  
 **Total bugs found and fixed:** 16.  
 **System status:** ✅ Production-ready and live.
+
+---
+
+# 🟢 TRACK A ADDENDUM — WHATSAPP INTEGRATION (Round 7)
+
+**Date added:** May 2026
+**Status:** Shipped — wa.me click-to-send live in production
+**Migration:** `005_whatsapp_support` applied 2026-05-17
+
+> This addendum extends the master reference doc above. The structure below mirrors sections 3, 5, 6, 8, 9, 14 of the original — read this when working on anything WhatsApp-related.
+
+---
+
+## A1. Why wa.me, not WhatsApp Business API
+
+**Decision date:** 2026-05-17
+**Chosen approach:** wa.me click-to-send link (manual tap per message, zero backend, fully editable templates)
+**Rejected alternatives:**
+- WhatsApp Business API (~₹500-1,500/month + Meta business verification + template pre-approval; constrains template editing)
+- WhatsApp Web automation / unofficial APIs (against ToS — account ban risk)
+
+**Trade-off:** Manual tap per message in exchange for ₹0 cost forever, full template freedom, and zero backend complexity. For ~9 farmers and a family tool, the trade-off is clearly worthwhile.
+
+**Consequence:** `whatsapp_log.status` is always `'initiated'` — wa.me click cannot confirm delivery. Do NOT add `'delivered'`/`'read'` statuses unless we migrate to API.
+
+---
+
+## A2. Schema additions (extends section 3)
+
+### `farmers` — 3 new columns
+```sql
+whatsapp_number       TEXT (nullable)             -- normalized as "91XXXXXXXXXX" (12 digits)
+whatsapp_enabled      BOOLEAN DEFAULT FALSE
+whatsapp_consent_at   TIMESTAMPTZ (nullable)      -- ISO timestamp when farmer agreed
+```
+
+### New table `whatsapp_message_templates`
+```sql
+id                UUID PRIMARY KEY DEFAULT uuid_generate_v4()
+template_type     TEXT NOT NULL UNIQUE        -- 'usage_entry' | 'payment_received'
+template_text     TEXT NOT NULL
+updated_at        TIMESTAMPTZ DEFAULT NOW()
+updated_by        UUID → auth.users(id)
+updated_by_email  TEXT
+```
+- **Seeded with 2 rows** at migration time (Hindi defaults — see section A4)
+- RLS: `USING (true) WITH CHECK (true)` for `authenticated` (same as all other tables)
+- UNIQUE constraint on `template_type` is the conflict key for backup imports
+
+### New table `whatsapp_log`
+```sql
+id                  UUID PRIMARY KEY
+farmer_id           UUID → farmers(id) ON DELETE CASCADE
+message_type        TEXT NOT NULL           -- 'usage_entry' | 'payment_received' | 'manual_resend'
+related_entry_id    UUID                    -- usage_entries.id OR payments.id (depending on message_type)
+message_text        TEXT NOT NULL           -- exact text put into the wa.me link
+whatsapp_number     TEXT NOT NULL           -- snapshot — survives farmer number changes
+status              TEXT DEFAULT 'initiated'
+sent_by             UUID → auth.users(id)
+sent_by_email       TEXT
+sent_at             TIMESTAMPTZ DEFAULT NOW()
+```
+- Indexes: `idx_whatsapp_log_farmer_id`, `idx_whatsapp_log_sent_at DESC`
+- RLS same as above
+
+### Migration summary
+**Migration 005 (`add_whatsapp_support`)** is PURELY ADDITIVE:
+- 3 nullable / defaulted column additions on `farmers` (existing 20 rows get `NULL`/`FALSE` defaults)
+- 2 new tables (CREATE TABLE IF NOT EXISTS)
+- 2 seed INSERTs (ON CONFLICT (template_type) DO NOTHING)
+- 0 DELETE, 0 DROP, 0 UPDATE of existing data
+
+**Verified:** post-migration, all 20 farmers / 30 usage_entries / 9 payments / 5 month_closings rows preserved exactly.
+
+---
+
+## A3. Feature 8 — WhatsApp Notifications (extends section 5)
+
+**Location:** Spans 4 source files
+- `src/pages/FarmersPage.tsx` — number/toggle/consent UI on farmer add/edit
+- `src/pages/SettingsPage.tsx` — Hindi template editor (new file)
+- `src/pages/UsagePage.tsx` — send banner + per-entry re-send
+- `src/pages/PaymentsPage.tsx` — send banner + per-payment re-send
+- `src/lib/whatsapp.ts` — pure helpers + DB ops (new file, 356 lines)
+- `src/pages/BackupPage.tsx` — export/import the 2 new tables, version bump
+
+### Per-farmer setup (FarmersPage)
+- WhatsApp section in the farmer add/edit modal (below Notes)
+- Number input with `tel` keyboard, helper "10 digits — e.g. 9876543210"
+- Live preview below input: `✓ Will send to: +91 98765 43210` (uses `normalizeWhatsAppNumber()` + `formatWhatsAppDisplay()`)
+- Invalid input → red border + Hindi error
+- iOS-style toggle "WhatsApp messages enable karo" — green when on, gray when off
+- Consent checkbox — visually disabled and dimmed when toggle is off
+- Save validation: if toggle is ON, both a valid normalized number AND consent are required
+- **Consent timestamp preservation:** if consent box was already checked and stays checked on edit, the original `whatsapp_consent_at` is preserved. Only uncheck → recheck creates a fresh timestamp.
+- Farmer card display: small green-circle MessageCircle icon next to name when `whatsapp_enabled && whatsapp_number`. Tooltip shows the formatted number.
+
+### Template editor (SettingsPage, route `/settings`)
+- Two template cards: usage_entry, payment_received
+- Each card has: subtitle, trigger context, collapsible placeholder reference (with full list of allowed `{placeholders}`), textarea with auto-grow, amber border + "Unsaved changes" indicator when dirty
+- Buttons: Preview / Reset Default / Save
+- Preview button → opens modal rendering sample data (`sampleUsageVars()` / `samplePaymentVars()`) in WhatsApp-green bubble style
+- Reset → `confirm()` prompt → upsert default text from `DEFAULT_TEMPLATES` constants
+- Save → upsert by `template_type`, records `updated_by_email`
+- "Last updated: <email> • <date>" displayed at footer of each card
+- Bottom-nav "Setup" tab (7th tab) — Settings icon
+
+### Post-save banner (UsagePage + PaymentsPage)
+- After a successful save, if the farmer has WhatsApp enabled + valid number, a green banner appears between the page header and the month filter
+- Headline: "{farmer.name} ko WhatsApp bhejo?"
+- Subtitle (usage page): "{hours}h {minutes}m · ₹{amount} — message mein mahine ka total bhi jaayega"
+- Subtitle (payments page): "₹{amount} · For {for_month} — message mein baki balance bhi jaayega"
+- Two buttons: green "WhatsApp Bhejo" (gradient) + X Skip
+- Click "WhatsApp Bhejo" → helper builds message (with send-time DB query) + logs + opens wa.me in new tab
+- Click X Skip → banner disappears, no log row created
+- Banner cleared on send, on skip, on entry/payment delete (if deleted item was the last-saved one), and on page navigate-away
+
+### Per-entry / per-payment re-send (in expanded accordion)
+- Green MessageCircle icon button shown only when farmer has WhatsApp ready
+- Click triggers same helper with `messageType: 'manual_resend'`
+- Useful when: banner was dismissed by mistake, farmer's phone was off at original time, or owner wants to resend an old entry's summary
+- **No auto-resend on edit/delete** — only this manual button
+
+---
+
+## A4. Default Hindi templates (kept in sync between code + DB)
+
+These constants live in `src/lib/whatsapp.ts` as `DEFAULT_USAGE_TEMPLATE` / `DEFAULT_PAYMENT_TEMPLATE`. They MUST match the seed text in `supabase/migrations/005_whatsapp_support.sql`. If owner edits the templates via SettingsPage and then hits "Reset to default", the DB row is set back to these constants.
+
+### Usage template
+```
+Namaste {farmer_name} ji 🙏
+
+Aaj ka pani entry:
+⏱️ Aaj chala: {today_hours} ghante {today_minutes} minute
+⏱️ Iss mahine pehle: {previous_total_hours} ghante {previous_total_minutes} minute
+⏱️ Iss mahine kul: {new_total_hours} ghante {new_total_minutes} minute
+
+Date: {date}
+
+— Tubewell Manager
+```
+
+### Payment template
+```
+Namaste {farmer_name} ji 🙏
+
+Payment receive ho gaya:
+💰 Pichla baki: ₹{previous_due}
+💰 Abhi diya: ₹{amount_paid}
+💰 Ab baki: ₹{new_due}
+
+Kis mahine ke liye: {for_month}
+Date: {date}
+
+— Tubewell Manager
+```
+
+### Placeholder reference
+| Placeholder | Usage | Payment | Source |
+|---|---|---|---|
+| `{farmer_name}` | ✓ | ✓ | `farmers.name` |
+| `{date}` | ✓ | ✓ | entry/payment date as "DD MMM YYYY" |
+| `{today_hours}`, `{today_minutes}` | ✓ | — | new entry's h/m |
+| `{previous_total_hours}`, `{previous_total_minutes}` | ✓ | — | sum of OTHER entries this month |
+| `{new_total_hours}`, `{new_total_minutes}` | ✓ | — | previous + today |
+| `{previous_due}` | — | ✓ | `max(0, usage_sum − paid_before)` — formatted "1,500.00" |
+| `{amount_paid}` | — | ✓ | this payment's amount — formatted "500.00" |
+| `{new_due}` | — | ✓ | `max(0, usage_sum − paid_after)` — formatted "1,000.00" |
+| `{for_month}` | — | ✓ | `payments.for_month` |
+
+**Unknown placeholders are left LITERAL** in the output (e.g. `{farmerr_name}` will show as `{farmerr_name}` in the message). This makes typos visible — owner can catch them in Preview before sending.
+
+---
+
+## A5. Send-time math (extends section 6)
+
+**CRITICAL RULE:** All totals/dues in WhatsApp messages are computed at SEND TIME by querying Supabase, NOT from React state. This protects against the multi-device-sync scenario the app was built for — another family member could have added an entry 30 seconds ago and your React state wouldn't know.
+
+### Usage message math (`buildAndLogUsageWhatsApp`)
+```ts
+// Query at send-time:
+SELECT total_minutes FROM usage_entries
+WHERE farmer_id = X AND month = Y AND id != current_entry_id
+
+previousTotalMinutes = Σ of returned rows
+newTotalMinutes      = previousTotalMinutes + current_entry.total_minutes
+{ hours, minutes } = splitHoursMinutes(...)
+```
+
+### Payment message math (`buildAndLogPaymentWhatsApp`)
+```ts
+// Two parallel queries at send-time:
+A: SELECT amount FROM usage_entries
+   WHERE farmer_id=F AND month=payment.for_month
+B: SELECT amount FROM payments
+   WHERE farmer_id=F AND for_month=payment.for_month AND id != current_payment.id
+
+usage_sum    = Σ A
+paid_before  = Σ B
+paid_after   = paid_before + current_payment.amount
+
+previous_due = max(0, usage_sum - paid_before)
+new_due      = max(0, usage_sum - paid_after)
+```
+
+### Why `max(0, ...)` (Option 1 overpayment policy)
+This matches the existing app's per-farmer `max(0, ...)` cap. If a farmer overpays, message shows `new_due = ₹0.00` — overpayment is NOT mentioned. Owner reconciles overpayment in person. Documented in Decisions Log entry "2026-05-17 — Overpayment behavior stays consistent". Track B (advance credit tracking) is the future project that will change this behavior holistically across the app.
+
+### Why exclude current row from `previous_*`
+When editing an existing entry/payment and re-sending, "previous" must mean "before this row existed". If we included the current row in `previous`, the math would be wrong. The `.neq('id', ...)` filter handles both Add (current row exists in DB, exclude it) and Edit (current row exists in DB with new values, exclude it and add back the new values explicitly).
+
+---
+
+## A6. Helper library (`src/lib/whatsapp.ts`)
+
+**24 exports** organized as:
+- Constants: `DEFAULT_USAGE_TEMPLATE`, `DEFAULT_PAYMENT_TEMPLATE`, `DEFAULT_TEMPLATES`, `TEMPLATE_PLACEHOLDERS`
+- Number ops: `normalizeWhatsAppNumber()`, `formatWhatsAppDisplay()`
+- Formatting: `formatDateForMessage()`, `splitHoursMinutes()`, `formatRupees()`
+- Template rendering: `renderTemplate()`, `buildUsageMessage()`, `buildPaymentMessage()`, sample data generators
+- Link builder: `buildWaMeUrl()`
+- DB ops: `fetchTemplate()`, `fetchAllTemplates()`, `saveTemplate()`, `resetTemplateToDefault()`, `logWhatsAppSend()`
+- Type exports: `UsageMessageVars`, `PaymentMessageVars`, `SaveTemplateArgs`, `LogWhatsAppSendArgs`
+
+### Number normalization details
+Accepts: "9876543210", "+91 9876543210", "91-9876543210", "09876543210", "+919876543210", " 98765 43210 ", etc.
+Rejects: anything that doesn't reduce to exactly 10 digits, OR numbers not starting with 6/7/8/9.
+Output: always `91XXXXXXXXXX` (12 digits, no '+', no spaces) — wa.me format.
+
+### Decoupled send architecture
+- Save first (`.select().maybeSingle()` to get saved row back)
+- If farmer has WhatsApp ready → set `lastSaved` state → banner appears
+- Banner click → helper builds + logs + opens wa.me
+- **Failures in build/log/open NEVER roll back the save** — data integrity > notification reliability
+- Errors → console + toast "WhatsApp nahi khul saka — dobara try karo"
+
+---
+
+## A7. Backup v2.1 (extends section A2 + Feature 7 in original)
+
+Backup version bumped `"2.0"` → `"2.1"`. Constant `CURRENT_BACKUP_VERSION` at top of `BackupPage.tsx`.
+
+### Export adds 2 arrays
+```json
+{
+  "version": "2.1",
+  "exported_at": "...",
+  "farmers": [...],
+  "usage_entries": [...],
+  "payments": [...],
+  "month_closings": [...],
+  "whatsapp_message_templates": [...],
+  "whatsapp_log": [...]
+}
+```
+
+### Importer backward compat
+- v1.0 backups → `month_closings`, `whatsapp_*` default to `[]`
+- v2.0 backups → `whatsapp_*` default to `[]`
+- v2.1 → all fields present
+
+### Replace-mode delete order (FK-safe)
+```
+whatsapp_log          (FK → farmers, but log isolated)
+month_closings        (FK → farmers)
+payments              (FK → farmers)
+usage_entries         (FK → farmers)
+whatsapp_message_templates   (no FK — independent)
+farmers               (root)
+```
+
+### Upsert conflict keys
+- `farmers`, `usage_entries`, `payments`, `month_closings`, `whatsapp_log` → `onConflict: 'id'`
+- `whatsapp_message_templates` → `onConflict: 'template_type'` (because the logical row is identified by its type — surviving different UUIDs across DBs is the desired behavior)
+
+---
+
+## A8. Known behaviors & edge cases (extends section 14)
+
+**WhatsApp not yet enabled for any farmer (post-deploy):** UI is wired but the 20 production farmers all have `whatsapp_enabled = FALSE` by default. Owner enables per-farmer through Farmers page as needed. Zero behavior change until first farmer is enabled.
+
+**Banner appears on Edit too, not just Add:** When editing an existing usage entry or payment, the post-save banner reappears (if farmer has WhatsApp). The math stays correct because the helper excludes the current entry/payment from "previous" and uses the saved row's NEW values for "today" / "amount_paid". Result: edit-with-corrections produces an updated message. By design — owner can Skip if they don't want to re-notify.
+
+**Click on wa.me ≠ message sent:** wa.me opens WhatsApp pre-filled. User can still edit or cancel in WhatsApp. `whatsapp_log.status` is `'initiated'` — we have no way to confirm delivery. Do NOT treat a log row as proof of delivery.
+
+**Templates page edits propagate to all future sends:** Same DB row backs every send. No per-farmer template — by design (simpler mental model for owner; template variations are a future feature if needed).
+
+**Concurrent edits OK:** Two family members can add usage entries for the same farmer simultaneously. Each save independently triggers a banner on their device. If both click WhatsApp, two messages go — each with correct send-time totals (because helper queries DB at click moment, not at save moment). Worst case: farmer gets two notifications about distinct entries — accurate, just chatty.
+
+**Payment for a month with no usage:** `previous_due = 0`, `new_due = 0` regardless of amount paid (overpayment cap). Message will show all zeros. Acceptable — farmer should know money was received either way.
+
+**Mobile no. vs WhatsApp no.:** The existing `farmers.mobile` field is unchanged (could be a landline, could be a different number than WhatsApp). The new `whatsapp_number` is separate. Owner can leave `mobile` blank and only fill WhatsApp, or vice versa.
+
+---
+
+## A9. What's still NOT built (updates section 15)
+
+These deferred features remain post-Track A:
+- **Track B — Advance credit tracking across months** (the big one — see PROJECT_STATUS Decisions Log)
+- **WhatsApp reminders for overdue farmers** — different feature than per-entry notifications; would be a scheduled/batched job
+- **WhatsApp Business API migration** — only worth doing if owner wants truly automatic send (no manual tap)
+- **Farmer statement share** — single WhatsApp message summarizing a farmer's full account
+- Other items unchanged from section 15
+
+---
+
+**Track A Addendum End.**
+**Total source changes:** 6 files modified (`FarmersPage`, `UsagePage`, `PaymentsPage`, `BackupPage`, `App.tsx`, `Layout.tsx`, `types/index.ts`) + 2 new (`src/lib/whatsapp.ts`, `src/pages/SettingsPage.tsx`).
+**Total DB changes:** 1 migration (`005`) — additive only.
+**Total bug count introduced:** 0 (per build verification across 6 phases).
+**System status:** ✅ Live, multi-device-safe, backup-portable.

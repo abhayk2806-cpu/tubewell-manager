@@ -3,10 +3,109 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Farmer, Payment } from '@/types';
 import { format, parse } from 'date-fns';
-import { Plus, Trash2, Edit2, X, Check, ChevronDown, ChevronUp, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  Plus, Trash2, Edit2, X, Check, ChevronDown, ChevronUp,
+  CheckCircle2, AlertCircle, MessageCircle, Send,
+} from 'lucide-react';
+import {
+  DEFAULT_PAYMENT_TEMPLATE,
+  buildPaymentMessage,
+  buildWaMeUrl,
+  fetchTemplate,
+  formatDateForMessage,
+  formatRupees,
+  logWhatsAppSend,
+} from '@/lib/whatsapp';
 
 // Raw usage shape for month-wise due computation
 type RawUsage = { farmer_id: string; amount: number; month: string };
+
+interface PaymentSendArgs {
+  payment: Payment;
+  farmer: Farmer;
+  messageType: 'payment_received' | 'manual_resend';
+  userId: string | null;
+  userEmail: string | null;
+}
+
+/**
+ * Build the WhatsApp message for a payment, log the send, return wa.me URL.
+ *
+ * CRITICAL: previous_due / new_due are computed by querying Supabase at send-time
+ * (NOT from React state) — protects against concurrent payments / usage entries by
+ * other family members. Same pattern as UsagePage Phase 4. See PROJECT_STATUS.md
+ * Decisions Log 2026-05-18.
+ *
+ * Math (matches Option 1 overpayment behavior — ₹0 cap, no advance tracking):
+ *   usage_sum   = Σ usage_entries.amount  WHERE farmer_id=F AND month=for_month
+ *   paid_before = Σ payments.amount       WHERE farmer_id=F AND for_month=for_month AND id != this_payment
+ *   paid_after  = paid_before + this_payment.amount
+ *   previous_due = max(0, usage_sum - paid_before)
+ *   new_due      = max(0, usage_sum - paid_after)
+ */
+async function buildAndLogPaymentWhatsApp({
+  payment, farmer, messageType, userId, userEmail,
+}: PaymentSendArgs): Promise<string | null> {
+  if (!farmer.whatsapp_number) return null;
+  if (!payment.for_month) {
+    console.error('[whatsapp] payment has no for_month — cannot compute due correctly');
+    return null;
+  }
+
+  // Send-time DB queries — DO NOT read from React state.
+  const [{ data: usageRows, error: usageErr }, { data: paymentRows, error: paymentsErr }] =
+    await Promise.all([
+      supabase
+        .from('usage_entries')
+        .select('amount')
+        .eq('farmer_id', payment.farmer_id)
+        .eq('month', payment.for_month),
+      supabase
+        .from('payments')
+        .select('amount, id')
+        .eq('farmer_id', payment.farmer_id)
+        .eq('for_month', payment.for_month)
+        .neq('id', payment.id),
+    ]);
+
+  if (usageErr) console.error('[whatsapp] usage fetch failed:', usageErr);
+  if (paymentsErr) console.error('[whatsapp] payments fetch failed:', paymentsErr);
+
+  const usageSum = (usageRows || []).reduce((s, u) => s + Number(u.amount || 0), 0);
+  const paidBefore = (paymentRows || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+  const paidAfter = paidBefore + Number(payment.amount || 0);
+
+  // Cap at 0 per Option 1 overpayment policy (no advance credit tracking)
+  const previousDue = Math.max(0, usageSum - paidBefore);
+  const newDue = Math.max(0, usageSum - paidAfter);
+
+  // Fetch template (fallback to default if missing/error)
+  const tpl = await fetchTemplate('payment_received');
+  const templateText = tpl?.template_text ?? DEFAULT_PAYMENT_TEMPLATE;
+
+  const message = buildPaymentMessage(templateText, {
+    farmer_name: farmer.name,
+    previous_due: formatRupees(previousDue),
+    amount_paid: formatRupees(Number(payment.amount || 0)),
+    new_due: formatRupees(newDue),
+    for_month: payment.for_month,
+    date: formatDateForMessage(payment.date),
+  });
+
+  // Audit log — best effort
+  const { error: logErr } = await logWhatsAppSend({
+    farmerId: farmer.id,
+    messageType,
+    relatedEntryId: payment.id,
+    messageText: message,
+    whatsappNumber: farmer.whatsapp_number,
+    userId,
+    userEmail,
+  });
+  if (logErr) console.error('[whatsapp] payment log insert failed:', logErr);
+
+  return buildWaMeUrl(farmer.whatsapp_number, message);
+}
 
 const PaymentsPage: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +120,11 @@ const PaymentsPage: React.FC = () => {
   const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [toastType, setToastType] = useState<'success' | 'info' | 'warn'>('success');
+
+  // After a successful save, if farmer has WhatsApp enabled, holds payment + farmer
+  // so the green banner renders. Cleared on Skip / send / page reload.
+  const [lastSaved, setLastSaved] = useState<{ payment: Payment; farmer: Farmer } | null>(null);
+  const [sendingWa, setSendingWa] = useState(false);
 
   const [form, setForm] = useState({
     farmer_id: '',
@@ -190,18 +294,44 @@ const PaymentsPage: React.FC = () => {
       created_by_email: user?.email,
     };
 
+    let savedRow: Payment | null = null;
     if (editPayment) {
-      const { error } = await supabase.from('payments').update(payload).eq('id', editPayment.id);
+      const { data, error } = await supabase
+        .from('payments')
+        .update(payload)
+        .eq('id', editPayment.id)
+        .select()
+        .maybeSingle();
       if (error) { setFormError('Update nahi hua. Dobara try karo.'); setSaving(false); return; }
+      savedRow = data as Payment | null;
       showToast('Payment update ho gayi ✓');
     } else {
-      const { error } = await supabase.from('payments').insert(payload);
+      const { data, error } = await supabase
+        .from('payments')
+        .insert(payload)
+        .select()
+        .maybeSingle();
       if (error) { setFormError('Payment save nahi hui. Dobara try karo.'); setSaving(false); return; }
+      savedRow = data as Payment | null;
       showToast('Payment add ho gaya ✓');
     }
 
     setSaving(false);
     setShowForm(false);
+
+    // If farmer has WhatsApp enabled + a number, surface the send banner.
+    const farmerOfPayment = farmers.find(f => f.id === form.farmer_id) || null;
+    if (
+      savedRow &&
+      farmerOfPayment &&
+      farmerOfPayment.whatsapp_enabled &&
+      farmerOfPayment.whatsapp_number
+    ) {
+      setLastSaved({ payment: savedRow, farmer: farmerOfPayment });
+    } else {
+      setLastSaved(null);
+    }
+
     loadData();
   };
 
@@ -209,7 +339,64 @@ const PaymentsPage: React.FC = () => {
     if (!confirm('Yeh payment delete karna chahte ho?')) return;
     await supabase.from('payments').delete().eq('id', p.id);
     showToast('Payment delete ho gayi');
+    // If the deleted payment was the "last saved" one, clear the banner.
+    if (lastSaved && lastSaved.payment.id === p.id) setLastSaved(null);
     loadData();
+  };
+
+  // -------------------------------------------------------
+  // WhatsApp send handlers
+  // -------------------------------------------------------
+  const handleSendBannerWhatsApp = async () => {
+    if (!lastSaved || sendingWa) return;
+    setSendingWa(true);
+    try {
+      const url = await buildAndLogPaymentWhatsApp({
+        payment: lastSaved.payment,
+        farmer: lastSaved.farmer,
+        messageType: 'payment_received',
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+      });
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showToast('WhatsApp open ho gaya — message bhejo');
+      } else {
+        showToast('WhatsApp message build nahi ho saka', 'warn');
+      }
+    } catch (err) {
+      console.error('[whatsapp] payment send banner failed:', err);
+      showToast('WhatsApp nahi khul saka — dobara try karo', 'warn');
+    } finally {
+      setSendingWa(false);
+      setLastSaved(null);
+    }
+  };
+
+  const handleResendWhatsApp = async (payment: Payment, farmer: Farmer) => {
+    if (sendingWa) return;
+    if (!farmer.whatsapp_enabled || !farmer.whatsapp_number) return;
+    setSendingWa(true);
+    try {
+      const url = await buildAndLogPaymentWhatsApp({
+        payment,
+        farmer,
+        messageType: 'manual_resend',
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+      });
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showToast('WhatsApp open ho gaya — message bhejo');
+      } else {
+        showToast('WhatsApp message build nahi ho saka', 'warn');
+      }
+    } catch (err) {
+      console.error('[whatsapp] payment resend failed:', err);
+      showToast('WhatsApp nahi khul saka — dobara try karo', 'warn');
+    } finally {
+      setSendingWa(false);
+    }
   };
 
   // -------------------------------------------------------
@@ -437,6 +624,44 @@ const PaymentsPage: React.FC = () => {
         </button>
       </div>
 
+      {/* WhatsApp send banner — shown after save if farmer has WhatsApp enabled */}
+      {lastSaved && (
+        <div
+          className="mb-4 rounded-2xl p-3 flex items-center justify-between gap-2"
+          style={{ background: '#dcfce7', borderLeft: '4px solid #16a34a' }}
+        >
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            <MessageCircle size={18} className="text-green-700 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {lastSaved.farmer.name} ko WhatsApp bhejo?
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">
+                ₹{Number(lastSaved.payment.amount).toLocaleString('en-IN')} · For {lastSaved.payment.for_month} — message mein baki balance bhi jaayega
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleSendBannerWhatsApp}
+              disabled={sendingWa}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+            >
+              <Send size={13} /> {sendingWa ? 'Bhej raha...' : 'WhatsApp Bhejo'}
+            </button>
+            <button
+              onClick={() => setLastSaved(null)}
+              disabled={sendingWa}
+              className="p-2 rounded-lg text-gray-500 hover:bg-white/60 disabled:opacity-50"
+              title="Skip"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Month Filter (uses for_month — accurate allocation) */}
       <div className="mb-4">
         <select
@@ -464,6 +689,7 @@ const PaymentsPage: React.FC = () => {
             const monthUsage = selectedMonth ? getMonthUsage(farmer.id, selectedMonth) : 0;
             const isClosed = selectedMonth ? isMonthClosed(farmer.id, selectedMonth) : false;
             const isOpen = expandedFarmer === farmer.id;
+            const waReady = farmer.whatsapp_enabled && !!farmer.whatsapp_number;
 
             return (
               <div
@@ -484,8 +710,16 @@ const PaymentsPage: React.FC = () => {
                       {farmer.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-900">{farmer.name}</span>
+                        {waReady && (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100"
+                            title="WhatsApp enabled"
+                          >
+                            <MessageCircle size={10} className="text-green-600" />
+                          </span>
+                        )}
                         {isClosed && (
                           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
                             Closed ✓
@@ -538,6 +772,16 @@ const PaymentsPage: React.FC = () => {
                           <div className="font-bold text-green-600">
                             ₹{Number(p.amount).toLocaleString('en-IN')}
                           </div>
+                          {waReady && (
+                            <button
+                              onClick={() => handleResendWhatsApp(p, farmer)}
+                              disabled={sendingWa}
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              title="WhatsApp dobara bhejo"
+                            >
+                              <MessageCircle size={14} />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEdit(p)}
                             className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50"

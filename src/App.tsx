@@ -8,6 +8,7 @@ import UsagePage from '@/pages/UsagePage';
 import PaymentsPage from '@/pages/PaymentsPage';
 import MonthsPage from '@/pages/MonthsPage';
 import BackupPage from '@/pages/BackupPage';
+import SettingsPage from '@/pages/SettingsPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -37,6 +38,7 @@ function AppRoutes() {
       <Route path="/payments" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
       <Route path="/months" element={<ProtectedRoute><MonthsPage /></ProtectedRoute>} />
       <Route path="/backup" element={<ProtectedRoute><BackupPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -32,3 +32,7 @@ dist-ssr
 # Build output
 dist/
 dist-ssr/
+
+# Personal Claude overrides — never commit
+CLAUDE.local.md
+*.backup

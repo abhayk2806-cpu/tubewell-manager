@@ -3,9 +3,94 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Farmer, UsageEntry } from '@/types';
 import { format, parse } from 'date-fns';
-import { Plus, Trash2, Edit2, X, Check, Droplets, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  Plus, Trash2, Edit2, X, Check, Droplets, ChevronDown, ChevronUp, MessageCircle, Send,
+} from 'lucide-react';
+import {
+  DEFAULT_USAGE_TEMPLATE,
+  buildUsageMessage,
+  buildWaMeUrl,
+  fetchTemplate,
+  formatDateForMessage,
+  logWhatsAppSend,
+  splitHoursMinutes,
+} from '@/lib/whatsapp';
 
 const getMonth = (date: string) => format(new Date(date), 'MMMM yyyy');
+
+interface SendArgs {
+  entry: UsageEntry;
+  farmer: Farmer;
+  messageType: 'usage_entry' | 'manual_resend';
+  userId: string | null;
+  userEmail: string | null;
+}
+
+/**
+ * Build the WhatsApp message for a usage entry, log the send, and return the wa.me URL.
+ *
+ * CRITICAL: totals are computed by querying Supabase at send-time, NOT from React state —
+ * this protects against concurrent entries by other family members. See PROJECT_MEMORY.md
+ * section 6 and tasks/lessons.md.
+ *
+ * Returns null if farmer has no whatsapp_number (caller should not have invoked us).
+ */
+async function buildAndLogUsageWhatsApp({
+  entry, farmer, messageType, userId, userEmail,
+}: SendArgs): Promise<string | null> {
+  if (!farmer.whatsapp_number) return null;
+
+  // Send-time DB query: sum of total_minutes for the SAME farmer + SAME month,
+  // EXCLUDING this entry. Gives us the "previous total" before this entry.
+  const { data: others, error: othersErr } = await supabase
+    .from('usage_entries')
+    .select('total_minutes')
+    .eq('farmer_id', entry.farmer_id)
+    .eq('month', entry.month)
+    .neq('id', entry.id);
+
+  if (othersErr) {
+    console.error('[whatsapp] failed to fetch other entries:', othersErr);
+    // Fall through with previousTotal=0 — message will still be coherent for this entry alone
+  }
+
+  const previousTotalMinutes = (others || []).reduce(
+    (s, e) => s + Number(e.total_minutes || 0),
+    0,
+  );
+  const newTotalMinutes = previousTotalMinutes + Number(entry.total_minutes || 0);
+  const prev = splitHoursMinutes(previousTotalMinutes);
+  const newTot = splitHoursMinutes(newTotalMinutes);
+
+  // Fetch template (fallback to default if missing/error)
+  const tpl = await fetchTemplate('usage_entry');
+  const templateText = tpl?.template_text ?? DEFAULT_USAGE_TEMPLATE;
+
+  const message = buildUsageMessage(templateText, {
+    farmer_name: farmer.name,
+    today_hours: Number(entry.hours) || 0,
+    today_minutes: Number(entry.minutes) || 0,
+    previous_total_hours: prev.hours,
+    previous_total_minutes: prev.minutes,
+    new_total_hours: newTot.hours,
+    new_total_minutes: newTot.minutes,
+    date: formatDateForMessage(entry.date),
+  });
+
+  // Audit log insert — best effort. Don't block the wa.me link if this fails.
+  const { error: logErr } = await logWhatsAppSend({
+    farmerId: farmer.id,
+    messageType,
+    relatedEntryId: entry.id,
+    messageText: message,
+    whatsappNumber: farmer.whatsapp_number,
+    userId,
+    userEmail,
+  });
+  if (logErr) console.error('[whatsapp] log insert failed:', logErr);
+
+  return buildWaMeUrl(farmer.whatsapp_number, message);
+}
 
 const UsagePage: React.FC = () => {
   const { user } = useAuth();
@@ -17,6 +102,11 @@ const UsagePage: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+
+  // After a successful save, if the farmer has WhatsApp enabled, this holds the
+  // entry + farmer so the green "WhatsApp Bhejo" banner can render.
+  const [lastSaved, setLastSaved] = useState<{ entry: UsageEntry; farmer: Farmer } | null>(null);
+  const [sendingWa, setSendingWa] = useState(false);
 
   const [form, setForm] = useState({
     farmer_id: '',
@@ -116,18 +206,45 @@ const UsagePage: React.FC = () => {
       created_by: user?.id, created_by_email: user?.email,
     };
 
+    let savedRow: UsageEntry | null = null;
     if (editEntry) {
-      const { error } = await supabase.from('usage_entries').update(payload).eq('id', editEntry.id);
+      const { data, error } = await supabase
+        .from('usage_entries')
+        .update(payload)
+        .eq('id', editEntry.id)
+        .select()
+        .maybeSingle();
       if (error) { setFormError('Update nahi hua'); setSaving(false); return; }
+      savedRow = data as UsageEntry | null;
       showToast('Entry update ho gayi ✓');
     } else {
-      const { error } = await supabase.from('usage_entries').insert(payload);
+      const { data, error } = await supabase
+        .from('usage_entries')
+        .insert(payload)
+        .select()
+        .maybeSingle();
       if (error) { setFormError('Entry save nahi hui'); setSaving(false); return; }
+      savedRow = data as UsageEntry | null;
       showToast('Entry save ho gayi ✓');
     }
 
     setSaving(false);
     setShowForm(false);
+
+    // If the farmer has WhatsApp enabled + a number, surface the send banner.
+    // Edits trigger the banner too — owner can decide whether to re-send.
+    const farmerOfEntry = farmers.find(f => f.id === form.farmer_id) || null;
+    if (
+      savedRow &&
+      farmerOfEntry &&
+      farmerOfEntry.whatsapp_enabled &&
+      farmerOfEntry.whatsapp_number
+    ) {
+      setLastSaved({ entry: savedRow, farmer: farmerOfEntry });
+    } else {
+      setLastSaved(null);
+    }
+
     loadData();
   };
 
@@ -135,7 +252,58 @@ const UsagePage: React.FC = () => {
     if (!confirm('Yeh entry delete karna chahte ho?')) return;
     await supabase.from('usage_entries').delete().eq('id', e.id);
     showToast('Entry delete ho gayi');
+    // If the deleted entry was the "last saved" one, clear the banner.
+    if (lastSaved && lastSaved.entry.id === e.id) setLastSaved(null);
     loadData();
+  };
+
+  // ── WhatsApp send handlers ────────────────────────────────────────────────
+  const handleSendBannerWhatsApp = async () => {
+    if (!lastSaved || sendingWa) return;
+    setSendingWa(true);
+    try {
+      const url = await buildAndLogUsageWhatsApp({
+        entry: lastSaved.entry,
+        farmer: lastSaved.farmer,
+        messageType: 'usage_entry',
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+      });
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showToast('WhatsApp open ho gaya — message bhejo');
+      }
+    } catch (err) {
+      console.error('[whatsapp] send banner failed:', err);
+      showToast('WhatsApp nahi khul saka — dobara try karo');
+    } finally {
+      setSendingWa(false);
+      setLastSaved(null);
+    }
+  };
+
+  const handleResendWhatsApp = async (entry: UsageEntry, farmer: Farmer) => {
+    if (sendingWa) return;
+    if (!farmer.whatsapp_enabled || !farmer.whatsapp_number) return;
+    setSendingWa(true);
+    try {
+      const url = await buildAndLogUsageWhatsApp({
+        entry,
+        farmer,
+        messageType: 'manual_resend',
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+      });
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        showToast('WhatsApp open ho gaya — message bhejo');
+      }
+    } catch (err) {
+      console.error('[whatsapp] resend failed:', err);
+      showToast('WhatsApp nahi khul saka — dobara try karo');
+    } finally {
+      setSendingWa(false);
+    }
   };
 
   const liveAmount = () => {
@@ -236,6 +404,44 @@ const UsagePage: React.FC = () => {
         </button>
       </div>
 
+      {/* WhatsApp send banner — shown after save if farmer has WhatsApp enabled */}
+      {lastSaved && (
+        <div
+          className="mb-4 rounded-2xl p-3 flex items-center justify-between gap-2"
+          style={{ background: '#dcfce7', borderLeft: '4px solid #16a34a' }}
+        >
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            <MessageCircle size={18} className="text-green-700 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900">
+                {lastSaved.farmer.name} ko WhatsApp bhejo?
+              </div>
+              <div className="text-xs text-gray-600 mt-0.5">
+                {lastSaved.entry.hours}h {lastSaved.entry.minutes}m · ₹{Number(lastSaved.entry.amount).toLocaleString('en-IN')} — message mein mahine ka total bhi jaayega
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleSendBannerWhatsApp}
+              disabled={sendingWa}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+            >
+              <Send size={13} /> {sendingWa ? 'Bhej raha...' : 'WhatsApp Bhejo'}
+            </button>
+            <button
+              onClick={() => setLastSaved(null)}
+              disabled={sendingWa}
+              className="p-2 rounded-lg text-gray-500 hover:bg-white/60 disabled:opacity-50"
+              title="Skip"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Month Filter */}
       <div className="mb-4">
         <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
@@ -259,6 +465,7 @@ const UsagePage: React.FC = () => {
             const totalMins = fEntries.reduce((s, e) => s + e.total_minutes, 0) % 60;
             const totalAmt = fEntries.reduce((s, e) => s + Number(e.amount), 0);
             const isOpen = expandedFarmer === farmer.id;
+            const waReady = farmer.whatsapp_enabled && !!farmer.whatsapp_number;
 
             return (
               <div key={farmer.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
@@ -273,7 +480,17 @@ const UsagePage: React.FC = () => {
                       {farmer.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900">{farmer.name}</div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                        {farmer.name}
+                        {waReady && (
+                          <span
+                            className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-100"
+                            title="WhatsApp enabled"
+                          >
+                            <MessageCircle size={10} className="text-green-600" />
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-gray-400">{fEntries.length} entries · {totalHours}h {totalMins}m</div>
                     </div>
                   </div>
@@ -305,6 +522,16 @@ const UsagePage: React.FC = () => {
                           )}
                         </div>
                         <div className="flex gap-1 ml-2">
+                          {waReady && (
+                            <button
+                              onClick={() => handleResendWhatsApp(e, farmer)}
+                              disabled={sendingWa}
+                              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                              title="WhatsApp dobara bhejo"
+                            >
+                              <MessageCircle size={14} />
+                            </button>
+                          )}
                           <button onClick={() => openEdit(e)} className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50">
                             <Edit2 size={14} />
                           </button>
