@@ -36,7 +36,7 @@ Stack: React 19 + TypeScript ~6.0 + Vite 8 + Tailwind 3 + shadcn/ui (40+ compone
 /src/lib/             → supabase.ts (client init), utils.ts (cn()), whatsapp.ts (all WhatsApp helpers)
 /src/types/           → index.ts — all interfaces (Farmer, UsageEntry, Payment, MonthClosing, BackupData, WhatsAppMessageTemplate, WhatsAppLogEntry)
 /src/hooks/           → use-toast.ts
-/supabase/migrations/ → 001-005 (drift closed 2026-05-17)
+/supabase/migrations/ → 001-006 (drift closed; 006 added payment_group_id on 2026-05-23)
 /project/             → PROJECT_MEMORY.md — canonical deep-dive doc, read on-demand
 /tasks/               → todo.md (active), lessons.md (mistake memory), whatsapp-plan.md (Track A reference)
 ```
@@ -68,6 +68,18 @@ The single most error-prone area of this app. Every monthly calculation depends 
 - A payment made on April 5 might be FOR March — the system handles this only because `for_month` is honored everywhere
 - If you see `p.date` being used to bucket payments by month, that's a bug — fix it
 - Verify before touching `Dashboard.tsx`, `MonthsPage.tsx`, or `PaymentsPage.tsx`: read `project/PROJECT_MEMORY.md` section 6 first
+
+---
+
+## Critical Rules — `payment_group_id` Is UI Hint Only, NEVER in Math
+
+Added in migration 006 (Session 3 — multi-month payments). `payments.payment_group_id` is a nullable UUID that groups N rows created from one user action.
+
+- All due/balance/total calculations remain row-wise on `for_month`. NEVER filter or bucket by `payment_group_id` for math.
+- Use `payment_group_id` only for: UI badges ("Part of ₹X (N-month payment)"), group-aware delete warnings, multi-month resend (sending the summary again).
+- For the multi-month WhatsApp summary: `paid_before` for each month MUST exclude EVERY row sharing the current `payment_group_id`, not just the current row id. Easiest way — fetch all payments for the months, filter client-side on `p.payment_group_id !== groupId` (correctly handles Postgres NULL semantics; `WHERE col != 'uuid'` excludes NULL rows).
+- Multi-month summary message format is hard-coded in `PaymentsPage.tsx::buildAndLogMultiMonthPaymentWhatsApp` (NOT template-driven). Single-month sends continue to use the editable DB template. Don't unify them — template placeholders are single-month by design.
+- See `BUSINESS_KNOWLEDGE.md` Round 8 + `tasks/lessons.md` for the full rationale.
 
 ---
 
@@ -228,4 +240,4 @@ Do NOT load these at session start. Read only when the task requires them.
 - `project/PROJECT_MEMORY.md` → Full feature list, every fixed bug, ground-truth numbers, full DB schema, calculation logic, conversation timeline. The "Track A Addendum" at the end (sections A1-A9) covers every WhatsApp internal. Read when working on calculations, schema, or any non-trivial feature.
 - `BUSINESS_KNOWLEDGE.md` → Terminology, brand voice, user audience, business evolution log. Read when working on UX, copy, or product decisions.
 - `tasks/whatsapp-plan.md` → The original Track A plan with phase-by-phase implementation notes. Read only if revisiting Track A scope or planning Track B.
-- `supabase/migrations/*.sql` → All migrations 001-005 are in the repo (drift closed). For current schema, query Supabase live via MCP — migration files describe history, not necessarily current state if anyone has run ad-hoc SQL.
+- `supabase/migrations/*.sql` → All migrations 001-006 are in the repo (drift closed). For current schema, query Supabase live via MCP — migration files describe history, not necessarily current state if anyone has run ad-hoc SQL.

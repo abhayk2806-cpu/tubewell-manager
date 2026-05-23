@@ -7,9 +7,11 @@ import { Download, Upload, AlertTriangle, Check, Database, MessageCircle } from 
 //   v1.0 — initial (farmers, usage_entries, payments)
 //   v2.0 — added month_closings + for_month on payments
 //   v2.1 — added whatsapp_message_templates + whatsapp_log (Track A)
+//   v2.2 — added payment_group_id on payments (multi-month payment grouping; migration 006)
 //
 // The importer accepts ANY of these versions. Missing fields default to empty arrays.
-const CURRENT_BACKUP_VERSION = '2.1';
+// payment_group_id is auto-included by select('*') on export; missing on import = NULL.
+const CURRENT_BACKUP_VERSION = '2.2';
 
 const BackupPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -215,7 +217,7 @@ const BackupPage: React.FC = () => {
           </div>
           <div>
             <h2 className="font-semibold text-gray-900">Import / Restore</h2>
-            <p className="text-xs text-gray-500">Purana backup file upload karo (v1, v2, v2.1 — sab supported)</p>
+            <p className="text-xs text-gray-500">Purana backup file upload karo (v1, v2, v2.1, v2.2 — sab supported)</p>
           </div>
         </div>
 
@@ -273,6 +275,7 @@ const BackupPage: React.FC = () => {
               Version: {importPreview.version || 'v1'}
               {importPreview.version === '1.0' && ' (old format — month_closings will be empty)'}
               {importPreview.version === '2.0' && ' (no WhatsApp data)'}
+              {importPreview.version === '2.1' && ' (no multi-month payment grouping)'}
             </div>
             <div className="text-xs text-gray-600">👨‍🌾 Farmers: {importPreview.farmers.length}</div>
             <div className="text-xs text-gray-600">💧 Pani Entries: {importPreview.usage_entries.length}</div>

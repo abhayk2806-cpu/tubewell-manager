@@ -197,3 +197,42 @@ App-internal terms added with the WhatsApp feature:
 - Full TypeScript build verified clean across all 6 implementation phases
 
 **Status:** Live in production after 6 phases of work + 1 documentation pass. Zero farmers have WhatsApp enabled yet — owner will enable per-farmer as they confirm consent.
+
+---
+
+## Payment UX Terminology (Round 8)
+
+App-internal terms added with the multi-month + auto-fill payment improvements:
+
+- **Pura ₹X bharo** = green chip button below the amount field in single-month payment mode. Click → amount input auto-fills with the exact pending balance for the selected month. Only shows when pending > 0. Saves typing + eliminates "₹500 typed as ₹50" errors.
+- **Ek month / Multiple months** = the mode toggle at the top of the payment add form. "Ek month" = the existing single-month flow. "Multiple months" = chip selector where the user picks 2+ months in one save action.
+- **Multi-month payment** = one user action that creates N independent payment rows (one per month), all sharing the same `payment_group_id` UUID. The rows are still allocated row-wise on `for_month` for all due/balance math — `payment_group_id` is purely a UI grouping hint (for badges, group resend, edit warning).
+- **Sab pending select** = one-click button in multi mode that checks every month with balance > 0 for the current farmer and pre-fills each row with its full pending. Fast path when settling all dues at once.
+- **Allocation** = the amount assigned to a specific month inside a multi-month payment. Each row is independently editable; the total auto-sums and shows below the chip list.
+- **Part of ₹X (N-month payment)** = the purple badge shown on a payment row in the list when it's part of a multi-month group. Tells the user at a glance "this row didn't stand alone, it was part of a bigger settlement".
+- **Multi-month summary message** = the single WhatsApp message sent for a multi-month payment. Hard-coded format (NOT template-driven), lists each month's pichla baki / abhi diya / ab baki. Resend on any grouped row sends this full summary again.
+
+---
+
+## Business Evolution Log — Round 8 (added)
+
+### 2026-05-23 — Round 8 — Payment UX improvements
+
+**Owner's ask:** "Suppose a farmer pays the full remaining amount for a month — there should be a button that auto-fills the pending into the input. Same logic: if he pays ₹800 covering April ₹500 + May ₹300, I should be able to pick both months in ONE entry, not two separate ones."
+
+**Decision tree resolved in conversation:**
+- **Schema for multi-month:** N independent rows sharing `payment_group_id` UUID — NOT a new join table. Reasoning: zero changes to existing calculations (5 pages, 16 historical bugs); group ID is UI-hint-only.
+- **WhatsApp for multi-month:** Single summary message, not one per row. Reasoning: cleaner for the farmer; one notification per real-world event.
+- **Hard-coded summary format vs. template:** Hard-coded. Reasoning: existing template placeholders only support single-month vars. Owner edits to the payment template still apply to single-month sends (the 95% case).
+- **Partial allocation allowed:** Yes — each row's amount is editable in multi mode. Default is full pending, user can dial down (e.g., to leave a partial balance).
+- **Edit/delete on grouped rows:** Per-row, with a warning. Multi-month grouping is a creation-time convenience — editing one row doesn't cascade.
+- **Scope boundary:** This is NOT Track B. Track B (advance credit tracking) is still deferred. These are convenience features for paying KNOWN dues, not tracking carry-forward credit.
+
+**What shipped (May 2026):**
+- Migration 006: nullable `payment_group_id uuid` on `payments` + partial index
+- `PaymentsPage.tsx`: mode toggle, single-mode "Pura ₹X bharo" chip, multi-mode chip selector with per-month allocation, live total summary, "Sab pending select" one-click button, grouped-row badges in payment list, group-aware delete/resend
+- `buildAndLogMultiMonthPaymentWhatsApp`: send-time DB query, single summary message, correctly excludes entire payment_group from `paid_before`
+- Backup format v2.1 → v2.2 (payment_group_id auto-included)
+- Build verified clean (tsc + vite)
+
+**Status:** Code complete and staged in git. Awaiting owner commit + push (Cowork sandbox cannot release the .git lock on the Windows mount). Will go live on Netlify auto-deploy on push.

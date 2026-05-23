@@ -36,6 +36,10 @@ export interface Payment {
   created_by: string;
   created_by_email: string;
   created_at: string;
+  // Added in migration 006. Optional UUID grouping multi-month payment rows
+  // created from one user action. NULL for single-month payments.
+  // UI grouping hint only — NOT used in any due/balance calculation.
+  payment_group_id?: string | null;
 }
 
 export interface FarmerSummary extends Farmer {
@@ -102,11 +106,11 @@ export interface WhatsAppLogEntry {
 // ============================================================================
 
 export interface BackupData {
-  version: string;                       // "2.0" or "2.1" (current)
+  version: string;                       // "2.0", "2.1", or "2.2" (current)
   exported_at: string;
   farmers: Farmer[];
   usage_entries: UsageEntry[];
-  payments: Payment[];
+  payments: Payment[];                   // v2.2+ includes optional payment_group_id per row
   month_closings: MonthClosing[];
   // Added in backup v2.1 (Track A — WhatsApp). v2.0 imports default to empty arrays.
   whatsapp_message_templates?: WhatsAppMessageTemplate[];

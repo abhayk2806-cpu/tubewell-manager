@@ -1,18 +1,26 @@
 # Tubewell Manager — Project Status
 
-> Last updated: 2026-05-18 | Session 2 (Track A — ALL 7 phases complete) | Phase: **Live in production — maintenance mode**
+> Last updated: 2026-05-23 | Session 3 (Payment UX improvements — shipped to repo) | Phase: **Live in production — pending owner push**
 
 ---
 
 ## Current Phase & Top Priority
 
-**🎉 Track A — WhatsApp Integration: SHIPPED (all 7 phases complete).**
+**✅ Payment UX improvements (Session 3) — code complete, awaiting owner commit + push.**
 
-The WhatsApp feature is functionally complete, build-verified, knowledge-files-updated, and ready to push. Farmers can be enabled per-account via FarmersPage. Templates editable in Setup page. Banners fire after every save (usage + payment). Manual re-send button on every entry. Audit log captures every send. Backup v2.1 includes WhatsApp tables.
+Two improvements done:
+1. **"Pura ₹X bharo" auto-fill** — in the payment add form (single mode), when farmer + for_month is chosen, a green chip appears showing the exact pending and one click auto-fills the amount input. Saves typing + eliminates "wrong amount" errors.
+2. **Multi-month payment** — mode toggle "Ek month / Multiple months" in the form. Multi mode shows chip-style cards for every month with pending balance; check the months, each one pre-fills its full pending amount (editable), live total auto-sums. On save: N rows are inserted in one transaction sharing a `payment_group_id` UUID. All existing calculations stay row-wise on `for_month` — zero math changes elsewhere.
 
-**No active project right now.** Owner needs to direct next move. See "Next Actions" below.
+WhatsApp behavior for multi-month: single summary message listing each month's previous_due / abhi diya / new_due. Hard-coded format (templates only support single-month placeholders, by design). Resend on a grouped row sends the full summary again.
 
-**Recommended immediate action when pushing to production:** test WhatsApp end-to-end with 1 enabled farmer before rolling out to others. See test scenarios in `tasks/whatsapp-plan.md` and the manual test checklist reported per phase.
+**🎉 Track A — WhatsApp Integration: SHIPPED (all 7 phases complete) — Session 2.**
+
+The WhatsApp feature is functionally complete, build-verified, knowledge-files-updated, and pushed. Farmers can be enabled per-account via FarmersPage. Templates editable in Setup page. Banners fire after every save (usage + payment). Manual re-send button on every entry. Audit log captures every send. Backup v2.2 includes WhatsApp tables + payment_group_id.
+
+**Recommended immediate actions:**
+1. Commit + push Session 3 changes (instructions in the session-end message — git index was locked by a Windows-mount permission quirk, files are staged).
+2. After Netlify auto-deploys, test the two new features with one farmer end-to-end.
 
 ---
 
@@ -110,14 +118,27 @@ No active blockers.
 **Decision:** Backup version `"2.0"` → `"2.1"`. Adds optional `whatsapp_message_templates` + `whatsapp_log`. Importer backward-compat with v1 + v2.
 **Impact:** `BackupPage.tsx` exports/imports 2 extra tables. Constant `CURRENT_BACKUP_VERSION` at top. Replace delete order updated. Templates upsert on `template_type`, log on `id`.
 
+### 2026-05-23 — Multi-month payments via shared payment_group_id
+**Decision:** Migration 006 adds nullable `payment_group_id uuid` to `payments`. When the user picks N months in one save, N independent payment rows are inserted sharing the same UUID. Every existing calculation continues to operate row-wise on `for_month` — `payment_group_id` is a UI hint only (badges, group resend, edit warning) and is NEVER used in any due/balance math.
+**Alternatives considered & rejected:** A new `payment_allocations` join table — would have required re-auditing every page that computes monthly dues. Blast radius too big for a UX convenience.
+**Impact:** `PaymentsPage.tsx` adds mode toggle, multi-month chip selector, "Pura ₹X bharo" auto-fill in single mode, multi-month WhatsApp summary message. `types/index.ts` adds `Payment.payment_group_id?`. `BackupPage` bumps to v2.2; export auto-includes the field via `select('*')`.
+
+### 2026-05-23 — Multi-month WhatsApp message is a single summary, hard-coded format
+**Decision:** When a multi-month payment is sent, build ONE message listing each month's `previous_due` / `amount paid` / `new_due`. Format is hard-coded in `PaymentsPage.tsx::buildAndLogMultiMonthPaymentWhatsApp` — NOT template-driven, because `whatsapp_message_templates.payment_received` only supports single-month placeholders (`{previous_due}`, `{amount_paid}`, etc.). Single-month payments continue to use the editable DB template.
+**Impact:** User edits to the payment_received template still apply to single-month sends (the 95% case). Multi-month edits to the message format require code changes — acceptable trade-off since multi-month payments are infrequent and the summary format is functional.
+
+### 2026-05-23 — Pura pending bharo auto-fill (single-month UX)
+**Decision:** In the single-month payment form, when farmer + for_month are selected, a green chip button shows the calculated pending and one click fills the amount input. Same math as everywhere else (`max(0, usage_sum − paid_so_far)`). Just exposes the existing calculation as a button — no new logic.
+**Impact:** Faster data entry. Eliminates "₹500 typed as ₹50" errors. Hidden when pending = ₹0.
+
 ---
 
 ## Key Project State
 
 - **Source files (hand-edited):** ~14 files in src/. New in Session 2: `src/lib/whatsapp.ts`, `src/pages/SettingsPage.tsx`. Modified: `src/types/index.ts`, `src/App.tsx`, `src/components/Layout.tsx`, `src/pages/FarmersPage.tsx`, `src/pages/UsagePage.tsx`, `src/pages/PaymentsPage.tsx`, `src/pages/BackupPage.tsx`.
 - **DB tables:** 6 (farmers, usage_entries, payments, month_closings, whatsapp_message_templates, whatsapp_log)
-- **Migrations applied to prod:** 5
-- **Migrations in repo:** 5 (drift closed)
+- **Migrations applied to prod:** 6 (added 006_add_payment_group_id on 2026-05-23)
+- **Migrations in repo:** 6 (drift closed)
 - **Routes:** 8 protected + 1 public + catch-all
 - **Bottom nav tabs:** 7
 - **Total farmers in DB:** 20
@@ -127,7 +148,7 @@ No active blockers.
 - **WhatsApp log entries:** 0 (no sends yet — push and test in production)
 - **Bundle:** 877KB JS / 247KB gzipped
 - **App version (package.json):** 0.0.0
-- **Backup format version:** 2.1
+- **Backup format version:** 2.2
 - **Production URL:** https://tubewell-manager.netlify.app
 - **Supabase project:** `vsgptyuvnistwjjmrfby` (ap-south-1, free tier)
 - **Netlify site ID:** `cfff021f-a629-41ef-af45-394f09e5c3d0`
@@ -171,9 +192,24 @@ No active blockers.
 - `PROJECT_STATUS.md` — this file. Marked Track A COMPLETE. Phase set to "Live in production — maintenance mode". No active project.
 - `tasks/todo.md` — Track A all 7 phases moved to Done. New "Next Up" list with recommended owner actions.
 
-**Status:** Track A fully shipped end-to-end. Awaiting owner push + production test.
+**Status:** Track A fully shipped end-to-end. Pushed and live in production.
 
-**Pending owner actions (not blocking):**
-- Push all changes to GitHub `main` → Netlify auto-deploys
-- Enable WhatsApp for 1 farmer + smoke-test the banner + log flow
-- Decide on next project (Track B / tests / README / something else)
+### 2026-05-23 — Session 3 — Payment UX improvements
+**New: migration 006**
+- `supabase/migrations/006_add_payment_group_id.sql` — applied to prod via MCP, committed to repo. Adds nullable `payment_group_id uuid` to `payments` + partial index. UI grouping hint only; NOT used in any due/balance calculation.
+
+**Modified:**
+- `src/types/index.ts` — `Payment.payment_group_id?: string | null` (optional). BackupData comment updated to "2.0, 2.1, or 2.2 (current)".
+- `src/pages/PaymentsPage.tsx` — major. Mode toggle "Ek month / Multiple months". Single mode adds a green chip "Pura ₹X bharo" that auto-fills the selected month's pending. Multi mode shows chip-style cards for every month with balance > 0; each card has its own allocation input pre-filled with full pending; live total summary. New helper `buildAndLogMultiMonthPaymentWhatsApp` builds the single-summary multi-month message at send-time from DB (correctly excludes the entire payment_group from `paid_before`). Payment list shows "Part of ₹X (N-month payment)" badge on grouped rows. Delete on grouped row warns user. Resend on grouped row sends the full summary.
+- `src/pages/BackupPage.tsx` — `CURRENT_BACKUP_VERSION` `"2.1"` → `"2.2"`. Version-note updated. Export auto-includes `payment_group_id` via `select('*')`.
+
+**Verified:** `tsc -b && vite build` exit 0 in fresh `/tmp` install. Bundle: 354KB JS / 105KB gzipped (lower than 2.1 — pnpm resolve seems to have de-duped something during fresh install).
+
+**Lint:** No new errors introduced by my changes. Pre-existing 15 errors across pages (`react-hooks/set-state-in-effect` on `useEffect(() => loadData(), [])` pattern) are untouched.
+
+**Status:** Code complete, staged in git, awaiting owner commit + push (git index was locked by a Windows-mount permission quirk in the sandbox).
+
+**Pending owner actions:**
+- Commit + push (instructions in chat).
+- Smoke-test in production: pick a farmer with multi-month dues, try the auto-fill button, then try a multi-month payment, then send the WhatsApp summary.
+- Decide next move: Track B / tests / something else.

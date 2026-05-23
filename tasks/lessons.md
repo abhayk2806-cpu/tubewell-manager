@@ -144,3 +144,32 @@
 - Diagnostic: `stat <file>` showing a `Modify` time from before your edit + bytes count matching original size = stale mount. `tail -3 <file>` showing the file cut off mid-token confirms it.
 - Impact: high (caused multiple confusing "build broken" detours in Session 2 Phase 2)
 - Date: 2026-05-18
+
+**`pnpm` reports "Already up to date" even when node_modules is broken**
+- Mistake: After session restart, `pnpm install` in the mounted workspace returned "Already up to date" in <1s, but `pnpm run build` failed with "Cannot find module .../typescript/bin/tsc". The pnpm symlink farm was inconsistent because the previous session's install was on a different mount.
+- Root cause: pnpm checks the lockfile timestamp + `.modules.yaml` to decide if install is needed. After session reset, the lockfile says "complete" but the actual symlinks in `node_modules/.bin/` may be broken or missing binaries from `node_modules/.pnpm/<pkg>/node_modules/<pkg>/`.
+- Rule: To validate a build during Cowork sessions, copy the source files (NOT node_modules) to `/tmp/<dir>` and run `pnpm install` there — fresh install always works, ~10-20s. Don't trust an in-place `pnpm install --force` on the mounted folder; it can't remove existing files (`Operation not permitted` on the Windows mount).
+- Diagnostic: `ls node_modules/.bin/tsc` returns the symlink path but `ls node_modules/typescript` errors with "Input/output error" = broken pnpm farm.
+- Impact: medium (slows down build verification; workaround takes ~30s)
+- Date: 2026-05-23
+
+**Multi-month payments → split into N rows sharing payment_group_id, NOT a new schema**
+- Mistake (almost made): Tempting to add a `payment_allocations` join table for multi-month payments, treating each user action as one row with N child allocations.
+- Why rejected: Would require re-auditing every page that computes monthly dues (5 pages, ~16 historical bugs). Bigger blast radius than the feature deserves.
+- Rule: For multi-month payments, insert N independent rows (one per month) sharing a single `payment_group_id` UUID. All existing calculations stay row-wise on `for_month` — zero change. `payment_group_id` is UI hint only (badges, group resend, edit warning). NEVER use `payment_group_id` in any due/balance/total calculation.
+- Impact: high (avoided regression risk class)
+- Date: 2026-05-23
+
+**Multi-month WhatsApp message MUST exclude the entire group from `paid_before`, not just one row**
+- Mistake-trap: When computing `previous_due` for a multi-month send, the natural query `paid_before = Σ payments WHERE for_month = M AND id != current_row.id` is WRONG — it includes the OTHER rows of the same group in `paid_before`, making "previous due" appear smaller than it actually was before the user took action.
+- Rule: For multi-month, `paid_before = Σ payments WHERE for_month = M AND (payment_group_id IS NULL OR payment_group_id != current_group_id)`. Easiest: fetch all payments for the months in one query, filter client-side on `p.payment_group_id !== groupId` (cleanly handles the SQL NULL semantics where `!= 'uuid'` excludes NULL rows).
+- Impact: high (would have produced incorrect message totals)
+- Date: 2026-05-23
+
+**`.git/index.lock` stuck on Windows-mount — cannot be removed from Linux sandbox**
+- Mistake: Tried `rm -f .git/index.lock` after a partial `git add` left a stale lock. The Linux sandbox got `Operation not permitted` even though `ls -la` showed the file is owned by the sandbox user.
+- Root cause: Windows-side filesystem driver holds an exclusive handle on the lock file once git creates it; the Linux sandbox can read but not delete certain mounted files.
+- Rule: For git operations during Cowork sessions, prefer letting the USER run `git commit` + `git push` from their native Windows terminal. Stage files via the sandbox if convenient (`git add` works), but commits should be the user's job. If you must commit from sandbox, do it BEFORE any tmp_obj write fails — the lock appears only after a failed/interrupted git op.
+- Workaround for the user: Close any open editor with the repo, then in PowerShell: `cd C:\Users\<u>\Documents\GitHub\tubewell-manager; Remove-Item .git\index.lock; git status`. The lock is just a marker, no data loss.
+- Impact: medium (blocked auto-push from sandbox)
+- Date: 2026-05-23
