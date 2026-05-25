@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import type { Farmer, UsageEntry } from '@/types';
+import type { Farmer, UsageEntry, Payment } from '@/types';
 import { format, parse } from 'date-fns';
 import {
   Plus, Trash2, Edit2, X, Check, Droplets, ChevronDown, ChevronUp, MessageCircle, Send,
+  Eye, EyeOff, CheckCircle2,
 } from 'lucide-react';
 import {
   DEFAULT_USAGE_TEMPLATE,
@@ -94,13 +96,20 @@ async function buildAndLogUsageWhatsApp({
 
 const UsagePage: React.FC = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [prefillHandled, setPrefillHandled] = useState(false);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [entries, setEntries] = useState<UsageEntry[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editEntry, setEditEntry] = useState<UsageEntry | null>(null);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
+  // Feature 2: hide settled farmers (whose month balance is 0) by default.
+  // "Settled" = month-scoped balance is 0 for that farmer in the selected month.
+  // Toggle reveals them; doesn't affect "Sabhi Months" view (no per-month scope).
+  const [showSettled, setShowSettled] = useState(false);
   const [toast, setToast] = useState('');
 
   // After a successful save, if the farmer has WhatsApp enabled, this holds the
@@ -122,13 +131,18 @@ const UsagePage: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    const { data: f } = await supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name');
-    const { data: e } = await supabase.from('usage_entries').select('*').order('date', { ascending: false });
+    const [{ data: f }, { data: e }, { data: p }] = await Promise.all([
+      supabase.from('farmers').select('*').eq('is_deleted', false).eq('is_disabled', false).order('name'),
+      supabase.from('usage_entries').select('*').order('date', { ascending: false }),
+      supabase.from('payments').select('*'),
+    ]);
     const activeFarmerIds = new Set((f || []).map((x) => x.id));
     // Only show entries from active (non-deleted, non-disabled) farmers
     const activeEntries = (e || []).filter((x) => activeFarmerIds.has(x.farmer_id));
+    const activePayments = (p || []).filter((x) => activeFarmerIds.has(x.farmer_id));
     setFarmers(f || []);
     setEntries(activeEntries);
+    setPayments(activePayments);
 
     // Default to current month if it has entries, else latest month
     const currentMonth = format(new Date(), 'MMMM yyyy');
@@ -142,6 +156,30 @@ const UsagePage: React.FC = () => {
 
   useEffect(() => { loadData(); }, []);
 
+  // ── Deep-link prefill (from FarmerDetailPage "Pani Add karo") ──────────────
+  // /usage?farmer_id=xxx → opens the form with farmer pre-selected. Single-shot.
+  useEffect(() => {
+    if (loading || prefillHandled || farmers.length === 0) return;
+    const farmerId = searchParams.get('farmer_id');
+    if (!farmerId) { setPrefillHandled(true); return; }
+    const farmer = farmers.find(f => f.id === farmerId);
+    if (!farmer) { setPrefillHandled(true); return; }
+
+    setEditEntry(null);
+    setForm({
+      farmer_id: farmerId,
+      date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      hours: '',
+      minutes: '',
+      rate_per_hour: '100',
+    });
+    setFormError('');
+    setShowForm(true);
+    setPrefillHandled(true);
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, farmers, prefillHandled]);
+
   // All unique months sorted descending
   const allMonths = [...new Set(entries.map(e => e.month))].sort((a, b) => {
     const da = parse(a, 'MMMM yyyy', new Date());
@@ -154,11 +192,26 @@ const UsagePage: React.FC = () => {
     ? entries.filter(e => e.month === selectedMonth)
     : entries;
 
-  // Group by farmer
-  const grouped = farmers.map(f => ({
-    farmer: f,
-    entries: monthEntries.filter(e => e.farmer_id === f.id),
-  })).filter(g => g.entries.length > 0);
+  // Group by farmer + compute settled state (for the selected month).
+  // Settled = (sum of usage in this month) - (sum of payments for_month = this month) <= 0
+  // Settled concept only applies when a specific month is selected. When "Sabhi Months"
+  // is active (selectedMonth empty), is_settled is always false (no per-month scope).
+  const grouped = farmers.map(f => {
+    const fEntries = monthEntries.filter(e => e.farmer_id === f.id);
+    const usage_amount = fEntries.reduce((s, e) => s + Number(e.amount || 0), 0);
+    const paid = selectedMonth
+      ? payments
+          .filter(p => p.farmer_id === f.id && p.for_month === selectedMonth)
+          .reduce((s, p) => s + Number(p.amount || 0), 0)
+      : 0;
+    const balance = Math.max(0, usage_amount - paid);
+    const is_settled = !!selectedMonth && usage_amount > 0 && balance === 0;
+    return { farmer: f, entries: fEntries, usage_amount, paid, balance, is_settled };
+  }).filter(g => g.entries.length > 0);
+
+  // Apply settled filter — default hide settled, toggle to show
+  const visibleGrouped = showSettled ? grouped : grouped.filter(g => !g.is_settled);
+  const hiddenSettledCount = grouped.length - visibleGrouped.length;
 
   const calcAmount = (hours: number, mins: number, rate: number) =>
     parseFloat(((hours + mins / 60) * rate).toFixed(2));
@@ -395,7 +448,12 @@ const UsagePage: React.FC = () => {
       <div className="flex items-center justify-between mb-4 pt-2">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Pani Entries</h1>
-          <p className="text-sm text-gray-500">{monthEntries.length} entries</p>
+          <p className="text-sm text-gray-500">
+            {visibleGrouped.length} kisan
+            {hiddenSettledCount > 0 && (
+              <span className="text-gray-400"> · {hiddenSettledCount} cleared (hidden)</span>
+            )}
+          </p>
         </div>
         <button onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-white font-medium text-sm"
@@ -443,7 +501,7 @@ const UsagePage: React.FC = () => {
       )}
 
       {/* Month Filter */}
-      <div className="mb-4">
+      <div className="mb-3">
         <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
           className="w-full px-4 py-3 rounded-xl border text-sm bg-white outline-none"
           style={{ borderColor: '#e5e2dc' }}>
@@ -452,15 +510,46 @@ const UsagePage: React.FC = () => {
         </select>
       </div>
 
+      {/* Settled toggle — only meaningful when a specific month is selected */}
+      {selectedMonth && (grouped.some(g => g.is_settled)) && (
+        <button
+          onClick={() => setShowSettled(s => !s)}
+          className="mb-3 w-full flex items-center justify-center gap-2 py-2 rounded-xl border text-xs font-medium text-gray-600 bg-white hover:bg-gray-50"
+          style={{ borderColor: '#e5e2dc' }}
+        >
+          {showSettled ? (
+            <>
+              <EyeOff size={13} /> Sirf pending dikhao
+              <span className="text-gray-400">({hiddenSettledCount === 0 ? grouped.filter(g => g.is_settled).length : hiddenSettledCount} cleared)</span>
+            </>
+          ) : (
+            <>
+              <Eye size={13} /> Settled kisan bhi dikhao
+              <span className="text-gray-400">({hiddenSettledCount} cleared chhupe hain)</span>
+            </>
+          )}
+        </button>
+      )}
+
       {loading ? (
         <div className="text-center py-10 text-gray-400">Load ho raha hai...</div>
-      ) : grouped.length === 0 ? (
+      ) : visibleGrouped.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">
-          {selectedMonth ? `${selectedMonth} mein koi entry nahi` : 'Koi entry nahi hai'}
+          {grouped.length > 0 && hiddenSettledCount > 0 ? (
+            <>
+              <CheckCircle2 size={28} className="text-green-500 mx-auto mb-2" />
+              <div className="text-green-700 font-medium">Saare kisan cleared hain 🎉</div>
+              <div className="mt-1">Settled wale dekhne ke liye upar toggle daba do</div>
+            </>
+          ) : selectedMonth ? (
+            `${selectedMonth} mein koi entry nahi`
+          ) : (
+            'Koi entry nahi hai'
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {grouped.map(({ farmer, entries: fEntries }) => {
+          {visibleGrouped.map(({ farmer, entries: fEntries, is_settled, balance, paid }) => {
             const totalHours = Math.floor(fEntries.reduce((s, e) => s + e.total_minutes, 0) / 60);
             const totalMins = fEntries.reduce((s, e) => s + e.total_minutes, 0) % 60;
             const totalAmt = fEntries.reduce((s, e) => s + Number(e.amount), 0);
@@ -476,11 +565,13 @@ const UsagePage: React.FC = () => {
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-                      style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
+                      style={{ background: is_settled
+                        ? 'linear-gradient(135deg, #16a34a, #15803d)'
+                        : 'linear-gradient(135deg, #2563eb, #1d4ed8)' }}>
                       {farmer.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                      <div className="font-semibold text-gray-900 flex items-center gap-1.5 flex-wrap">
                         {farmer.name}
                         {waReady && (
                           <span
@@ -490,13 +581,26 @@ const UsagePage: React.FC = () => {
                             <MessageCircle size={10} className="text-green-600" />
                           </span>
                         )}
+                        {is_settled && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle2 size={9} /> Cleared
+                          </span>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-400">{fEntries.length} entries · {totalHours}h {totalMins}m</div>
+                      <div className="text-xs text-gray-400">
+                        {fEntries.length} entries · {totalHours}h {totalMins}m
+                        {selectedMonth && paid > 0 && (
+                          <span className="text-green-700"> · ₹{paid.toLocaleString('en-IN')} paid</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="font-bold text-gray-900">₹{totalAmt.toLocaleString('en-IN')}</div>
+                      {selectedMonth && !is_settled && balance > 0 && (
+                        <div className="text-[10px] text-red-500 font-semibold">₹{balance.toLocaleString('en-IN')} baki</div>
+                      )}
                     </div>
                     {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
                   </div>

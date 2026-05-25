@@ -82,7 +82,9 @@ export interface WhatsAppMessageTemplate {
   updated_by_email: string | null;
 }
 
-export type WhatsAppMessageType = 'usage_entry' | 'payment_received' | 'manual_resend';
+// 'reminder' was added in Session 4 (Dashboard pending dues quick-action).
+// The DB column has no CHECK constraint so no migration required.
+export type WhatsAppMessageType = 'usage_entry' | 'payment_received' | 'manual_resend' | 'reminder';
 export type WhatsAppLogStatus = 'initiated';
 // Note: only 'initiated' is currently used. wa.me click-to-send cannot confirm delivery —
 // the link merely opens WhatsApp pre-filled. Don't add 'delivered'/'read' statuses unless

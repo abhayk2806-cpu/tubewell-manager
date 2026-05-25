@@ -30,16 +30,18 @@ Stack: React 19 + TypeScript ~6.0 + Vite 8 + Tailwind 3 + shadcn/ui (40+ compone
 ## Directory Map
 
 ```
-/src/pages/           → 8 pages: Login, Dashboard, Farmers, Usage, Payments, Months, Backup, Settings
-/src/components/      → Layout.tsx + 40+ shadcn ui/ components (don't edit ui/ unless intentional)
+/src/pages/           → 9 pages: Login, Dashboard, Farmers, FarmerDetail (/farmers/:id), Usage, Payments, Months, Backup, Settings
+/src/components/      → Layout.tsx (header search overlay) + 40+ shadcn ui/ components (don't edit ui/ unless intentional)
 /src/context/         → AuthContext.tsx (Supabase auth)
 /src/lib/             → supabase.ts (client init), utils.ts (cn()), whatsapp.ts (all WhatsApp helpers)
 /src/types/           → index.ts — all interfaces (Farmer, UsageEntry, Payment, MonthClosing, BackupData, WhatsAppMessageTemplate, WhatsAppLogEntry)
 /src/hooks/           → use-toast.ts
 /supabase/migrations/ → 001-006 (drift closed; 006 added payment_group_id on 2026-05-23)
-/project/             → PROJECT_MEMORY.md — canonical deep-dive doc, read on-demand
+/project/             → PROJECT_MEMORY.md — canonical deep-dive doc, read on-demand. Session 4 Addendum (T1-T10) covers nav/UX features.
 /tasks/               → todo.md (active), lessons.md (mistake memory), whatsapp-plan.md (Track A reference)
 ```
+
+Routes: `/`, `/login`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, `/settings` + catch-all.
 
 ---
 
@@ -137,6 +139,36 @@ The WhatsApp message helpers (`buildAndLogUsageWhatsApp` in UsagePage, `buildAnd
 - No auto-resend on edit/delete. The per-entry/payment manual re-send button is the only way to send a non-banner message.
 - `whatsapp_log.status` is always `'initiated'`. wa.me click-to-send cannot confirm delivery. Don't add `'delivered'` or `'read'` values unless we migrate to WhatsApp Business API.
 - Consent timestamp (`whatsapp_consent_at`) is set on FIRST consent and PRESERVED on subsequent edits (don't overwrite the original date). Only uncheck → recheck creates a fresh timestamp.
+- `whatsapp_log.message_type` values: `'usage_entry' | 'payment_received' | 'manual_resend' | 'reminder'`. The `'reminder'` value was added in Session 4 (Dashboard quick-reminder send). DB column has no CHECK constraint — no migration was required. Don't break the TS union without checking every call site.
+
+---
+
+## Critical Rules — FarmerDetailPage Is Read-Mostly
+
+Added in Session 4. Route `/farmers/:id`. The page renders summaries, month breakdown, and a ledger — it does NOT own create/update/delete flows.
+
+- All add/edit/delete still happens on the canonical pages: FarmersPage, UsagePage, PaymentsPage. The detail page deep-links to those with `useSearchParams` prefill.
+- If you find yourself wiring an "Edit entry" or "Delete payment" button into the detail page → STOP. Either deep-link to PaymentsPage / UsagePage (preferred — keeps math and WhatsApp logic single-sourced) or surface the requirement to the owner first.
+- WhatsApp resend on the detail page is single-month only. For multi-month grouped payments, the canonical resend lives on PaymentsPage (`buildAndLogMultiMonthPaymentWhatsApp`). Don't duplicate the multi-month summary builder here.
+- Active-farmer filter does NOT apply at the route level — disabled/deleted farmers can still be navigated to via `/farmers/:id` (for audit / history). The page renders a Disabled/Deleted badge in the header so it's visible. Other pages already exclude these farmers from their lists, so the only way to land here is intentional.
+
+---
+
+## Critical Rules — Deep-Link URL Prefill Pattern
+
+PaymentsPage and UsagePage accept URL search params to open the Add form pre-filled:
+
+- `/payments?farmer_id=<uuid>[&for_month=<"April 2026">][&amount=<number>]`
+- `/usage?farmer_id=<uuid>`
+
+Implementation rules (matched in both pages):
+
+- Use `useSearchParams` from react-router-dom.
+- Guard the effect with `if (loading || prefillHandled || farmers.length === 0) return;` — must wait for `loadData` to populate `farmers` before validating `farmer_id`.
+- Always validate `farmer_id` resolves to a known farmer; otherwise just set `prefillHandled = true` and return (don't open a half-broken form).
+- After opening the form, call `setSearchParams({}, { replace: true })` — single-shot, refresh-safe, doesn't pollute back history.
+- Don't add a new query param without auditing both pages — keep the contract small (`farmer_id` / `for_month` / `amount`).
+- The prefill effect must NOT bypass any validation that the normal Add flow runs. Same `handleSave` is reused; we only pre-populate, the user confirms.
 
 ---
 

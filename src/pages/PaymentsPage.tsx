@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { Farmer, Payment } from '@/types';
@@ -229,6 +230,8 @@ type PayMode = 'single' | 'multi';
 
 const PaymentsPage: React.FC = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [prefillHandled, setPrefillHandled] = useState(false);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [rawUsage, setRawUsage] = useState<RawUsage[]>([]);
@@ -293,6 +296,37 @@ const PaymentsPage: React.FC = () => {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  // ── Deep-link prefill ──────────────────────────────────────
+  // Opens the Add Payment form pre-filled from URL params, e.g.
+  //   /payments?farmer_id=xxx&for_month=April 2026&amount=500
+  // Triggered from FarmerDetailPage's "Pay" buttons. Single-shot — params are
+  // cleared after handling so refresh / re-navigation doesn't re-open.
+  useEffect(() => {
+    if (loading || prefillHandled || farmers.length === 0) return;
+    const farmerId = searchParams.get('farmer_id');
+    if (!farmerId) { setPrefillHandled(true); return; }
+    const farmer = farmers.find(f => f.id === farmerId);
+    if (!farmer) { setPrefillHandled(true); return; }
+    const forMonth = searchParams.get('for_month') || '';
+    const amount = searchParams.get('amount') || '';
+
+    setEditPayment(null);
+    setPayMode('single');
+    setMultiAllocations({});
+    setForm({
+      farmer_id: farmerId,
+      amount,
+      date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      for_month: forMonth,
+    });
+    setFormError('');
+    setShowForm(true);
+    setPrefillHandled(true);
+    // Clear URL params so refresh doesn't re-open the form
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, farmers, prefillHandled]);
 
   // -------------------------------------------------------
   // Per-farmer month-wise due computation

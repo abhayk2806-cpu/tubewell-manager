@@ -1166,3 +1166,433 @@ These deferred features remain post-Track A:
 **Total DB changes:** 1 migration (`005`) — additive only.
 **Total bug count introduced:** 0 (per build verification across 6 phases).
 **System status:** ✅ Live, multi-device-safe, backup-portable.
+
+---
+---
+
+# Session 3 Addendum — Payment UX Improvements (2026-05-23)
+
+> Shipped + owner-verified in production. Adds two UX features to the payment workflow without changing any existing calculation logic.
+
+## S1. Why this change
+
+Two friction points in the existing single-month payment flow:
+
+1. **Manual typing of pending amount.** When a farmer pays the full pending balance for a month, the owner had to read the balance off the form's helper text and type it into the amount input. Slow + error-prone (₹500 typed as ₹50 was a real concern).
+
+2. **One row per payment action.** When a farmer paid one lump sum covering multiple months (e.g., ₹800 = April ₹500 + May ₹300), the owner had to add the payment as TWO separate entries, manually splitting the amount and selecting each month. Slow, easy to forget, and the two rows weren't linked in any way.
+
+Both are UX conveniences for paying *known* dues — explicitly NOT advance credit tracking (that's still Track B, deferred).
+
+## S2. Schema additions (migration 006)
+
+Single new column on `payments`:
+
+```sql
+ALTER TABLE payments
+  ADD COLUMN IF NOT EXISTS payment_group_id uuid NULL;
+
+CREATE INDEX IF NOT EXISTS idx_payments_payment_group_id
+  ON payments (payment_group_id)
+  WHERE payment_group_id IS NOT NULL;  -- partial index, most rows are NULL
+```
+
+**Semantics:**
+- Nullable. NULL for all pre-existing rows and for any future single-month payment.
+- Non-NULL when N rows were created from one user action. All N rows share the same UUID.
+- The UUID is generated client-side with `crypto.randomUUID()` before insert (one UUID per user action, applied to every row in the batch).
+
+**Critical rule:** `payment_group_id` is a **UI grouping hint only**. It is NEVER used in any due, balance, total, recovery-rate, or any other calculation. Every existing math path remains row-wise on `for_month` — exactly as it was pre-006. This is the safety guarantee that made the feature shippable without re-auditing all 5 calculation pages.
+
+## S3. Architectural decision — why N rows, not a join table
+
+Alternative considered: a `payment_allocations` table with `payment_id` + `for_month` + `amount`, where each user action creates 1 row in `payments` and N rows in `payment_allocations`.
+
+**Rejected.** Reasons:
+
+1. **Blast radius.** Every page that computes monthly dues (Dashboard, MonthsPage, PaymentsPage, FarmersPage, plus the WhatsApp helpers) would need re-auditing. 16 historical bugs in this calculation space already.
+2. **Backup format complexity.** A second table to export/import, with FK ordering implications in Replace mode.
+3. **No payoff at this scale.** ~9 active farmers, low payment volume. The "one transaction, N allocations" abstraction doesn't unlock anything the current model can't do.
+
+The N-rows-sharing-a-UUID approach gives us:
+- Zero changes to existing calculation logic
+- Zero backup schema change beyond a column add
+- A clean UI grouping signal for badges, group resend, and delete warnings
+
+## S4. UI flow (PaymentsPage)
+
+### Single mode (default, existing flow + new chip)
+
+```
+[ Farmer dropdown                          ]
+[ for_month dropdown                       ]
+  ↳ Balance helper: "April 2026 ka balance: ₹500.00 baki hai"
+[ Amount input         ]
+  ↳ [ ⚡ Pura ₹500.00 bharo ]   ← NEW: green chip, click to auto-fill
+[ Date input                               ]
+[ Save karo ]
+```
+
+The chip:
+- Only renders when `selectedMonthBalance > 0` (no chip when month is cleared)
+- Shows the exact pending value with 2 decimal places
+- On click, calls `setForm({ amount: balance.toFixed(2) })` — that's it, no other side effects
+- User can still hand-edit the amount after clicking (chip is fire-and-forget)
+
+### Multi mode (new)
+
+```
+[ Tab toggle: [ Ek month ] [ Multiple months ] ]   ← only in Add mode, not Edit
+[ Farmer dropdown                          ]
+[ Header: "Kaunse months pay kar rahe ho?"  [ ⚡ Sab pending select ] ]
+[ ┌─ April 2026 ───────────────── ₹500.00 pending ┐ ]
+[ │ ☐ (unchecked)                                  │ ]
+[ └────────────────────────────────────────────────┘ ]
+[ ┌─ May 2026 ─────────────────── ₹300.00 pending ┐ ]
+[ │ ☑ Allocate: [ 300.00              ]            │ ]   ← editable
+[ └────────────────────────────────────────────────┘ ]
+[ ┌─ Total summary card ─────────────────────── ┐  ]
+[ │ Total payment (2 months):       ₹800.00     │  ]
+[ │ April 2026 + May 2026                       │  ]
+[ └─────────────────────────────────────────────┘  ]
+[ Date input                                       ]
+[ Save karo ]
+```
+
+Behavior details:
+- Only months with `balance > 0` for the selected farmer appear in the chip list. Cleared months are hidden in multi mode (intentional — paying a cleared month would be overpayment, which the app doesn't track as credit anyway).
+- On checkbox toggle, the allocation defaults to the full pending. User can edit before saving (allows partial multi-month, e.g., ₹400 April + ₹300 May = ₹700 even though April pending is ₹500).
+- "Sab pending select" checks every month and pre-fills each with its full pending.
+- The total summary card auto-sums the allocations. No separate "amount" input — total IS the sum.
+- Validation on save: at least 2 months selected; every allocation must parse as a positive number.
+
+### Edit mode
+
+Multi-month is a creation-time convenience only. Editing a row that has `payment_group_id`:
+- Mode toggle is hidden (edit always operates on a single row).
+- Modal shows a blue info note: *"Yeh row ek {N}-month payment (kul ₹X) ka part hai. Sirf is row ko edit kar rahe ho."*
+- Saving updates the single row. Other rows in the group are unaffected.
+
+## S5. Multi-month WhatsApp message — single summary
+
+When a multi-month payment is saved (or resent from a grouped row), one WhatsApp message goes out summarizing all months.
+
+### Message format (hard-coded — NOT template-driven)
+
+```
+Namaste {farmer_name} ji 🙏
+
+Payment receive ho gaya: ₹{total_amount}
+
+💰 Allocation:
+📅 {month_1}
+   Pichla baki: ₹{previous_due_1}
+   Abhi diya: ₹{allocated_1}
+   Ab baki: ₹{new_due_1}
+📅 {month_2}
+   Pichla baki: ₹{previous_due_2}
+   Abhi diya: ₹{allocated_2}
+   Ab baki: ₹{new_due_2}
+
+Date: {date}
+
+— Tubewell Manager
+```
+
+### Why hard-coded, not template-driven
+
+The existing `whatsapp_message_templates.payment_received` row uses placeholders `{previous_due}` / `{amount_paid}` / `{new_due}` / `{for_month}` — single-month by design. Stretching the template system to support a variable-length list of months would require:
+- A new template syntax (loops? array placeholders?)
+- A migration adding a new template row OR a major rewrite of the existing one
+- Updating SettingsPage to handle the new placeholder vocabulary
+
+Not worth it for a feature that's used occasionally. The single-month flow (95% of sends) continues to honor the editable template. Multi-month is the rare case with a fixed format.
+
+Owner edits to the `payment_received` template **still apply to single-month sends**. They have no effect on multi-month summaries. Documented in CLAUDE.md and BUSINESS_KNOWLEDGE.md Round 8.
+
+### Send-time math (critical correctness rule)
+
+For each month in the group, the message shows:
+- **Pichla baki (previous_due):** `max(0, usage_sum − paid_before)` where `paid_before = Σ payments for that farmer + for_month EXCLUDING every row in the current payment_group_id`
+- **Abhi diya:** the allocation for that month in the current group
+- **Ab baki (new_due):** `max(0, usage_sum − paid_before − allocation)`
+
+The exclusion rule is the subtle one. If we used the single-month helper's pattern `WHERE id != current_row_id`, the OTHER rows of the same multi-month group would be counted in `paid_before` — making "pichla baki" appear smaller than it actually was before the user took action. That's wrong.
+
+**Implementation:** fetch all payments for `(farmer_id, for_month IN group_months)` in one query, then filter client-side on `p.payment_group_id !== groupId`. The client-side filter handles SQL NULL semantics cleanly (Postgres `WHERE col != 'uuid'` excludes NULL rows; client-side `!==` keeps them).
+
+### Logging
+
+One log row per multi-month send, not N. Schema:
+- `message_type: 'payment_received'` (or `'manual_resend'` on resend)
+- `related_entry_id`: first row's id in the group (the "anchor" row)
+- `message_text`: full summary text
+- `whatsapp_number`: the farmer's normalized number
+- `status: 'initiated'` (same wa.me limitation as everything else)
+
+## S6. Resend, Delete, Edit on grouped rows
+
+### Resend (per-payment WhatsApp icon)
+
+Click WhatsApp icon on a grouped row:
+1. Helper detects `payment.payment_group_id != null` AND group size > 1
+2. Loads all rows in the group from React state (already fetched)
+3. Calls `buildAndLogMultiMonthPaymentWhatsApp` with the full group
+4. Same summary message format, fresh send-time DB query, new log row
+
+Click WhatsApp icon on a single-month row (or a "group of 1"): unchanged behavior — uses `buildAndLogPaymentWhatsApp` with the editable template.
+
+### Delete
+
+Delete confirmation has 3 cases:
+1. **Single-month row** (no group): existing confirm: *"Yeh payment delete karna chahte ho?"*
+2. **Grouped row** (group size > 1): new confirm: *"Yeh payment {N} months ke multi-month payment ka part hai. Sirf is row ({month} — ₹{amount}) ko delete karna chahte ho? Baki ke {N-1} months affect nahi honge."*
+3. **Group of 1** (orphan — e.g., other rows already deleted): existing confirm (no warning).
+
+Each row is deleted independently — there's no "delete whole group" button. If owner wants to delete a whole group, they delete each row in sequence. Acceptable trade-off for code simplicity.
+
+### Edit
+
+Always single-row, as noted in S4. The blue info note in the modal is informational only — there's no "edit whole group" mode.
+
+## S7. Backup format v2.2
+
+Single change from v2.1:
+- `payments[].payment_group_id` is now an optional string field (UUID) on each payment row
+
+The export uses `select('*')` so the new column is auto-included. The importer upserts payment rows with whatever fields they contain — missing `payment_group_id` defaults to NULL in the DB (column is nullable, no DEFAULT clause needed).
+
+Backward compatibility:
+- **v1.0** backup imported into current DB → all payments get `payment_group_id = NULL`. No data loss; no grouping (which makes sense — v1 didn't have grouping).
+- **v2.0** backup imported → same as v1.0 case
+- **v2.1** backup imported → same as above
+- **v2.2** backup imported into pre-006 DB → would fail because column doesn't exist. Not a real risk: prod DB has migration 006 applied; the only "pre-006" DBs would be local dev copies, in which case the owner would just run the migration first.
+
+`CURRENT_BACKUP_VERSION` constant in `BackupPage.tsx` bumped `"2.1"` → `"2.2"`. Preview page shows a version note when importing older backups (e.g., v2.1: *"(no multi-month payment grouping)"*).
+
+## S8. Files touched
+
+- `supabase/migrations/006_add_payment_group_id.sql` — NEW
+- `src/types/index.ts` — `Payment.payment_group_id?: string | null` added; `BackupData.version` comment updated
+- `src/pages/PaymentsPage.tsx` — major rewrite (~830 → ~1100 lines):
+  - New `MultiPaymentSendArgs` type + `buildAndLogMultiMonthPaymentWhatsApp` helper
+  - New `PayMode` type, `payMode` + `multiAllocations` state
+  - New handlers: `switchToMode`, `handleFillFullPending`, `toggleMultiMonth`, `updateMultiAllocation`, `handleFillAllPending`
+  - `handleSave` split into single-mode and multi-mode branches; multi-mode generates UUID + inserts N rows
+  - `handleDelete` checks group size, shows different confirms
+  - `handleResendWhatsApp` routes to multi-month helper when group size > 1
+  - Form modal: mode toggle, multi-mode chip selector, total summary card
+  - Payment list: grouped-row purple badge
+- `src/pages/BackupPage.tsx` — `CURRENT_BACKUP_VERSION` bumped; version-note text updated
+- Knowledge: `CLAUDE.md`, `PROJECT_STATUS.md`, `BUSINESS_KNOWLEDGE.md`, `tasks/lessons.md`, `tasks/todo.md`, `project/PROJECT_MEMORY.md` (this file)
+
+## S9. What's NOT in scope
+
+Deliberately excluded — owner can revisit later if needed:
+- **Unified "delete whole group" button** — workflow rarely needs it; per-row delete + warning is clearer
+- **Multi-month template editor** — see S5 for why the hard-coded format is the right trade-off
+- **Multi-month edit mode** — current edit is single-row; reworking to "edit the whole group" would add UI complexity for an edge case
+- **Group resend from a fresh "Recent Multi-Month Payments" view** — current per-payment WhatsApp icon already handles this
+- **Cross-farmer payment splits** — a payment_group_id is scoped to one farmer by current code; mixing farmers in one group would break the WhatsApp message logic. If needed in future: add a `farmer_ids` check.
+- **Advance credit (overpayment carry-forward)** — STILL Track B, STILL deferred. The new multi-month UI does NOT add advance credit semantics — overpayment in a multi-month allocation still caps `new_due` at ₹0 per row, same as the existing single-month flow.
+
+---
+
+**Session 3 Addendum End.**
+**Total source changes:** 3 files modified (`src/types/index.ts`, `src/pages/PaymentsPage.tsx`, `src/pages/BackupPage.tsx`) + 1 new SQL migration (`006`).
+**Total DB changes:** 1 migration (`006`) — additive only (1 nullable column + 1 partial index).
+**Total bug count introduced:** 0 (per build verification + owner production smoke-test).
+**System status:** ✅ Live in production, owner-verified end-to-end 2026-05-23. All existing calculations unchanged. Backup v2.2.
+
+---
+
+# Session 4 Addendum (2026-05-25) — Navigation & UX features
+
+> Status: code complete on local repo, build verified, NOT pushed yet. Owner pushes from Windows.
+
+## T1. Why this change
+
+Owner's two-pain-points after Session 3 launch:
+
+1. **Tab-hopping** — to see a single farmer's complete picture, owner had to navigate Farmers → Usage → Payments → Months. Slow and error-prone.
+2. **Settled clutter in Usage section** — farmers whose accounts were cleared for a month still appeared in the Pani Entries list, creating confusion ("kiska abhi paisa baki hai?").
+
+Decision: build a per-farmer "home page" + hide settled clutter by default + add fast navigation hooks (search + quick-action buttons everywhere).
+
+## T2. Architectural shape — no math changes anywhere
+
+The single most important property of Session 4: **zero changes to any calculation logic**. New code only:
+- Reads existing rows (farmer + entries + payments + month_closings + templates).
+- Renders aggregations using the same row-wise `for_month`-bucketed math as Dashboard / MonthsPage / PaymentsPage (sections 6 + A5 of this file).
+- Deep-links to existing pages via URL search params; the existing pages remain the only source of insert/update/delete.
+
+This is intentional — Session 4 is a navigation + presentation layer. All critical rules (allocation by `for_month`, send-time DB query, active-farmer filter, soft-delete only, `payment_group_id` is UI-hint-only) stay in force unchanged.
+
+## T3. New route — `/farmers/:id` (FarmerDetailPage)
+
+File: `src/pages/FarmerDetailPage.tsx` (~430 lines)
+
+**Data load** (parallel, on mount + when `id` changes):
+
+```ts
+const [farmer, entries, payments, closings] = await Promise.all([
+  supabase.from('farmers').select('*').eq('id', id).maybeSingle(),
+  supabase.from('usage_entries').select('*').eq('farmer_id', id).order('date', desc),
+  supabase.from('payments').select('*').eq('farmer_id', id).order('date', desc),
+  supabase.from('month_closings').select('*').eq('farmer_id', id),
+]);
+```
+
+If farmer not found → "Yeh kisan nahi mila" + back button to `/farmers`.
+
+**Derived state via `useMemo`:**
+
+- `totals` — `{ totalUsage, totalPaid, totalDue = max(0, usage - paid), totalMinutes }`
+- `monthBreakdown` — per-month: `{ usage_amount, usage_total_minutes, paid, due = max(0, usage - paid), is_settled = due===0 && (usage>0 || paid>0), entries, payments, is_closed }`. Sorted most-recent month first.
+- `ledger` — interleaved entries + payments sorted by row date desc.
+
+**Render layout (top to bottom):**
+
+1. Back button + farmer header (name, WhatsApp pill, mobile, Disabled/Deleted badge if applicable).
+2. Optional notes block (amber tint).
+3. 3 summary cards: Total Usage / Total Paid / Baki — each with secondary line (`{hours}h {min}m` / `N payments` / `M months pending` or "Cleared ✓").
+4. 2 quick-action buttons: "Pani Add karo" (blue) → `/usage?farmer_id=...`, "Payment Add karo" (green; disabled when totalDue=0) → `/payments?farmer_id=...`.
+5. Month-wise breakdown card — list of months with usage hours+amount, paid, balance, badges (Cleared / Pending / Month Closed). Each pending month has its own `Pura ₹X bharo` green button → `/payments?farmer_id=...&for_month=...&amount=...`.
+6. Full ledger card — chronological list of entries (blue droplet icon) and payments (green wallet icon). Payment rows from a multi-month group show purple "multi-month" badge. WhatsApp resend icon (green) on payment rows when farmer has WA enabled — uses send-time DB math, same pattern as PaymentsPage. Max-height with overflow-y scroll (480px) so the ledger doesn't push everything else off the screen.
+
+**WhatsApp resend on this page is single-month only.** Multi-month grouped payments (with `payment_group_id`) get a fallback single-month message from here — the full multi-month summary lives in PaymentsPage where the grouped-resend helper is. Acceptable trade-off: ledger is a read view, full multi-month resend stays in the creation flow.
+
+## T4. Deep-link prefill pattern (PaymentsPage + UsagePage)
+
+The Farmer Detail Page action buttons and Dashboard "Pay" button deep-link with URL search params:
+
+| URL | Effect |
+|---|---|
+| `/payments?farmer_id=xxx` | Add form opens, farmer pre-selected |
+| `/payments?farmer_id=xxx&for_month=April 2026` | + month pre-selected |
+| `/payments?farmer_id=xxx&for_month=April 2026&amount=500` | + amount pre-filled |
+| `/usage?farmer_id=xxx` | Add form opens, farmer pre-selected |
+
+**Implementation:**
+
+```tsx
+const [searchParams, setSearchParams] = useSearchParams();
+const [prefillHandled, setPrefillHandled] = useState(false);
+
+useEffect(() => {
+  if (loading || prefillHandled || farmers.length === 0) return;
+  const farmerId = searchParams.get('farmer_id');
+  if (!farmerId) { setPrefillHandled(true); return; }
+  const farmer = farmers.find(f => f.id === farmerId);
+  if (!farmer) { setPrefillHandled(true); return; }
+  // ... build form state from searchParams ...
+  setShowForm(true);
+  setPrefillHandled(true);
+  setSearchParams({}, { replace: true }); // single-shot: clear params
+}, [loading, farmers, prefillHandled]);
+```
+
+**Single-shot pattern:** `prefillHandled` flips true on first run, `setSearchParams({}, { replace: true })` clears URL so refresh doesn't re-open the form. Replaces history entry so back button doesn't get polluted.
+
+**Why an effect and not a direct read in `loadData`:** PaymentsPage and UsagePage already had `useEffect(() => loadData(), [])` — keeping the prefill logic separate makes the dependency on `farmers` array explicit. Also lets us guard against `farmers.length === 0` (race during initial load).
+
+## T5. Settled-entries hide in UsagePage
+
+**Definition of "settled" for the selected month:**
+
+```
+usage_amount(farmer_id, selected_month) = Σ usage_entries.amount WHERE farmer_id AND month = selected
+paid(farmer_id, selected_month) = Σ payments.amount WHERE farmer_id AND for_month = selected
+balance = max(0, usage_amount - paid)
+is_settled = !!selected_month && usage_amount > 0 && balance === 0
+```
+
+Settled is **scoped to the selected month**. When "Sabhi Months" is active (selectedMonth empty), `is_settled` is always false — the concept doesn't apply across the whole history.
+
+**UI:**
+
+- Default: `showSettled = false` — settled cards hidden.
+- Toggle button visible only when a specific month is selected AND at least one settled farmer exists. Click flips `showSettled`.
+- When shown: settled cards get a green "Cleared" badge next to the name + a green avatar tint.
+- Header line summarizes "N kisan · M cleared (hidden)" when applicable.
+- Empty-state for "all are settled" case has celebratory copy + pointer to the toggle.
+
+**Math is row-wise on `for_month`**, exactly like Dashboard and MonthsPage. UsagePage now also fetches `payments` in `loadData` (it didn't before). Active-farmer filter applied to both entries and payments at fetch time.
+
+## T6. Dashboard pending-dues widget enhancement
+
+The existing "Kisan-wise Baki" list (top-10, sorted by due desc) now has three interactive elements per row:
+
+1. **Clickable name area** (left half) → `navigate(`/farmers/${f.id}`)` to the detail page.
+2. **"Pay" button** (green pill, always shown) → `navigate(`/payments?farmer_id=${f.id}`)` — deep-link, no for_month or amount; owner picks in the form. Useful when the due is across multiple months and owner doesn't know which to pay.
+3. **WhatsApp icon** (only when `whatsapp_enabled && whatsapp_number`) → opens wa.me with a hard-coded Hindi reminder message and logs the send with `whatsapp_log.message_type = 'reminder'`.
+
+**Reminder message format** (hard-coded inline in `Dashboard.tsx::handleReminderWa`, NOT template-driven):
+
+```
+Namaste {farmer_name} ji 🙏
+
+Aapke kuch paise abhi tak baki hain:
+💰 Total baki: ₹{total_due}
+
+Jab convenient ho, please clear kar dijiye.
+
+— Tubewell Manager
+```
+
+`{total_due}` is the per-period due (matches what's shown on the dashboard — when in "Monthly" view it's the per-month due; in "All Time" view it's all-time). This matches owner intuition: send a reminder for what they're looking at right now.
+
+**New `message_type = 'reminder'`**: added to the `WhatsAppMessageType` TS union in `src/types/index.ts`. The `whatsapp_log.message_type` DB column has no `CHECK` constraint, so no migration is needed. `related_entry_id` is `null` for reminders (the message is not tied to any single row).
+
+## T7. Global farmer search in Layout header
+
+Search icon button in the top header opens an overlay (fixed inset-0, z-50, click-outside dismisses).
+
+**Search data:** `id, name, mobile, whatsapp_number, whatsapp_enabled` of all active farmers — re-fetched every time the overlay opens (cheap query for ~10 rows; ensures freshness).
+
+**Filter:** in-memory `String.includes` over name / mobile / whatsapp_number. Case-insensitive on name+mobile, raw match on whatsapp_number (digits only anyway).
+
+**Result row:** name (with WA pill if enabled) + mobile, chevron-right affordance. Click → `navigate('/farmers/${id}')`. Max 30 results displayed with a "narrow karo" hint when truncated.
+
+**Auto-close triggers:** route change (via `useLocation` watcher), Esc keypress, X button, backdrop click. Input auto-focuses on open (50ms timeout to let the DOM mount).
+
+**Why an overlay and not a header text input:** the header is already packed (logo + email + logout); adding a visible search input would compress everything on narrow phones. An icon → overlay keeps the header lean and gives the search input full width when used.
+
+## T8. FarmersPage cards become navigation entry points
+
+Each farmer card's left side (name area + mobile + notes + new chevron) is now a `<button>` that navigates to `/farmers/:id`. The right-side action buttons (edit / delete / restore / enable) are in a separate flex container — no event-bubbling conflict.
+
+**Visual change:** hover background on the clickable area, chevron icon on the right of the clickable area. No other layout changes.
+
+## T9. Files touched
+
+**NEW:**
+- `src/pages/FarmerDetailPage.tsx`
+
+**MODIFIED:**
+- `src/App.tsx` — import + route for `/farmers/:id`
+- `src/components/Layout.tsx` (96 → 247 lines) — Search overlay
+- `src/pages/FarmersPage.tsx` — card left side clickable, chevron, `useNavigate`
+- `src/pages/UsagePage.tsx` — fetches `payments` in loadData, settled toggle + filter, deep-link prefill, Cleared badge, per-card paid/balance summary line
+- `src/pages/PaymentsPage.tsx` — `useSearchParams` deep-link prefill (no other changes)
+- `src/pages/Dashboard.tsx` — pending-dues row enhancement (clickable + Pay button + WhatsApp reminder), `whatsapp.ts` import, reminder send handler, toast
+- `src/types/index.ts` — `WhatsAppMessageType` adds `'reminder'`
+
+**ZERO migrations.** No schema changes required.
+
+## T10. What's NOT in scope (Session 4)
+
+- **Print/share farmer statement** — owner explicitly removed this from the recommended list. Workflow stays in-person, scrolling on the detail page is sufficient.
+- **WhatsApp reminder template editor** — the reminder message is hard-coded inline in Dashboard.tsx. If owner wants to edit the wording later, add a new row to `whatsapp_message_templates` with `template_type='reminder'` and update the helper to fetch+fallback. Out of scope here.
+- **Bulk WhatsApp reminders / scheduled batches** — still in backlog. Today's reminder is a per-tap manual action only.
+- **Farmer detail edit/delete actions** — the detail page is read-mostly. All create / edit / delete still happens on FarmersPage, UsagePage, PaymentsPage (canonical CRUD pages). Detail page is just a viewing surface that deep-links to those flows.
+- **Track B (advance credit tracking)** — still deferred. None of Session 4 touches the ₹0-cap overpayment policy.
+- **Tests** — still zero. Same lessons.md note applies.
+
+---
+
+**Session 4 Addendum End.**
+**Total source changes:** 1 new file + 7 files modified (`App.tsx`, `Layout.tsx`, `FarmersPage.tsx`, `UsagePage.tsx`, `PaymentsPage.tsx`, `Dashboard.tsx`, `types/index.ts`).
+**Total DB changes:** 0 (zero migrations).
+**Total bug count introduced:** 0 (build verification passed; production smoke-test pending after owner pushes).
+**System status:** 🛠 Code complete on local repo, build clean (354KB JS / 105KB gz). Awaiting owner push + production verification.

@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 import type { FarmerSummary } from '@/types';
 import { format, parse } from 'date-fns';
-import { Droplets, Wallet, Users, TrendingUp, ChevronRight, ChevronDown } from 'lucide-react';
+import {
+  Droplets, Wallet, Users, TrendingUp, ChevronRight, ChevronDown,
+  MessageCircle, Send,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { buildWaMeUrl, formatRupees, logWhatsAppSend } from '@/lib/whatsapp';
 
 type ViewMode = 'all' | 'monthly' | 'yearly';
 
@@ -13,6 +18,7 @@ type RawUsage = { farmer_id: string; amount: number; month: string; date: string
 type RawPayment = { farmer_id: string; amount: number; date: string; for_month: string };
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
   const [farmers, setFarmers] = useState<FarmerSummary[]>([]);
   const [allUsage, setAllUsage] = useState<RawUsage[]>([]);
   const [allPayments, setAllPayments] = useState<RawPayment[]>([]);
@@ -20,7 +26,11 @@ const Dashboard: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('monthly');
   const [selectedMonth, setSelectedMonth] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
+  const [sendingWaForFarmer, setSendingWaForFarmer] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
   const navigate = useNavigate();
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 2800); };
 
   const loadData = async () => {
     setLoading(true);
@@ -69,6 +79,44 @@ const Dashboard: React.FC = () => {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  // ── WhatsApp reminder send ─────────────────────────────────
+  // Quick-action reminder for farmers with outstanding due. Uses a hard-coded
+  // Hindi message (not template-driven — different shape than usage/payment
+  // templates). Logs with message_type='reminder'. Send is decoupled from any
+  // data save (read-only operation against farmer + dues snapshot).
+  const handleReminderWa = async (farmer: FarmerSummary) => {
+    if (sendingWaForFarmer) return;
+    if (!farmer.whatsapp_enabled || !farmer.whatsapp_number) return;
+    if (farmer.total_due <= 0) return;
+
+    setSendingWaForFarmer(farmer.id);
+    try {
+      const message =
+        `Namaste ${farmer.name} ji 🙏\n\n` +
+        `Aapke kuch paise abhi tak baki hain:\n` +
+        `💰 Total baki: ₹${formatRupees(farmer.total_due)}\n\n` +
+        `Jab convenient ho, please clear kar dijiye.\n\n` +
+        `— Tubewell Manager`;
+
+      await logWhatsAppSend({
+        farmerId: farmer.id,
+        messageType: 'reminder',
+        relatedEntryId: null,
+        messageText: message,
+        whatsappNumber: farmer.whatsapp_number,
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+      });
+      window.open(buildWaMeUrl(farmer.whatsapp_number, message), '_blank', 'noopener,noreferrer');
+      showToast('WhatsApp open ho gaya — reminder bhejo');
+    } catch (err) {
+      console.error('[dashboard] reminder send failed:', err);
+      showToast('WhatsApp nahi khul saka — dobara try karo');
+    } finally {
+      setSendingWaForFarmer(null);
+    }
+  };
 
   // --- Month / Year options for selectors ---
   const allMonths = [...new Set(allUsage.map(u => u.month))].sort((a, b) => {
@@ -156,6 +204,11 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="p-4 space-y-4 max-w-2xl mx-auto">
+      {toast && (
+        <div className="fixed top-16 left-4 right-4 z-50 bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2">
+          <MessageCircle size={16} /> {toast}
+        </div>
+      )}
       <div className="pt-2">
         <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500">Saara hisaab ek jagah</p>
@@ -292,18 +345,45 @@ const Dashboard: React.FC = () => {
           </div>
         ) : (
           <div className="divide-y" style={{ borderColor: '#f5f5f4' }}>
-            {farmerPeriodDues.filter(f => f.total_due > 0).slice(0, 10).map(f => (
-              <div key={f.id} className="px-4 py-3 flex items-center justify-between">
-                <div>
-                  <div className="font-medium text-gray-900">{f.name}</div>
-                  {f.mobile && <div className="text-xs text-gray-400">{f.mobile}</div>}
+            {farmerPeriodDues.filter(f => f.total_due > 0).slice(0, 10).map(f => {
+              const waReady = f.whatsapp_enabled && !!f.whatsapp_number;
+              return (
+                <div key={f.id} className="px-3 py-2.5 flex items-center gap-1">
+                  <button
+                    onClick={() => navigate(`/farmers/${f.id}`)}
+                    className="flex-1 min-w-0 text-left px-2 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="font-medium text-gray-900 truncate">{f.name}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-bold text-red-500 text-sm">₹{f.total_due.toLocaleString('en-IN')} baki</span>
+                      {f.mobile && <span className="text-[11px] text-gray-400 truncate">· {f.mobile}</span>}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => navigate(`/payments?farmer_id=${f.id}`)}
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-white text-xs font-semibold"
+                    style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)' }}
+                    title="Payment add karo"
+                  >
+                    <Wallet size={12} /> Pay
+                  </button>
+                  {waReady && (
+                    <button
+                      onClick={() => handleReminderWa(f)}
+                      disabled={sendingWaForFarmer === f.id}
+                      className="shrink-0 p-1.5 rounded-lg text-green-600 hover:bg-green-50 disabled:opacity-50"
+                      title="WhatsApp reminder bhejo"
+                    >
+                      {sendingWaForFarmer === f.id ? (
+                        <Send size={14} className="animate-pulse" />
+                      ) : (
+                        <MessageCircle size={14} />
+                      )}
+                    </button>
+                  )}
                 </div>
-                <div className="text-right">
-                  <div className="font-bold text-red-500">₹{f.total_due.toLocaleString('en-IN')}</div>
-                  <div className="text-xs text-gray-400">baki</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

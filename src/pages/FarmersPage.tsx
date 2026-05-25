@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import type { Farmer, FarmerSummary } from '@/types';
 import {
-  Plus, Search, Trash2, Edit2, RotateCcw, X, Check, EyeOff, Eye, MessageCircle,
+  Plus, Search, Trash2, Edit2, RotateCcw, X, Check, EyeOff, Eye, MessageCircle, ChevronRight,
 } from 'lucide-react';
 import { normalizeWhatsAppNumber, formatWhatsAppDisplay } from '@/lib/whatsapp';
 
@@ -29,6 +30,7 @@ const EMPTY_FORM: FarmerForm = {
 };
 
 const FarmersPage: React.FC = () => {
+  const navigate = useNavigate();
   const [farmers, setFarmers] = useState<FarmerSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -513,31 +515,38 @@ const FarmersPage: React.FC = () => {
               style={{ borderColor: f.is_disabled ? '#fde68a' : '#e5e2dc' }}
             >
               <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900">{f.name}</span>
-                    {f.whatsapp_enabled && f.whatsapp_number && (
-                      <span
-                        className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100"
-                        title={`WhatsApp: ${formatWhatsAppDisplay(f.whatsapp_number)}`}
-                      >
-                        <MessageCircle size={12} className="text-green-600" />
-                      </span>
-                    )}
-                    {f.is_disabled && (
-                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                        Disabled
-                      </span>
-                    )}
-                    {f.is_deleted && (
-                      <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-                        Deleted
-                      </span>
-                    )}
+                <button
+                  onClick={() => navigate(`/farmers/${f.id}`)}
+                  className="flex-1 min-w-0 text-left flex items-center gap-2 -mx-1 px-1 py-1 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Pura hisab dekho"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-900">{f.name}</span>
+                      {f.whatsapp_enabled && f.whatsapp_number && (
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100"
+                          title={`WhatsApp: ${formatWhatsAppDisplay(f.whatsapp_number)}`}
+                        >
+                          <MessageCircle size={12} className="text-green-600" />
+                        </span>
+                      )}
+                      {f.is_disabled && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                          Disabled
+                        </span>
+                      )}
+                      {f.is_deleted && (
+                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                          Deleted
+                        </span>
+                      )}
+                    </div>
+                    {f.mobile && <div className="text-sm text-gray-400">{f.mobile}</div>}
+                    {f.notes && <div className="text-xs text-gray-400 mt-1 truncate">{f.notes}</div>}
                   </div>
-                  {f.mobile && <div className="text-sm text-gray-400">{f.mobile}</div>}
-                  {f.notes && <div className="text-xs text-gray-400 mt-1 truncate">{f.notes}</div>}
-                </div>
+                  <ChevronRight size={16} className="text-gray-300 shrink-0" />
+                </button>
 
                 <div className="flex items-center gap-2 ml-2">
                   {activeTab === 'active' && (

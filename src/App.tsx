@@ -4,6 +4,7 @@ import Layout from '@/components/Layout';
 import LoginPage from '@/pages/LoginPage';
 import Dashboard from '@/pages/Dashboard';
 import FarmersPage from '@/pages/FarmersPage';
+import FarmerDetailPage from '@/pages/FarmerDetailPage';
 import UsagePage from '@/pages/UsagePage';
 import PaymentsPage from '@/pages/PaymentsPage';
 import MonthsPage from '@/pages/MonthsPage';
@@ -34,6 +35,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/farmers" element={<ProtectedRoute><FarmersPage /></ProtectedRoute>} />
+      <Route path="/farmers/:id" element={<ProtectedRoute><FarmerDetailPage /></ProtectedRoute>} />
       <Route path="/usage" element={<ProtectedRoute><UsagePage /></ProtectedRoute>} />
       <Route path="/payments" element={<ProtectedRoute><PaymentsPage /></ProtectedRoute>} />
       <Route path="/months" element={<ProtectedRoute><MonthsPage /></ProtectedRoute>} />
