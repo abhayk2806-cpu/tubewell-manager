@@ -27,6 +27,7 @@ import {
   formatRupees,
   logWhatsAppSend,
 } from '@/lib/whatsapp';
+import { allocateMonth, formatMinutes, type EntryAllocation } from '@/lib/allocation';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,6 +173,18 @@ const FarmerDetailPage: React.FC = () => {
     ];
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [entries, payments]);
+
+  // Per-entry paid/partial/unpaid allocation (DERIVED — see src/lib/allocation.ts).
+  // For each month, distribute that month's total paid across its entries FIFO.
+  // Keyed by entry.id so the ledger can look up any entry's status in O(1).
+  const entryAllocations = useMemo(() => {
+    const map = new Map<string, EntryAllocation>();
+    monthBreakdown.forEach(m => {
+      const alloc = allocateMonth(m.entries, m.paid);
+      alloc.entries.forEach(a => map.set(a.entry.id, a));
+    });
+    return map;
+  }, [monthBreakdown]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -483,6 +496,7 @@ const FarmerDetailPage: React.FC = () => {
             {ledger.map(row => {
               if (row.kind === 'usage') {
                 const e = row.entry;
+                const alloc = entryAllocations.get(e.id);
                 return (
                   <div key={`u-${e.id}`} className="px-4 py-2.5 flex items-start gap-3">
                     <div
@@ -499,6 +513,7 @@ const FarmerDetailPage: React.FC = () => {
                         Pani: <strong>{e.hours}h {e.minutes}m</strong>
                         <span className="text-gray-400"> @ ₹{e.rate_per_hour}/hr</span>
                       </div>
+                      {alloc && <PaidBadge alloc={alloc} />}
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-bold text-blue-600">
@@ -562,6 +577,30 @@ const FarmerDetailPage: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+// Paid / partial / unpaid badge for a single usage entry (derived allocation).
+const PaidBadge: React.FC<{ alloc: EntryAllocation }> = ({ alloc }) => {
+  if (alloc.status === 'paid') {
+    return (
+      <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+        <CheckCircle2 size={9} /> Paid
+      </span>
+    );
+  }
+  if (alloc.status === 'partial') {
+    const totalMin = Number(alloc.entry.total_minutes || 0);
+    return (
+      <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+        <AlertCircle size={9} /> Partial: {formatMinutes(alloc.paidMinutes)} of {formatMinutes(totalMin)} paid · ₹{alloc.dueAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} baki
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+      Unpaid
+    </span>
   );
 };
 

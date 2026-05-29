@@ -1,12 +1,12 @@
 # Tubewell Manager — Project Status
 
-> Last updated: 2026-05-25 | Session 4 (Navigation & UX features — built LOCALLY, awaiting owner push) | Phase: **Live in production — feature work in flight**
+> Last updated: 2026-05-29 | Session 5 (Entry-level payment coverage — built locally, awaiting build + push) | Phase: **Live in production — maintenance mode**
 
 ---
 
 ## Current Phase & Top Priority
 
-**🛠 Session 4 (Navigation & UX features) — code complete on local repo, NOT YET PUSHED.**
+**🎉 Session 4 (Navigation & UX features) — SHIPPED, pushed (commit `85f0b2e`), Netlify auto-deployed, and verified by owner on https://tubewell-manager.netlify.app on 2026-05-26.**
 
 Four features built end-to-end to address the owner's pain points: "har chij dekhne ke liye tab to tab move karna padta hai" and "settled farmers ki entries Pani section mein confusion karti hain".
 
@@ -29,7 +29,7 @@ WhatsApp behavior for multi-month: single summary message listing each month's p
 
 The WhatsApp feature is functionally complete, build-verified, knowledge-files-updated, and pushed. Farmers can be enabled per-account via FarmersPage. Templates editable in Setup page. Banners fire after every save (usage + payment). Manual re-send button on every entry. Audit log captures every send. Backup v2.2 includes WhatsApp tables + payment_group_id.
 
-**Session 4 next step:** owner runs the push commands from Windows (provided at session end), Netlify auto-deploys, owner verifies the 4 features end-to-end on https://tubewell-manager.netlify.app, then flag as SHIPPED + VERIFIED here.
+**No active project right now.** Owner picks next move. See "Next Actions" below.
 
 ---
 
@@ -80,6 +80,12 @@ No active blockers.
 ---
 
 ## Decisions Log
+
+### 2026-05-29 — Entry-level payment coverage is DERIVED, never stored (Session 5)
+**Decision:** Show which usage entries a payment has covered (paid / partial / unpaid) by computing it live, not by storing per-entry paid state. New pure helper `src/lib/allocation.ts::allocateMonth(entries, totalPaidForMonth)` distributes the month's total paid across entries FIFO (oldest-first) and returns per-entry `{ paidAmount, dueAmount, paidMinutes, status }`.
+**Allocation unit is MONEY, not hours.** `rate_per_hour` is stored per-entry, so two entries in one month can have different rates — converting ₹→hours globally would be wrong. We allocate rupees; each entry's paid-minutes is derived from THAT entry's own rate. Overpayment beyond usage is reported as `leftoverPaid` and otherwise ignored (consistent with the ₹0-due cap).
+**Alternatives considered & rejected:** A stored `paid_status` column / `payment_allocations` table — same blast-radius objection as the 2026-05-23 `payment_group_id` decision. Stored state also goes stale on entry/payment edits; derived is self-correcting. Month-level due math was already correct; only the per-entry breakdown was missing, and that is a pure function of (entries, total paid).
+**Impact:** Zero schema change, zero migration, zero new write path. The sacred row-wise `for_month` due math is untouched — this is a display layer on top. Surfaced in: FarmerDetailPage ledger (badge per usage row), UsagePage entry cards (badge, only when a specific month is selected — hidden in "Sabhi Months"), and PaymentsPage (post-payment coverage card after a single-month save, computed fresh from DB). Multi-month payments skip the coverage card (banner already lists the months). `payment_group_id` stays out of the math — the pool is simply the sum of `for_month` payments.
 
 ### 2026-04 — Built on React + Supabase + Netlify free tier
 **Decision:** This exact stack for v1
@@ -201,6 +207,24 @@ No active blockers.
 
 ## Session Log
 
+### 2026-05-29 — Session 5 — Entry-level payment coverage (derived) — built locally, awaiting build + push
+
+**New file:**
+- `src/lib/allocation.ts` — pure helper. `allocateMonth(entries, totalPaidForMonth)` → FIFO money allocation across entries, per-entry `{ paidAmount, dueAmount, paidMinutes, status: paid|partial|unpaid }`, plus `leftoverPaid`, `totalUsage`, `totalDue`. `formatMinutes()` renders "1h 30m". No I/O.
+
+**Modified:**
+- `src/pages/FarmerDetailPage.tsx` — `entryAllocations` useMemo (Map keyed by entry.id, built per-month from `monthBreakdown`); `PaidBadge` component renders in each usage row of the ledger. Partial shows "Xm of Ym paid · ₹Z baki".
+- `src/pages/UsagePage.tsx` — per-entry badge in the expanded entry list. `allocMap` computed per farmer from `allocateMonth(fEntries, paid)`, only when a specific month is selected (null in "Sabhi Months").
+- `src/pages/PaymentsPage.tsx` — `coverage` state + `computeCoverage(farmerId, forMonth, name)` (fresh DB query, send-time-DB style). Called after a single-month save (regardless of WhatsApp). Renders a coverage card after the WhatsApp banner listing each entry's status. Cleared on openAdd / multi-save / delete. Multi-month saves skip it.
+
+**Verification done in sandbox:**
+- Logic unit-tested (node): Rampal ₹350/6h → E1+E2 paid, E3 partial (25m of 1h30m, ₹108.33 baki), E4 unpaid, ₹250 due ✓. Mixed-rate, overpayment (leftover tracked), and ₹0-paid cases all correct.
+- `allocation.ts` + `types/index.ts` type-check clean under TS 6.0.3 with the exact project flags (strict, verbatimModuleSyntax, noUnusedLocals).
+
+**NOT yet done (sandbox limitation):** Full `pnpm run build` (`tsc -b && vite build`) could not run — the sandbox has no npm registry access and the mounted pnpm `node_modules` symlinks are unreadable. **Owner must run `pnpm run build` locally before `git push`.** Page edits follow existing patterns; only the helper was independently type-checked.
+
+**Status:** Built locally. Awaiting local build verification + owner push. NOT pushed.
+
 ### 2026-05-17 — Session 1 — Knowledge system initialization
 **New:** All knowledge files initialized.
 
@@ -265,4 +289,4 @@ No active blockers.
 
 **Lint:** 19 errors total, all `react-hooks/set-state-in-effect` warnings on the existing `useEffect(() => loadData(), [])` pattern that's been in the codebase the whole time. 4 new warnings from new useEffects added in Session 4 — same pattern, eslint-disable comments added on the prefill effects where appropriate. NOT a deploy gate (Netlify runs only `npm run build`).
 
-**Status:** Code complete on local repo (`C:\Users\Abhay Kumar\Documents\GitHub\tubewell-manager`). NOT pushed yet — owner runs the push commands from Windows Git Bash / PowerShell. Once Netlify auto-deploys, owner verifies the 4 features end-to-end and then I flag this section as SHIPPED + VERIFIED.
+**Status:** ✅ SHIPPED + VERIFIED. Pushed as commit `85f0b2e` (`0b56abb..85f0b2e main -> main`), Netlify auto-deployed, owner confirmed site live on production 2026-05-26.

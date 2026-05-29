@@ -17,6 +17,7 @@ import {
   logWhatsAppSend,
   splitHoursMinutes,
 } from '@/lib/whatsapp';
+import { allocateMonth, formatMinutes, type EntryAllocation } from '@/lib/allocation';
 
 const getMonth = (date: string) => format(new Date(date), 'MMMM yyyy');
 
@@ -555,6 +556,15 @@ const UsagePage: React.FC = () => {
             const totalAmt = fEntries.reduce((s, e) => s + Number(e.amount), 0);
             const isOpen = expandedFarmer === farmer.id;
             const waReady = farmer.whatsapp_enabled && !!farmer.whatsapp_number;
+            // Per-entry paid/partial/unpaid — only meaningful within a single month.
+            // In "Sabhi Months" view (selectedMonth empty) we skip it (no per-month scope).
+            const allocMap: Map<string, EntryAllocation> | null = selectedMonth
+              ? (() => {
+                  const m = new Map<string, EntryAllocation>();
+                  allocateMonth(fEntries, paid).entries.forEach(a => m.set(a.entry.id, a));
+                  return m;
+                })()
+              : null;
 
             return (
               <div key={farmer.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
@@ -621,6 +631,29 @@ const UsagePage: React.FC = () => {
                             <span className="text-sm font-bold text-gray-900">₹{Number(e.amount).toLocaleString('en-IN')}</span>
                             <span className="text-xs text-gray-400">@₹{e.rate_per_hour}/hr</span>
                           </div>
+                          {allocMap && (() => {
+                            const a = allocMap.get(e.id);
+                            if (!a) return null;
+                            if (a.status === 'paid') {
+                              return (
+                                <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                                  <CheckCircle2 size={9} /> Paid
+                                </span>
+                              );
+                            }
+                            if (a.status === 'partial') {
+                              return (
+                                <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                                  Partial: {formatMinutes(a.paidMinutes)} of {formatMinutes(Number(e.total_minutes || 0))} · ₹{a.dueAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} baki
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 mt-1 text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">
+                                Unpaid
+                              </span>
+                            );
+                          })()}
                           {e.created_by_email && (
                             <div className="text-xs text-gray-400 mt-0.5">by: {e.created_by_email}</div>
                           )}

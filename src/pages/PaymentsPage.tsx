@@ -2,12 +2,13 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import type { Farmer, Payment } from '@/types';
+import type { Farmer, Payment, UsageEntry } from '@/types';
 import { format, parse } from 'date-fns';
 import {
   Plus, Trash2, Edit2, X, Check, ChevronDown, ChevronUp,
-  CheckCircle2, AlertCircle, MessageCircle, Send, Zap, Layers,
+  CheckCircle2, AlertCircle, MessageCircle, Send, Zap, Layers, Droplets,
 } from 'lucide-react';
+import { allocateMonth, formatMinutes, type EntryAllocation } from '@/lib/allocation';
 import {
   DEFAULT_PAYMENT_TEMPLATE,
   buildPaymentMessage,
@@ -248,6 +249,16 @@ const PaymentsPage: React.FC = () => {
   type LastSavedSingle = { kind: 'single'; payment: Payment; farmer: Farmer };
   type LastSavedMulti = { kind: 'multi'; payments: Payment[]; farmer: Farmer };
   const [lastSaved, setLastSaved] = useState<LastSavedSingle | LastSavedMulti | null>(null);
+  // Post-payment coverage breakdown (single-month). Derived allocation of the
+  // month's TOTAL paid across its entries (FIFO) — computed fresh from DB after save.
+  type Coverage = {
+    farmerName: string;
+    month: string;
+    alloc: EntryAllocation[];
+    totalPaid: number;
+    totalDue: number;
+  };
+  const [coverage, setCoverage] = useState<Coverage | null>(null);
   const [sendingWa, setSendingWa] = useState(false);
 
   // Form state — single mode (existing flow)
@@ -417,6 +428,7 @@ const PaymentsPage: React.FC = () => {
     setMultiAllocations({});
     setPayMode('single');
     setFormError('');
+    setCoverage(null); // clear any stale breakdown from a previous save
     setShowForm(true);
   };
 
@@ -505,6 +517,26 @@ const PaymentsPage: React.FC = () => {
     setMultiAllocations(next);
   };
 
+  // Compute the post-payment coverage breakdown for one farmer+month.
+  // Queries DB fresh (not React state) so it reflects the row just saved —
+  // consistent with the send-time-DB principle used by the WhatsApp helpers.
+  const computeCoverage = async (farmerId: string, forMonth: string, farmerName: string) => {
+    try {
+      const [{ data: entryRows }, { data: payRows }] = await Promise.all([
+        supabase.from('usage_entries').select('*').eq('farmer_id', farmerId).eq('month', forMonth),
+        supabase.from('payments').select('amount').eq('farmer_id', farmerId).eq('for_month', forMonth),
+      ]);
+      const entries = (entryRows || []) as UsageEntry[];
+      if (entries.length === 0) { setCoverage(null); return; }
+      const totalPaid = (payRows || []).reduce((s, p) => s + Number(p.amount || 0), 0);
+      const result = allocateMonth(entries, totalPaid);
+      setCoverage({ farmerName, month: forMonth, alloc: result.entries, totalPaid, totalDue: result.totalDue });
+    } catch (err) {
+      console.error('[coverage] compute failed:', err);
+      setCoverage(null);
+    }
+  };
+
   // -------------------------------------------------------
   // Save payment
   // -------------------------------------------------------
@@ -565,6 +597,9 @@ const PaymentsPage: React.FC = () => {
       } else {
         setLastSaved(null);
       }
+
+      // Show which entries this month's total now covers (regardless of WhatsApp).
+      await computeCoverage(form.farmer_id, form.for_month, farmerOfPayment?.name ?? 'Kisan');
 
       loadData();
       return;
@@ -640,6 +675,9 @@ const PaymentsPage: React.FC = () => {
     } else {
       setLastSaved(null);
     }
+    // Multi-month breakdown spans several months — the banner lists them; skip the
+    // single-month coverage card to avoid showing only one month's slice.
+    setCoverage(null);
 
     loadData();
   };
@@ -664,6 +702,7 @@ const PaymentsPage: React.FC = () => {
     showToast('Payment delete ho gayi');
     if (lastSaved?.kind === 'single' && lastSaved.payment.id === p.id) setLastSaved(null);
     if (lastSaved?.kind === 'multi' && lastSaved.payments.some(x => x.id === p.id)) setLastSaved(null);
+    setCoverage(null); // breakdown may now be stale
     loadData();
   };
 
@@ -1173,6 +1212,59 @@ const PaymentsPage: React.FC = () => {
             >
               <X size={14} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Post-payment coverage breakdown — which entries this month's total now covers */}
+      {coverage && (
+        <div className="mb-4 rounded-2xl border bg-white shadow-sm overflow-hidden" style={{ borderColor: '#e5e2dc' }}>
+          <div className="px-4 py-2.5 border-b flex items-center justify-between" style={{ borderColor: '#f0ede8' }}>
+            <div className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+              <Droplets size={14} className="text-blue-500" />
+              {coverage.farmerName} · {coverage.month} — kis entry ka paisa pohcha
+            </div>
+            <button
+              onClick={() => setCoverage(null)}
+              className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100"
+              title="Band karo"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="divide-y" style={{ borderColor: '#f5f5f4' }}>
+            {coverage.alloc.map(a => (
+              <div key={a.entry.id} className="px-4 py-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs text-gray-500">
+                    {format(new Date(a.entry.date), 'dd MMM')} · {a.entry.hours}h {a.entry.minutes}m · ₹{Number(a.entry.amount).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  {a.status === 'paid' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                      <CheckCircle2 size={11} /> Paid
+                    </span>
+                  )}
+                  {a.status === 'partial' && (
+                    <span className="inline-flex items-center gap-1 text-[11px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                      <AlertCircle size={11} /> {formatMinutes(a.paidMinutes)} of {formatMinutes(Number(a.entry.total_minutes || 0))} · ₹{a.dueAmount.toLocaleString('en-IN', { maximumFractionDigits: 2 })} baki
+                    </span>
+                  )}
+                  {a.status === 'unpaid' && (
+                    <span className="inline-flex items-center text-[11px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      Unpaid
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-4 py-2 bg-gray-50 text-xs text-gray-600 flex items-center justify-between">
+            <span>₹{coverage.totalPaid.toLocaleString('en-IN')} total paid is month</span>
+            <span className={coverage.totalDue > 0 ? 'text-red-500 font-semibold' : 'text-green-600 font-semibold'}>
+              {coverage.totalDue > 0 ? `₹${coverage.totalDue.toLocaleString('en-IN', { maximumFractionDigits: 2 })} abhi baki` : 'Pura clear ✓'}
+            </span>
           </div>
         </div>
       )}
