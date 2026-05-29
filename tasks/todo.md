@@ -1,20 +1,13 @@
 # Tubewell Manager — Task List
 
-> Last updated: 2026-05-25
-> Active project: **Session 4 (Navigation & UX features)** — code complete on local repo, awaiting owner push + production verification.
+> Last updated: 2026-05-26
+> Active project: **NONE** — Session 4 (Navigation & UX) shipped + owner-verified in production. Awaiting owner direction.
 
 ---
 
 ## 🔴 This Session (Do These Now)
 
-- [ ] **Push Session 4 to GitHub** — owner runs the provided commit/push commands from Windows Git Bash / PowerShell. Netlify auto-deploys from `main`.
-- [ ] **Verify in production** — once site is live, walk through the 4 features:
-  - Farmers page → tap any farmer card (left side, not the edit/delete buttons) → Detail page loads
-  - Detail page → pending month → tap "₹X bharo" → PaymentsPage opens pre-filled (farmer + month + amount)
-  - Usage page → pick a month where some farmers are fully paid → settled cards should be hidden by default → toggle reveals them with green "Cleared" badge
-  - Dashboard → "Kisan-wise Baki" row → name click navigates to detail; "Pay" button deep-links; WhatsApp icon (if any farmer has WA enabled) opens wa.me with reminder text and logs to `whatsapp_log`
-  - Top header → Search icon → overlay → type partial farmer name → click result → detail page
-- [ ] **Flag SHIPPED + VERIFIED** in PROJECT_STATUS.md once owner confirms each scenario above.
+_Nothing assigned. **Session 4 fully shipped, pushed (`85f0b2e`), Netlify-deployed, and verified live by owner on 2026-05-26.** Recommended next moves below._
 
 ---
 
@@ -43,7 +36,7 @@
 
 ## ✅ Done (Recent)
 
-### Session 4 — Navigation & UX features (CODE COMPLETE, BUILD PASSED — 2026-05-25)
+### Session 4 — Navigation & UX features (SHIPPED + VERIFIED — 2026-05-26)
 
 - [x] **Feature 1 — Farmer Detail Page (`/farmers/:id`)** — new file `src/pages/FarmerDetailPage.tsx` (~430 lines). Per-farmer landing page with 3 summary cards, month-wise breakdown (with cleared/pending/closed badges + "Pura ₹X bharo" quick-pay per pending month), full chronological ledger (entries blue + payments green, multi-month badge, per-payment WhatsApp resend), 2 top-level quick actions (Pani Add / Payment Add with URL prefill). Back button via `navigate(-1)`. Not-found + disabled/deleted states handled. — 2026-05-25
 - [x] **Feature 2 — Settled-entries hide in UsagePage** — `showSettled` toggle (default off). UsagePage now also fetches `payments` to compute per-farmer-per-month balance via `for_month`-bucketed math (same as Dashboard/MonthsPage). Settled farmer cards (usage_amount > 0, balance = 0) hidden when a specific month is selected; green "Cleared" badge + green avatar tint when shown. Empty-state has celebratory copy + toggle pointer. — 2026-05-25
@@ -54,7 +47,7 @@
 - [x] **App.tsx — new route `/farmers/:id`** — wrapped in `ProtectedRoute`. Imported FarmerDetailPage. — 2026-05-25
 - [x] **types/index.ts — `WhatsAppMessageType` extended with `'reminder'`** — DB column has no CHECK constraint, no migration required. — 2026-05-25
 - [x] **Build verified** — `tsc -b && vite build` exit 0 in fresh `/tmp` install. Bundle: 354KB JS / 105KB gz. No size regression. — 2026-05-25
-- [ ] **Push to GitHub + Netlify auto-deploy + owner verification in production** — pending owner action on Windows side.
+- [x] **Pushed + deployed** — commit `85f0b2e` pushed to `origin/main` (`0b56abb..85f0b2e`). Netlify auto-build triggered. Owner confirmed site live on https://tubewell-manager.netlify.app — 2026-05-26
 
 ### Session 3 — Payment UX improvements (SHIPPED + VERIFIED — 2026-05-23)
 
