@@ -365,6 +365,30 @@ is_deleted = false AND is_disabled = false
 ```
 All calculations, dropdowns, and displays across the entire system only use active farmers.
 
+### Entry-Level Payment Coverage (DERIVED — added Session 5, 2026-05-29)
+Shows which usage entries a payment has covered: paid / partial / unpaid. Lives in `src/lib/allocation.ts::allocateMonth(entries, totalPaidForMonth)`. **Pure function — nothing is stored in the DB.**
+
+```
+sort entries by date ascending (FIFO; tie-break created_at, then id)
+pool = max(0, totalPaidForMonth)        // sum of payments WHERE for_month=month
+for each entry (oldest first):
+    paidAmount  = min(pool, entry.amount)
+    pool       -= paidAmount
+    dueAmount   = max(0, entry.amount - paidAmount)
+    paidMinutes = round(paidAmount / entry.rate_per_hour × 60)   // capped at entry.total_minutes
+    status      = paid (paidAmount ≈ amount) | partial (0 < paidAmount < amount) | unpaid (0)
+leftoverPaid = pool after all entries     // overpayment, reported not allocated
+totalDue     = max(0, Σ amount − totalPaid)
+```
+
+Key rules:
+- **Allocation unit is MONEY (₹), not hours.** `rate_per_hour` is per-entry, so entries in the same month can differ. Allocate rupees; derive each entry's paid-minutes from THAT entry's own rate. A global ₹→hours conversion would be wrong with mixed rates.
+- **Derived, not stored** — keeps the row-wise `for_month` due math (above) untouched, and self-corrects when entries/payments are edited or deleted. Same blast-radius reasoning as the `payment_group_id` decision (no `payment_allocations` table).
+- `payment_group_id` stays out of this: the pool is just the sum of `for_month` payments (multi-month rows included).
+- Overpayment → `leftoverPaid`, capped at ₹0 due, consistent with the existing overpayment policy.
+
+Consumers (display only): `FarmerDetailPage` ledger badges, `UsagePage` entry-card badges (only when a specific month is selected), `PaymentsPage` post-single-save coverage card (`computeCoverage` queries DB fresh, send-time-DB style).
+
 ---
 
 ## 7. MULTI-USER SAFETY RULES
