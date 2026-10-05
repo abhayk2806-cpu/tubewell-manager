@@ -1,5 +1,5 @@
 -- supabase/tests/001_schema_checks.sql
--- Schema, trigger and RLS checks for migrations 001-003 (project tubewell-hisab).
+-- Schema, trigger and RLS checks for migrations 001-004 (project tubewell-hisab).
 --
 -- HOW TO RUN (re-runnable, leaves no data behind):
 --   Run SECTION A as one call (Supabase MCP execute_sql or the SQL editor). It is a single
@@ -162,10 +162,14 @@ begin
   perform set_config('tw.r', current_setting('tw.r') || format('T4.03|%s|both foreign keys to farmers are ON DELETE RESTRICT|found %s of 2', case when n = 2 then 'PASS' else 'FAIL' end, n) || chr(10), true);
 end $$;
 
--- T5 row level security and privileges
+-- T5 row level security and privileges (policies locked to the owner uid by migration 004)
+-- The owner uid is read from auth.users at run time; it is never written into this file or the output.
 do $$
 declare
   n integer;
+  owner_uid uuid;
+  owner_claims text;
+  other_claims constant text := '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
   fa uuid;
   fc uuid;
   c record;
@@ -173,6 +177,11 @@ declare
   rows_got bigint;
   ok boolean;
 begin
+  select count(*) into n from auth.users;
+  perform set_config('tw.r', current_setting('tw.r') || format('T5.00|%s|exactly one auth user (the owner) exists|found %s', case when n = 1 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  select id into owner_uid from auth.users limit 1;
+  owner_claims := json_build_object('sub', owner_uid, 'role', 'authenticated')::text;
+
   select count(*) into n from pg_catalog.pg_class
     where oid in ('public.farmers'::regclass, 'public.usage_entries'::regclass, 'public.payments'::regclass)
       and relrowsecurity;
@@ -181,8 +190,18 @@ begin
     where schemaname = 'public' and tablename in ('farmers', 'usage_entries', 'payments') and cmd in ('DELETE', 'ALL');
   perform set_config('tw.r', current_setting('tw.r') || format('T5.02|%s|no DELETE (or ALL) policy exists|found %s', case when n = 0 then 'PASS' else 'FAIL' end, n) || chr(10), true);
   select count(*) into n from pg_catalog.pg_policies
-    where schemaname = 'public' and tablename in ('farmers', 'usage_entries', 'payments') and roles = '{authenticated}';
-  perform set_config('tw.r', current_setting('tw.r') || format('T5.03|%s|9 policies (select/insert/update x 3 tables), all for role authenticated only|found %s', case when n = 9 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+    where schemaname = 'public' and tablename in ('farmers', 'usage_entries', 'payments')
+      and roles = '{authenticated}' and policyname like '%\_owner';
+  perform set_config('tw.r', current_setting('tw.r') || format('T5.03|%s|9 *_owner policies (select/insert/update x 3 tables), role authenticated only|found %s', case when n = 9 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  select count(*) into n from pg_catalog.pg_policies
+    where schemaname = 'public' and tablename in ('farmers', 'usage_entries', 'payments')
+      and coalesce(qual, '') || coalesce(with_check, '') like '%' || owner_uid::text || '%'
+      and (qual is null or qual like '%' || owner_uid::text || '%')
+      and (with_check is null or with_check like '%' || owner_uid::text || '%');
+  perform set_config('tw.r', current_setting('tw.r') || format('T5.04|%s|every policy expression is pinned to the owner uid|%s of 9', case when n = 9 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  select count(*) into n from pg_catalog.pg_policies
+    where schemaname = 'public' and policyname like '%\_authenticated';
+  perform set_config('tw.r', current_setting('tw.r') || format('T5.05|%s|old *_authenticated policies are gone|found %s', case when n = 0 then 'PASS' else 'FAIL' end, n) || chr(10), true);
 
   insert into public.farmers (name) values ('T5 Kisan A') returning id into fa;
   insert into public.farmers (name) values ('T5 Kisan C') returning id into fc;
@@ -197,30 +216,41 @@ begin
       ('T5.13', 'anon',      'anon cannot INSERT farmers',            'insert into public.farmers (name) values (''Anon Kisan'')', '42501', null),
       ('T5.14', 'anon',      'anon cannot INSERT payments',           'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fa}'', now(), 100)', '42501', null),
       ('T5.15', 'anon',      'anon cannot UPDATE farmers',            'update public.farmers set name = name', '42501', null),
-      ('T5.20', 'auth',      'authenticated can SELECT farmers',      'select 1 from public.farmers', '00000', -1),
-      ('T5.21', 'auth',      'authenticated can SELECT usage_entries','select 1 from public.usage_entries', '00000', -1),
-      ('T5.22', 'auth',      'authenticated can SELECT payments',     'select 1 from public.payments', '00000', -1),
-      ('T5.23', 'auth',      'authenticated can INSERT farmers',      'insert into public.farmers (name) values (''Auth Kisan'')', '00000', 1),
-      ('T5.24', 'auth',      'authenticated can INSERT usage_entries','insert into public.usage_entries (farmer_id, used_at, hours, minutes) values (''{fa}'', now(), 1, 15)', '00000', 1),
-      ('T5.25', 'auth',      'authenticated can INSERT payments',     'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fa}'', now(), 15000)', '00000', 1),
-      ('T5.26', 'auth',      'authenticated can UPDATE farmers',      'update public.farmers set notes = ''edited'' where id = ''{fa}''', '00000', 1),
-      ('T5.27', 'auth',      'authenticated can soft-delete (UPDATE deleted_at)', 'update public.farmers set deleted_at = now() where id = ''{fc}''', '00000', 1),
-      ('T5.28', 'auth',      'authenticated can restore (UPDATE deleted_at = NULL)', 'update public.farmers set deleted_at = null where id = ''{fc}''', '00000', 1),
-      ('T5.29', 'auth',      'authenticated cannot DELETE farmers',   'delete from public.farmers where id = ''{fc}''', '42501', null),
-      ('T5.30', 'auth',      'authenticated cannot DELETE usage_entries', 'delete from public.usage_entries', '42501', null),
-      ('T5.31', 'auth',      'authenticated cannot DELETE payments',  'delete from public.payments', '42501', null),
-      ('T5.32', 'auth',      'authenticated cannot TRUNCATE payments','truncate public.payments', '42501', null),
+      ('T5.20', 'owner',     'owner can SELECT farmers',              'select 1 from public.farmers', '00000', -1),
+      ('T5.21', 'owner',     'owner can SELECT usage_entries',        'select 1 from public.usage_entries', '00000', -1),
+      ('T5.22', 'owner',     'owner can SELECT payments',             'select 1 from public.payments', '00000', -1),
+      ('T5.23', 'owner',     'owner can INSERT farmers',              'insert into public.farmers (name) values (''Owner Kisan'')', '00000', 1),
+      ('T5.24', 'owner',     'owner can INSERT usage_entries',        'insert into public.usage_entries (farmer_id, used_at, hours, minutes) values (''{fa}'', now(), 1, 15)', '00000', 1),
+      ('T5.25', 'owner',     'owner can INSERT payments',             'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fa}'', now(), 15000)', '00000', 1),
+      ('T5.26', 'owner',     'owner can UPDATE farmers',              'update public.farmers set notes = ''edited'' where id = ''{fa}''', '00000', 1),
+      ('T5.27', 'owner',     'owner can soft-delete (UPDATE deleted_at)', 'update public.farmers set deleted_at = now() where id = ''{fc}''', '00000', 1),
+      ('T5.28', 'owner',     'owner can restore (UPDATE deleted_at = NULL)', 'update public.farmers set deleted_at = null where id = ''{fc}''', '00000', 1),
+      ('T5.29', 'owner',     'owner cannot DELETE farmers',           'delete from public.farmers where id = ''{fc}''', '42501', null),
+      ('T5.30', 'owner',     'owner cannot DELETE usage_entries',     'delete from public.usage_entries', '42501', null),
+      ('T5.31', 'owner',     'owner cannot DELETE payments',          'delete from public.payments', '42501', null),
+      ('T5.32', 'owner',     'owner cannot TRUNCATE payments',        'truncate public.payments', '42501', null),
       ('T5.40', 'auth_nosub','authenticated without auth.uid() sees 0 farmers', 'select 1 from public.farmers', '00000', 0),
       ('T5.41', 'auth_nosub','authenticated without auth.uid() cannot INSERT', 'insert into public.farmers (name) values (''No Sub Kisan'')', '42501', null),
-      ('T5.42', 'auth_nosub','authenticated without auth.uid() updates 0 rows', 'update public.farmers set notes = ''x''', '00000', 0)
+      ('T5.42', 'auth_nosub','authenticated without auth.uid() updates 0 rows', 'update public.farmers set notes = ''x''', '00000', 0),
+      ('T5.50', 'other',     'another authenticated uid sees 0 farmers', 'select 1 from public.farmers', '00000', 0),
+      ('T5.51', 'other',     'another authenticated uid sees 0 usage_entries', 'select 1 from public.usage_entries', '00000', 0),
+      ('T5.52', 'other',     'another authenticated uid sees 0 payments', 'select 1 from public.payments', '00000', 0),
+      ('T5.53', 'other',     'another authenticated uid cannot INSERT farmers', 'insert into public.farmers (name) values (''Other Kisan'')', '42501', null),
+      ('T5.54', 'other',     'another authenticated uid cannot INSERT payments', 'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fa}'', now(), 100)', '42501', null),
+      ('T5.55', 'other',     'another authenticated uid updates 0 farmers', 'update public.farmers set notes = ''hijack'' where id = ''{fa}''', '00000', 0),
+      ('T5.56', 'other',     'another authenticated uid updates 0 payments', 'update public.payments set amount_paise = 1', '00000', 0),
+      ('T5.57', 'other',     'another authenticated uid cannot DELETE farmers', 'delete from public.farmers', '42501', null)
     ) as v(id, who, label, stmt, want, want_rows)
     order by id
   loop
     if c.who = 'anon' then
       perform set_config('request.jwt.claims', '', true);
       set local role anon;
-    elsif c.who = 'auth' then
-      perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+    elsif c.who = 'owner' then
+      perform set_config('request.jwt.claims', owner_claims, true);
+      set local role authenticated;
+    elsif c.who = 'other' then
+      perform set_config('request.jwt.claims', other_claims, true);
       set local role authenticated;
     else
       perform set_config('request.jwt.claims', '{"role":"authenticated"}', true);
@@ -245,6 +275,9 @@ begin
       case when c.want_rows is null then '' when c.want_rows = -1 then ' rows>0' else ' rows=' || c.want_rows end,
       got, case when rows_got is null then '' else ' rows=' || rows_got end) || chr(10), true);
   end loop;
+
+  select count(*) into n from public.farmers where notes = 'hijack';
+  perform set_config('tw.r', current_setting('tw.r') || format('T5.58|%s|no row was changed by the other uid|found %s hijacked rows', case when n = 0 then 'PASS' else 'FAIL' end, n) || chr(10), true);
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
 end $$;
 
