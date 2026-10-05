@@ -1,7 +1,7 @@
 # Tubewell Manager — Claude Instructions
 
 > Owner-only web app that replaces a paper notebook. It tracks tubewell water usage (time × rate) and farmer payments and credit.
-> **Status:** full rebuild in progress on branch `rebuild/fresh-system`. Production (`main`) is the OLD v1 system, untouched until cutover.
+> **Status:** full rebuild in progress on branch `rebuild/fresh-system` (backed up on `origin`). Production (`main`) is the OLD v1 system, untouched until cutover.
 > UI language: Hinglish. Single user (the owner).
 
 ---
@@ -36,21 +36,31 @@ At the start of EVERY session, in this order:
 ## Deploy Safety (non-negotiable)
 
 **Branches**
-- All rebuild work happens on `rebuild/fresh-system`, which is local-only with no upstream.
+- All rebuild work happens on `rebuild/fresh-system`, which is backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push on 2026-10-05.
 - `main` is the old production system and stays untouched until the owner-approved cutover (Phase 10).
 
-**Pushes**
-- **Never push anything (any branch) unless the owner explicitly asks in the current session.**
-- For hook testing, the only allowed push-like command is `git push --dry-run` against a deliberately nonexistent remote.
+**Push Policy**
+- Pushing `rebuild/fresh-system` is part of the workflow, but **only** as an explicit final step written in the owner's prompt.
+- Use exactly `git push origin rebuild/fresh-system` (the first time it was run with `-u`).
+- Never push `main`, never push any other branch, never force-push.
+- **If the prompt has no push step, do not push.**
+- Before every push:
+  - confirm the branch is `rebuild/fresh-system`;
+  - scan the commits being pushed for secrets.
+- After every push: confirm with `git ls-remote --heads origin` that `main` is unchanged.
+- For hook testing, the only other push-like command allowed is `git push --dry-run` against a deliberately nonexistent remote.
 
-**Push gate** (`.claude/hooks/main-push-guard.mjs`, configured in `.claude/settings.json`)
+**Push gate** (`.claude/hooks/main-push-guard.mjs`, configured in `.claude/settings.json`; final — do not edit)
 - Blocks every Bash/PowerShell command that would update `main` on a remote: `origin main`, `HEAD:main`, `--all`, `--mirror`, a bare `git push` on `main`, `gh pr merge`, and similar.
 - It unlocks only when the owner's ENTIRE message is exactly: `CUTOVER APPROVED — PUSH TO MAIN NOW`
   - em dash, en dash or hyphen are all accepted;
   - uppercase words only; nothing before or after the phrase.
 - The unlock is valid for 5 minutes, for one push, in the same session. Any other owner message revokes it.
-- **Never ask the owner to type the phrase**, and never work around a block. If the owner approves in other words, explain that only the exact phrase unlocks.
-- After a successful push to `main`, run `rm -f .claude/.main-push-unlocked`.
+- **Never suggest, hint at or request a push to `main` on your own initiative.**
+  - Only when the OWNER says they want to push to `main` or cut over: tell them the exact phrase, which must be their entire message and nothing else.
+  - A block message from the guard is not, by itself, a reason to bring up the phrase.
+  - Never work around a block.
+- The guard consumes the unlock when it allows the push, and deletes its marker after a successful push. No manual cleanup is needed.
 
 **Hosting**
 - The live site `tubewellhisab.netlify.app` (owner's NEW Netlify account) is **disabled** to save build credits.
@@ -95,6 +105,8 @@ node .claude/hooks/main-push-guard.mjs selftest   # push-gate self-test (expects
 ## Never Touch
 
 - **`main`**: no checkout for edits, no commits, no pushes (except the owner-approved cutover).
+- **The push guard**: `.claude/hooks/main-push-guard.mjs` and `.claude/settings.json` are final; don't edit them.
+  - Shell commands must never mention the guard's marker filename. The guard fails closed on that; put any such check in a script file.
 - **The OLD Supabase project** `tubewell-manager` (`vsgptyuvnistwjjmrfby`):
   - paused, kept as a fallback;
   - don't query it or restore it;
@@ -118,7 +130,7 @@ Only the NEW Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`) may be c
   - hard-delete;
   - skip the active-farmer filter.
 - **Major version bumps** (Tailwind 4, React Router 8, TypeScript 7): need owner sign-off.
-- **Anything that would deploy or push**: needs the owner's explicit request.
+- **Any push or deploy beyond the push step in the owner's prompt**: needs the owner's explicit request (see Push Policy).
 
 ## When There's a Conflict
 

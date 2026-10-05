@@ -2,7 +2,7 @@
 
 Owner-only web app for a family tubewell business in India. It records water usage (time × rate) and farmer payments, and derives each farmer's account: monthly charges, FIFO allocation of payments, outstanding dues and carried-forward credit. The UI is in Hinglish.
 
-> **Status:** full rebuild in progress on branch `rebuild/fresh-system`. `main` is the old v1 system, untouched until cutover. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+> **Status:** full rebuild in progress on branch `rebuild/fresh-system` (backed up on `origin`). `main` is the old v1 system, untouched until cutover. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
 
 ## Stack
 
