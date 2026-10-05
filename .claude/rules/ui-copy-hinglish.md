@@ -27,9 +27,11 @@ Never label one figure with the other's words, and never add them together.
 - Outstanding is shown as **"Baki"** / "Kitna Baki Hai".
 - Never show credit as a negative Baki. Never show a cross-farmer figure that nets credit against dues.
 
-**Month status words:** "Settled", "Partial", "Unpaid". The label for a charge-0 month is PENDING OWNER DECISION.
+**Month status words:** "Settled", "Partial", "Unpaid".
+- A month with charge 0 and cash received > 0 shows the badge **"Sirf Payment"** (D3, 2026-10-05).
+- In a payment's allocation trail, an unapplied remainder is labelled **"Advance / Credit"** (D5).
 
-**Duplicates.** A duplicate is shown as a warning with an option to save anyway, never as a hard error (L14). The exact Hinglish wording is decided with the owner in Phase 4/5.
+**Duplicates.** A duplicate is shown as a warning with an option to save anyway, never as a hard error (L14). The exact Hinglish wording is decided with the owner in Phase 4/5 (decided 2026-10-05).
 
 **Forbidden.** No v1 wording: "Kis month ke liye?", "hisaab close karo", "WhatsApp Bhejo", multi-month allocation by hand. No "entry by <user>" display (there is a single user).
 

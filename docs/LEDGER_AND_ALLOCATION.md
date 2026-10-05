@@ -1,9 +1,8 @@
 # Ledger and Allocation — Authoritative Spec
 
-> **Status:** owner-approved rules, transcribed 2026-10-05. Tests come first, in Phase 3.
+> **Status:** owner-approved rules, transcribed 2026-10-05. Owner decisions D1–D8 were recorded on 2026-10-05 (see "Decided" at the end). Tests come first, in Phase 3.
 > **This file is the single source of truth** for every money and time calculation in the app.
 > Code, other docs and `.claude/rules/` must point here; they must not restate the rules.
-> Sections marked **PENDING OWNER DECISION** are not decided. Do not implement a guess for them.
 > Every number in the worked examples was checked on 2026-10-05 with an independent throwaway script (integer paise).
 
 ## Definitions
@@ -30,7 +29,11 @@
 
 **L2. Usage entry.**
 - Fields: farmer, timestamp, hours, minutes (0–59), total_minutes, and rate_per_hour stored on each entry (default 100).
+- The rate is whole paise only, at most 2 decimals (D6).
 - `amount = round_half_up(total_minutes × rate_per_hour / 60)` to 2 decimals, computed in integer paise.
+  - Integer form (D7): `amount_paise = floor((2 × total_minutes × rate_paise + 60) / 120)`.
+  - This formula was checked equal to the definition for every E22 case.
+- The amount is **not stored** (D7). The ledger engine is the only implementation of this rounding; the Phase 9 script recomputes it independently.
 - Entries stay individually stored and individually editable.
 
 **L3. Month.**
@@ -55,25 +58,38 @@
 - Each payment gets a list of (month, amount) pieces, plus any unapplied remainder.
 - Invariant: for every bucket, the pieces add up to that bucket's end-state `paid_i`.
 - The trail is computed from the **current** buckets. If usage is added later, an earlier payment's unapplied remainder becomes a piece of the new month (see E5, E13).
+- Presentation (D5): pieces are shown as plain months, including months later than the payment. Any unapplied remainder is labelled **"Advance / Credit"**. The math is unchanged.
 
 **L8. Credit.**
 - Credit is never lost. Later usage consumes it automatically (this follows from L6).
 - Credit is never netted across farmers.
 
-**L9. As-of view.** Only entries and payments with timestamp ≤ end of the chosen IST day (23:59:59.999 IST) are included. **PENDING OWNER DECISION:** rows that were edited or soft-deleted *after* the as-of date (see Open questions).
+**L9. As-of view (D2).**
+- An as-of view for IST day D includes the entries and payments whose timestamp ≤ end of D (23:59:59.999 IST).
+- Each row is taken in its **current** state: its current amount, and whether it is currently deleted.
+- **Limitation:** there is no edit history. A row edited or soft-deleted *after* D therefore changes the as-of figures for D. As-of views are a recomputation from today's data, not a frozen snapshot.
 
 **L10. Two different concepts.**
 - *Cash received in a period* is the payments dated in that period.
 - *Charge settled for a month* is `paid_i`.
 - Never mix them in math or in the UI.
 
-**L11. Months list and dashboard.**
-- The months list is every month with usage OR payments. A payment-only month shows charge 0 and cash received > 0.
-- The dashboard has All Time / Monthly / Yearly views showing charges created, cash received, outstanding, credit, and a per-farmer list.
+**L11. Months list and dashboard (D1).**
+- The months list is every month with usage OR payments.
+  - A payment-only month shows charge 0, cash received > 0, and the badge "Sirf Payment" (D3).
+  - The months list shows **current** balances (as of now).
+- The dashboard has All Time / Monthly / Yearly views. For the selected period P:
+  - **Charges created** = Σ usage amounts whose IST timestamp falls in P.
+  - **Cash received** = Σ payments whose IST timestamp falls in P.
+  - **Outstanding** and **Credit** = each farmer's L6 balance **as of the end of P** (last IST day of the month or year), using the L9 rule.
+  - **All Time** = as of now.
+  - The per-farmer list in a period view uses the same as-of figures.
+- The farmer profile (L17) and the Months table always show **current** balances.
 - Cross-farmer totals are Σ per-farmer outstanding and, **separately**, Σ per-farmer credit. Never net the two.
-- **PENDING OWNER DECISION:** what "outstanding" and "credit" mean inside the Monthly and Yearly views.
+- The owner may revisit D1 in Phase 7 after seeing the UI.
 
 **L12. Farmers.**
+- Farmers have BOTH Disable (temporary) and soft-Delete; both are restorable.
 - Deleted and disabled farmers are excluded from every list and total.
 - Their rows stay in the database, and restoring a farmer brings everything back.
 
@@ -85,6 +101,7 @@
 **L14. Duplicate protection is a WARNING, never a block.**
 - Payment: same farmer + amount + IST date.
 - Usage: same farmer + IST date + hours/minutes.
+- The Hinglish wording of the warning is decided in Phase 4/5.
 
 **L15. Money math.** Integer paise (or a decimal library). Never floats for sums.
 
@@ -106,11 +123,11 @@
 
 ### Clarifications and consequences
 
-- **Status for a month with charge 0** (payment-only month): **PENDING OWNER DECISION.** The examples show `-`.
+- **Status for a month with charge 0 and cash > 0:** the badge **"Sirf Payment"**, in place of Settled / Partial / Unpaid (D3).
 - **Rounding (L2):**
   - Half-up on exact half-paise.
-  - `total_minutes × rate_paise / 60` is computed with integers: quotient `q`, remainder `r`; if `2r ≥ 60` then `q + 1`.
-  - Because buckets sum rounded entries (L4), three 10-minute entries make ₹50.01, while one 30-minute entry is ₹50.00 (E6b).
+  - Integer form: `floor((2 × total_minutes × rate_paise + 60) / 120)`. This is equivalent to the quotient/remainder form: `q`, `r` of `total_minutes × rate_paise / 60`; if `2r ≥ 60` then `q + 1`.
+  - Per-entry rounding is confirmed (D4): a bucket sums individually rounded entries. Three 10-minute entries make ₹50.01; one 30-minute entry is ₹50.00 (E6b).
 - **The owner's original Ramu example had an arithmetic slip.** The four entries total **17h45m = ₹1,775.00**, not 16h45m = ₹1,675. The canonical paise values are 358.33, 441.67, 525.00 and 450.00.
 
 ## Worked examples (Phase 3 and Phase 9 test fixtures)
@@ -118,7 +135,7 @@
 Conventions for all examples:
 - Rate is ₹100/hr unless stated. Times are IST and entries are at 10:00 IST unless stated.
 - Months are written `YYYY-MM`.
-- "Cash" means cash received in that month (L10). Status `-` means the month has no charge.
+- "Cash" means cash received in that month (L10). "Sirf Payment" marks a month with no charge but with cash received (D3).
 
 ### E1 — Canonical Ramu
 Inputs:
@@ -131,7 +148,7 @@ Inputs:
 | 2026-06 | 4h25 | 441.67 | 141.67 | 300.00 | Partial | 0.00 |
 | 2026-07 | 5h15 | 525.00 | 0.00 | 525.00 | Unpaid | 0.00 |
 | 2026-08 | 4h30 | 450.00 | 0.00 | 450.00 | Unpaid | 0.00 |
-| 2026-09 | 0h00 | 0.00 | 0.00 | 0.00 | - | 500.00 |
+| 2026-09 | 0h00 | 0.00 | 0.00 | 0.00 | Sirf Payment | 500.00 |
 
 Totals: charges 1,775.00 · paid 500.00 · **outstanding 1,275.00** · credit 0.00.
 
@@ -158,13 +175,13 @@ Inputs: usage 2026-05-05 2h00 (200.00); payment ₹500 on 2026-05-25.
 
 Result: 2026-05 Settled, cash 500.00. Outstanding 0.00, **credit 300.00**.
 
-Trail: P1 → 2026-05: 200.00, unapplied 300.00.
+Trail: P1 → 2026-05: 200.00, Advance / Credit 300.00.
 
 ### E5 — Credit consumed by later usage
 - **E5a.** E4 plus usage 2026-06-15 1h30 (150.00):
   - 2026-06 paid 150.00, Settled.
   - Outstanding 0.00, credit 150.00.
-  - Trail: P1 → 05: 200.00, 06: 150.00, unapplied 150.00.
+  - Trail: P1 → 05: 200.00, 06: 150.00, Advance / Credit 150.00.
 - **E5b.** Then usage 2026-07-15 2h00 (200.00):
   - 2026-07 paid 150.00, remaining 50.00, Partial.
   - Outstanding 50.00, credit 0.00.
@@ -179,7 +196,7 @@ Inputs: usage 2026-05-05 2h00 (200.00); payment ₹200 on 2026-06-05.
 
 Months list:
 - 2026-05: charge 200.00, paid 200.00, Settled, cash 0.00.
-- **2026-06: charge 0.00, cash 200.00.**
+- **2026-06: charge 0.00, cash 200.00, badge "Sirf Payment".**
 
 Outstanding 0.00, credit 0.00. Trail: P1 → 2026-05: 200.00.
 
@@ -223,7 +240,7 @@ Result: all four months Unpaid; outstanding 1,775.00; no trail. P1 appears in Re
 Inputs: usage 2026-05-05 5h00 (500.00); payments ₹200 at 2026-06-02 10:00 and ₹200 at 2026-06-02 18:00.
 
 Result:
-- **Both count.** 2026-05 paid 400.00, remaining 100.00. Cash in 2026-06 is 400.00.
+- **Both count.** 2026-05 paid 400.00, remaining 100.00. Cash in 2026-06 is 400.00 (badge "Sirf Payment").
 - P2 triggers a duplicate **warning** (same farmer + amount + IST date) and is still saved.
 - Trail: P1 → 05: 200.00; P2 → 05: 200.00.
 
@@ -254,7 +271,7 @@ Inputs:
 
 Dashboard: **Σ outstanding 200.00 and Σ credit 200.00, shown separately.** A netted figure of 0.00 is wrong and must never be shown.
 
-### E19 — As-of view (Ramu, E1 data)
+### E19 — As-of view (Ramu, E1 data; current row state per L9)
 | As of (end of IST day) | Months | Charges | Paid | Outstanding |
 |---|---|---|---|---|
 | 2026-06-30 | 05, 06 | 800.00 | 0.00 | 800.00 |
@@ -285,14 +302,42 @@ Inputs: farmer A outstanding 100.00; farmer C (5h00, 500.00 outstanding) is disa
 | 0h03 @ 100.10 | 500.50 (half) | ₹5.01 (rounded up) |
 | 0h01 @ 100.30 | 167.17 | ₹1.67 |
 
-## Open questions (PENDING OWNER DECISION)
+The D7 integer formula `floor((2 × total_minutes × rate_paise + 60) / 120)` gives the same paise as the definition for all six rows. It was also checked over a sweep of 1,484,640 cases with no mismatch (2026-10-05).
 
-1. **Monthly/Yearly dashboard (L11).** In the Monthly and Yearly views, does "outstanding" and "credit" mean:
-   - (a) the farmer's balance as of the end of that period;
-   - (b) the current balance; or
-   - (c) only that period's buckets (charge settled and remaining)?
-2. **As-of view (L9).** There is no edit history. For a row edited or soft-deleted *after* the as-of date, should the as-of view use the current row state? That is the only option without an audit-history table.
-3. **Status label for a charge-0 month.** In payment-only months, what should show in place of Settled / Partial / Unpaid?
-4. **Per-entry rounding.** Please confirm that a bucket is the sum of individually rounded entries (E6b gives 50.01, not 50.00).
-5. **Trail presentation.** When a payment predates the usage it ends up covering (E5, E13), should the trail show plain future-month pieces (current behaviour), or label them "advance, later used for <month>"? The math is the same either way.
-6. **Rate precision.** Is the rate limited to 2 decimal places (whole paise)? The examples assume yes.
+### E23 — Monthly dashboard views (Ramu, E1 data; D1)
+| Month | Charges created | Cash received | Outstanding as of month end | Credit |
+|---|---|---|---|---|
+| 2026-05 | 358.33 | 0.00 | 358.33 (2026-05-31) | 0.00 |
+| 2026-06 | 441.67 | 0.00 | 800.00 (2026-06-30) | 0.00 |
+| 2026-07 | 525.00 | 0.00 | 1,325.00 (2026-07-31) | 0.00 |
+| 2026-08 | 450.00 | 0.00 | 1,775.00 (2026-08-31) | 0.00 |
+| 2026-09 | 0.00 | 500.00 | 1,275.00 (2026-09-30) | 0.00 |
+
+The farmer profile and the Months table show the **current** figures (E1), not these as-of figures.
+
+### E24 — Yearly dashboard views (D1)
+- **E24a. Ramu 2026 (E1 data):** charges 1,775.00 · cash 500.00 · outstanding as of 2026-12-31 1,275.00 · credit 0.00.
+- **E24b. One farmer, usage 2025-12-20 1h00 (100.00), payment ₹100 on 2026-01-05:**
+  - Yearly 2025: charges 100.00 · cash 0.00 · outstanding as of 2025-12-31 100.00 · credit 0.00.
+  - Yearly 2026: charges 0.00 · cash 100.00 · outstanding as of 2026-12-31 0.00 · credit 0.00.
+- **E24c. IST year boundary:**
+  - A usage entry (1h00) stored at `2025-12-31T18:40:00Z` is IST 2026-01-01 00:10, i.e. month 2026-01.
+  - It counts in the **2026** view: charges 100.00. The 2025 view shows charges 0.00.
+
+## Decided (owner, 2026-10-05)
+
+| # | Decision | Where |
+|---|---|---|
+| D1 | Monthly/Yearly dashboard: charges created and cash received by IST timestamp in the period; outstanding/credit as of the period end; All Time = now; profile and Months table = current; never net across farmers. May be revisited in Phase 7. | L11, E23, E24 |
+| D2 | As-of uses each row's current state; no edit history (documented limitation). | L9 |
+| D3 | Charge-0 month with cash > 0 shows the badge "Sirf Payment". | L11, Clarifications |
+| D4 | Per-entry rounding confirmed (E6b = 50.01). | Clarifications, L4 |
+| D5 | Trail shows plain (possibly future) month pieces; the unapplied remainder is labelled "Advance / Credit". | L7 |
+| D6 | Rate is whole paise only (max 2 decimals). | L2 |
+| D7 | Integer paise: `rate_paise` and `amount_paise` are bigint; `total_minutes` is a generated column; the entry amount is not stored and is computed only by the engine using `floor((2·total_minutes·rate_paise + 60) / 120)`. | L2, E22, `docs/ARCHITECTURE.md` |
+| D8 | Phase 10 wipe = test rows in the NEW project only (schema and the owner's Auth user are kept). The OLD project is deleted manually by the owner. | `PROJECT_STATUS.md` |
+
+Also decided on 2026-10-05:
+- farmers keep both Disable and soft-Delete (L12);
+- v1 backup files are not importable;
+- the duplicate-warning wording is decided in Phase 4/5 (L14).

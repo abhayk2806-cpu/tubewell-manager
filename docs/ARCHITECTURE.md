@@ -37,18 +37,18 @@ The `*_by` columns reference `auth.users`. There is only one user, so no "entry 
 | Table | Key columns | Notes |
 |---|---|---|
 | `farmers` | `id`, `name`, `mobile`, `notes`, `is_disabled`, audit columns | Delete is soft (`deleted_at`); disable is separate and restorable |
-| `usage_entries` | `id`, `farmer_id`, `started_at timestamptz`, `hours`, `minutes`, `rate_per_hour`, audit columns | CHECKs: hours ≥ 0, minutes 0–59, total > 0, rate > 0 |
-| `payments` | `id`, `farmer_id`, `paid_at timestamptz`, `amount`, `note`, audit columns | CHECK amount > 0. **No month column** |
+| `usage_entries` | `id`, `farmer_id`, `started_at timestamptz`, `hours`, `minutes`, `total_minutes` (generated: `hours*60+minutes`), `rate_paise bigint`, audit columns | CHECKs: hours ≥ 0, minutes 0–59, total_minutes > 0, rate_paise > 0. **No stored money amount** |
+| `payments` | `id`, `farmer_id`, `paid_at timestamptz`, `amount_paise bigint`, `note`, audit columns | CHECK amount_paise > 0. **No month column** |
+
+Money storage (decided 2026-10-05, D7):
+- All money is **integer paise in `bigint`**: `rate_paise` on usage entries, `amount_paise` on payments.
+- `total_minutes` is a generated column.
+- The usage entry's money amount is **not stored**. Only the ledger engine computes it, using the L2 integer formula, so the rounding exists in exactly one implementation. The Phase 9 verification script recomputes it independently.
+- See [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md) (L2, D7).
 
 What is NOT stored:
-- No month text and no totals, balances or allocations.
+- No month text and no totals, balances, entry amounts or allocations.
 - No `for_month`, `payment_group_id`, month closings or WhatsApp tables.
-
-**PENDING OWNER DECISION (Phase 2):**
-1. Money column type: integer paise (`bigint`) vs `numeric(12,2)` converted to paise at the data layer.
-2. Whether the per-entry `amount` and `total_minutes` are stored (e.g. Postgres generated columns) or computed only in the engine.
-
-Either choice must follow the rounding rule in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md) (L2).
 
 ## Data-access rules
 

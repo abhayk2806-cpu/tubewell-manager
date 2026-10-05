@@ -27,7 +27,7 @@ paths:
 - No stored totals, balances or allocations. See `docs/LEDGER_AND_ALLOCATION.md` (L1).
 
 **Constraints.**
-- Enforce validation in the DB too, with CHECK constraints: hours ≥ 0, minutes 0–59, total minutes > 0, rate > 0, payment amount > 0.
+- Enforce validation in the DB too, with CHECK constraints: hours ≥ 0, minutes 0–59, total_minutes > 0, rate_paise > 0, amount_paise > 0.
 - Use NOT NULL where required.
 
 **Security.**
@@ -35,4 +35,9 @@ paths:
 - Sign-ups are disabled (owner action).
 - Never put the service-role key in code or in `VITE_*` vars.
 
-**Money type.** Integer paise vs `numeric(12,2)` is **PENDING OWNER DECISION**. See `docs/ARCHITECTURE.md`.
+**Money type (decided 2026-10-05, D7).**
+- All money is integer paise as `bigint`: `usage_entries.rate_paise` and `payments.amount_paise`.
+- `usage_entries.total_minutes` is a generated column (`hours*60+minutes`).
+- The usage entry's money amount is **not stored** (the engine computes it). No `numeric` money columns, and no floats.
+
+See `docs/ARCHITECTURE.md` and `docs/LEDGER_AND_ALLOCATION.md` (L2).
