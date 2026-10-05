@@ -1,8 +1,9 @@
 # Architecture — Tubewell Manager (rebuild)
 
 > **Status (2026-10-05):**
-> - The **database schema is live** (Phase 2A, migrations 001–003).
-> - The app layers below are the plan that Phases 2B–3 implement.
+> - The **database schema is live** (Phase 2A, migrations 001–003; 004 from Phase 2B locks RLS to the owner).
+> - The **app foundation exists** (Phase 2B): auth, routing, layout shell, Supabase client, generated types, tests.
+> - The ledger, data and hooks layers are still planned (Phase 3 onwards).
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -30,11 +31,46 @@ Rules that follow from this:
 - **No calculation inside a component or page.**
 - Every figure on every screen comes from the same engine call, so totals always reconcile.
 
-## Database schema (live, migrations 001–003, 2026-10-05)
+## Actual `src/` layout (Phase 2B, 2026-10-05)
+
+| Path | What it is |
+|---|---|
+| `main.tsx` | Entry: `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App` |
+| `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. |
+| `routes/routes.ts` | Feature routes (Hinglish title + build phase) and the 6 bottom-nav tabs |
+| `routes/RouteGuards.tsx` | `ProtectedRoute` (loading → spinner, logged out → `/login`) and `PublicRoute` (logged in → `/`) |
+| `auth/` | `auth-context.ts` (types + context), `AuthProvider.tsx`, `useAuth.ts` |
+| `lib/config.ts` | Pure `parseConfig(env)`: validates `VITE_SUPABASE_URL` (https) and `VITE_SUPABASE_PUBLISHABLE_KEY` (D14) |
+| `lib/supabase.ts` | `createClient<Database>` with `persistSession` and `autoRefreshToken` |
+| `lib/utils.ts` | `cn()` class helper |
+| `types/database.ts` | GENERATED Supabase types (see Type generation) |
+| `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
+| `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
+| `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label` only. Add more with the shadcn CLI. |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage` |
+| `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
+| `index.css` + `tailwind.config.js` | Design tokens as CSS variables (no hex colours or inline styles in components) |
+
+## Auth flow
+
+1. On startup `AuthProvider` calls `supabase.auth.getSession()`, which restores the persisted session (localStorage). `loading` stays true until it resolves.
+2. `onAuthStateChange` keeps the session current (sign-in, sign-out, token refresh). The callback only stores state; it makes no awaited Supabase calls.
+3. `LoginPage` calls `signIn(email, password)`, which is `signInWithPassword`. The error is mapped to Hinglish text: "Email ya password galat hai." for invalid credentials, or the network text. On success, `PublicRoute` redirects to `/`.
+4. **Logout** calls `supabase.auth.signOut()`; the session clears and `ProtectedRoute` redirects to `/login`.
+5. There is no sign-up and no forgot-password flow. The single owner account is created in the Supabase dashboard.
+
+## Type generation
+
+- `src/types/database.ts` is generated: never edit it by hand.
+- After every migration, regenerate it with the Supabase MCP `generate_typescript_types` (project_id `ciszgagzhfubuqhpmyeh`). Paste the output under the existing "GENERATED - do not edit" header.
+- Then run `pnpm run typecheck`.
+- CLI alternative: `npx supabase gen types typescript --project-id ciszgagzhfubuqhpmyeh > src/types/database.ts`, then re-add the header.
+
+## Database schema (live, migrations 001–004, 2026-10-05)
 
 Sources:
-- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`.
-- Checks: `supabase/tests/001_schema_checks.sql` (68 checks, all rolled back) plus a residue check.
+- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`.
+- Checks: `supabase/tests/001_schema_checks.sql` (80 checks, all rolled back) plus a residue check.
 
 All tables are in `public`. IDs are `uuid` with default `gen_random_uuid()`. Timestamps are `timestamptz`. Money is integer paise in `bigint`.
 
@@ -94,7 +130,13 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 
 **RLS and privileges (D11):**
 - RLS is enabled on all three tables.
-- 9 policies: SELECT, INSERT and UPDATE per table, for role `authenticated` only. The condition is `(select auth.uid()) is not null`.
+- 9 policies named `*_owner`: SELECT, INSERT and UPDATE per table, for role `authenticated` only.
+- **D13 (migration 004):** the condition is `(select auth.uid()) = '<owner uid>'`.
+  - 004 reads the owner id from `auth.users` at apply time and refuses to run unless there is exactly 1 user.
+  - The repo never contains the uid.
+  - Any other signed-in uid sees 0 rows and cannot insert or update.
+  - If the owner's Auth user is re-created, a new migration must re-point the policies.
+  - (003's `*_authenticated` policies used `(select auth.uid()) is not null`.)
 - **No DELETE policy.**
 - Extra hardening beyond the policies: `anon` has no table privileges at all, and `authenticated` has no DELETE or TRUNCATE privilege.
 
@@ -121,19 +163,22 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 
 ## Auth and security
 
-- Single user (the owner): email + password.
-- Public sign-ups are disabled in the Supabase dashboard (owner action, needed before Phase 2B).
-- RLS is enabled on every table. Policies allow only the `authenticated` role (see Database schema).
-- The anon key is public by design. The service-role key never goes in `VITE_*` vars or in the repo.
-- Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (local `.env`, gitignored; Netlify env in Phase 10).
+- Single user (the owner): email + password. The Auth user exists (1 confirmed user, checked 2026-10-05).
+- Public sign-ups must stay disabled in the Supabase dashboard (owner setting).
+- RLS is enabled on every table, and policies match only the owner's uid (D13, see Database schema).
+- The publishable key is public by design: it ships in the browser bundle. The service-role key never goes in `VITE_*` vars or in the repo.
+- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10.
 
 ## Testing approach
 
-- **Phase 3:** unit-test the engine before any UI exists. Fixtures are the worked examples E1–E24 in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md). The test framework is chosen in Phase 3 (Vitest is the natural fit for Vite).
+- **Runner (D16):** Vitest + jsdom + React Testing Library + jest-dom.
+  - `pnpm run test` runs `src/**/*.test.{ts,tsx}`.
+  - Phase 2B tests cover config parsing, the route guards and login error handling (with a mocked Supabase client).
+- **Phase 3:** unit-test the engine before any UI exists. Fixtures are the worked examples E1–E24 in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
   - an edge-case matrix (timezone boundaries, rounding, soft-delete/restore, duplicates, disabled farmers, more than 1,000 rows).
-- `pnpm run build` (type-check + build) must pass before any commit that touches code.
+- `pnpm run typecheck`, `lint`, `test` and `build` must all pass before any commit that touches code.
 
 ## Backup and restore (Phase 8)
 

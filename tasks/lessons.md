@@ -70,12 +70,31 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 
 **pnpm `node_modules` can break silently**
 - Mistake: `pnpm install` said "Already up to date" while `node_modules/typescript` was missing. This was reproduced again on 2026-10-04.
-- Rule: if `tsc`/`vite` can't be found, do a fresh `pnpm install`, or build in a clean copy (`git archive HEAD` into a temp dir) to verify.
-- Impact: medium. Date: 2026-05-23, confirmed 2026-10-04.
+- Rule: if `tsc`/`vite` cannot be found, delete `node_modules` and run `pnpm install` again (an in-place install keeps saying "Already up to date"), or build in a clean copy (`git archive HEAD` into a temp dir) to verify.
+- Impact: medium. Date: 2026-05-23, confirmed 2026-10-04 and 2026-10-05 (fixed by deleting node_modules in Phase 2B).
 
 **Edit tools can save `\u` escapes as literal characters**
-- Mistake: `—`, ` ` etc. typed into an edit-tool string were written to disk as the real (sometimes invisible) characters, including inside the push-gate regex.
+- Mistake: backslash-u escape sequences (for example the ones for the em dash and the no-break space) typed into an edit-tool string were written to disk as the real, sometimes invisible, characters, including inside the push-gate regex. This lesson line itself was hit the same way and fixed on 2026-10-05.
 - Rule: for security-relevant code, generate the file with a script, or verify with a byte-level scan that no U+00A0, U+202F, U+200B–U+200F, U+2060 or U+FEFF remain.
+- Impact: medium. Date: 2026-10-05.
+
+**Vitest with `globals: false` needs explicit Testing Library cleanup**
+- Finding (Phase 2B): with globals off, RTL cannot register its automatic `afterEach(cleanup)`, so rendered trees leak between tests.
+- Rule: keep `afterEach(cleanup)` in `src/test/setup.ts`.
+- Impact: low. Date: 2026-10-05.
+
+**shadcn components trip `react-refresh/only-export-components`**
+- Finding: `button.tsx` exports `buttonVariants` next to the component, so lint fails with `--max-warnings=0`.
+- Rule: don't hand-edit generated `src/components/ui/*`. Turn that one rule off only for that folder (done in `eslint.config.js`).
+- Impact: low. Date: 2026-10-05.
+
+**pnpm 11 `peers check` can report a false "unmet peer"**
+- Finding: `tailwindcss-animate` wants `>=3.0.0 || insiders`, and pnpm 11.1.3 flags the installed `tailwindcss 3.4.1` as unmet.
+- Rule: read the range before "fixing" a peer warning. Never upgrade Tailwind to silence it (a major bump needs owner sign-off).
+- Impact: low. Date: 2026-10-05.
+
+**Never commit the owner's uid or other real ids**
+- Practice (migration 004): read the owner id from `auth.users` at apply or test time and build the policy with `format(%L)`. The repo is public.
 - Impact: medium. Date: 2026-10-05.
 
 ### Process and deployment

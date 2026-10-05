@@ -93,14 +93,17 @@ At the start of EVERY session, in this order:
 ## Commands
 
 ```bash
-pnpm install              # first setup / repair (local node_modules is currently broken)
-pnpm run dev              # Vite dev server (needs .env — none exists yet; created in Phase 2B)
-pnpm run build            # tsc -b && vite build — must pass before committing code
-pnpm run lint             # eslint .
+pnpm install              # install deps (use --frozen-lockfile to verify the lockfile)
+pnpm run dev              # Vite dev server on http://localhost:5173 (needs .env, see .env.example)
+pnpm run typecheck        # tsc -b
+pnpm run lint             # eslint . --max-warnings=0
+pnpm run test             # vitest run (jsdom + React Testing Library)
+pnpm run build            # tsc -b && vite build; typecheck, lint, test and build must pass before committing code
 node .claude/hooks/main-push-guard.mjs selftest   # push-gate self-test (expects 63/63)
 ```
 
-`import type` is required for type-only imports (`verbatimModuleSyntax`). The path alias `@/` points to `src/`.
+- Env vars (D14): `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, in a local `.env` (gitignored). Never a service-role key.
+- `import type` is required for type-only imports (`verbatimModuleSyntax`). The path alias `@/` points to `src/`.
 
 ## Never Touch
 
@@ -121,6 +124,7 @@ Only the NEW Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`) may be c
 **Database access rule.**
 - Pass `project_id: ciszgagzhfubuqhpmyeh` explicitly on EVERY Supabase MCP call.
 - Never call the old project or StreakForge. If a call would run without that ID, stop.
+- RLS is locked to the owner's auth uid (migration 004, D13). Public sign-ups must stay disabled. If the owner's Auth user is ever re-created, a new migration must re-point the policies.
 - Details: `.claude/rules/database-and-migrations.md`.
 
 **Public-repo rule.** The GitHub repo is PUBLIC (owner accepted, 2026-10-05).

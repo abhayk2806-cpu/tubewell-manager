@@ -10,18 +10,24 @@ React 19 · TypeScript · Vite · Tailwind 3 · shadcn/ui · Supabase (Postgres,
 
 ## Run locally
 
-```bash
-pnpm install
-pnpm run dev
-```
-
-You need a `.env` file at the repo root (gitignored; template in `.env.example`) with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` for the NEW Supabase project. That file is created in Phase 2.
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+2. Create `.env` (gitignored) by copying `.env.example`. Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` for the Supabase project `tubewell-hisab`: Dashboard → Project Settings → API Keys, publishable key. Never use a secret / service-role key.
+3. Start the dev server and open http://localhost:5173:
+   ```bash
+   pnpm run dev
+   ```
+   Log in with the owner's account. There is no sign-up.
 
 Other commands:
 
 ```bash
-pnpm run build   # type-check + production build
-pnpm run lint
+pnpm run test        # unit + component tests (Vitest)
+pnpm run typecheck   # tsc -b
+pnpm run lint        # eslint, zero warnings allowed
+pnpm run build       # type-check + production build into dist/
 ```
 
 ## Documentation map

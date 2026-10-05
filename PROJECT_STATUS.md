@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-05**
-> **Current phase:** 2A done (database schema, pending owner review); 2B next
+> **Current phase:** 2B done (app foundation, pending owner review); Phase 3 next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -22,8 +22,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 0 | System understanding, rebuild branch, push gate | ✅ Done (2026-10-04, closed 2026-10-05) |
 | 1 | Documentation foundation | ✅ Done (2026-10-05, including the closure with decisions D1–D8 and the first branch push) |
 | 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), pending owner review |
-| 2B | Project foundation: owner's Auth user + sign-ups off (owner action #1), `pnpm install`, `.env`, generated types, Supabase client | ⬜ Not started (next) |
-| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ⬜ Not started |
+| 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), pending owner review |
+| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ⬜ Not started (next) |
 | 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
@@ -34,8 +34,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 ## Next Action
 
-1. Owner reviews Phase 2A: the schema in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and decisions D9–D12 below.
-2. **Phase 2B: project foundation.** It needs Owner Manual Action #1 done first. The prompt will be written by the owner's assistant.
+1. Owner reviews Phase 2B. Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
+2. **Phase 3: ledger engine with tests** (fixtures E1–E24), before any UI. The prompt will be written by the owner's assistant.
 
 ---
 
@@ -43,8 +43,9 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 | # | When | Action | Status |
 |---|---|---|---|
-| 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups**. Optional: turn on leaked-password protection if your plan offers it. | Pending |
-| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, re-enable the site with **branch deploys OFF and deploy previews OFF** | Pending |
+| 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | **Auth user: done.** 1 confirmed user, verified by count on 2026-10-05. **Sign-ups disabled: owner to confirm.** Claude may not read Auth settings. |
+| 1b | Optional | Turn on leaked-password protection (Auth → Password security), if the plan offers it. The security advisor reports it as WARN since the Auth user exists. | Optional |
+| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (D14), re-enable the site with **branch deploys OFF and deploy previews OFF** | Pending |
 | 3 | After cutover | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
 | 4 | Optional | GitHub branch protection on `main` (extra layer on top of the push gate) | Optional |
 
@@ -52,7 +53,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 None blocking. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
 
-Phase 2A raised notes for the owner's review, listed in the 2026-10-05 Phase 2A session entry. None of them blocks Phase 2B.
+Phase 2A and 2B raised notes for the owner's review, listed in their 2026-10-05 session entries. None of them blocks Phase 3.
 
 ## Known Risks
 
@@ -156,6 +157,15 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
   - `created_*` is set on insert and immutable afterwards. `updated_*` is always `now()` / `auth.uid()`.
   - `deleted_by` is trigger-only (set on soft delete, cleared on restore). `deleted_at` is forced NULL on insert.
 
+### 2026-10-05 — Decisions D13–D16 (Phase 2B; proposed by the assistant under the owner's delegation)
+- **D13 — RLS locked to the owner uid** (migration 004).
+  - The 9 `*_owner` policies use `(select auth.uid()) = '<owner uid>'`. The uid is read from `auth.users` at apply time and never committed.
+  - Still no DELETE policy. Any other signed-in uid sees 0 rows and cannot write.
+  - Re-creating the owner's Auth user requires a new re-pointing migration.
+- **D14 — Env names:** `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (modern `sb_publishable_` key). Validated by `src/lib/config.ts`.
+- **D15 — v1 app code removed from the rebuild branch.** It stays on `main` and in git history, for reference only via `git show main:<path>`. No v1 code is copied into new files.
+- **D16 — Test runner:** Vitest + jsdom + React Testing Library + jest-dom.
+
 ---
 
 ## Session Log
@@ -200,10 +210,24 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
   4. Within one transaction `now()` is constant, so T3 proves "`updated_at` is set by the trigger" (client value ignored), not a different timestamp from `created_at`.
 - **Failed attempt:** none.
 
+### 2026-10-05 — Phase 2B: app foundation
+- **Preconditions:** 1 Auth user, 1 confirmed. node v24.14.0, pnpm 11.1.3.
+- **Code:**
+  - v1 app code removed (61 files; D15). Kept: build config, `index.css`, `lib/utils.ts`, the favicon, and shadcn `button`/`card`/`input`/`label`.
+  - Deps trimmed (react-hook-form, zod, date-fns, recharts, sonner and other unused v1 packages removed). Vitest stack added (D16).
+  - `node_modules` repaired with a clean reinstall.
+- **New:** `.env` (gitignored), `lib/config.ts`, typed `lib/supabase.ts`, generated `types/database.ts`, auth provider, route guards, layout shell with 6 tabs, placeholder pages, NotFound, ErrorBoundary, design tokens.
+- **Quality gates:** typecheck, lint (0 warnings), 16 tests and build all green. `dist/` contains no `service_role`. The real key is in no tracked file.
+- **Migration 004** (D13) applied; md5 identical to the repo file. SQL tests 80/80 PASS, 0 rows after.
+- **Advisors:** new security WARN `auth_leaked_password_protection` (owner setting, see action 1b). Performance unchanged (`unused_index` INFO).
+- **Notes for owner review:**
+  1. "Sign-ups disabled" could not be verified, because this phase may not read Auth settings.
+  2. `pnpm peers check` reports a false "unmet peer" for `tailwindcss-animate` (3.4.1 satisfies `>=3.0.0`).
+  3. The JS bundle is ~463 kB (137 kB gzip), almost all supabase-js plus react-router. Fine for now.
+- **Failed attempt:** none. The first `pnpm install` said "Already up to date" on a broken `node_modules` (known lesson); fixed by deleting `node_modules` and reinstalling.
+
 ---
 
 ## Known Local Issues
 
-- No `.env` file exists locally (created in Phase 2B for the NEW project).
-- Local `node_modules` is broken: `tsc` is missing. Run `pnpm install` in Phase 2B.
 - `netlify.toml` builds with `npm run build` while the repo uses pnpm. Review in Phase 10.
