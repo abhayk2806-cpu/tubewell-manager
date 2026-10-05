@@ -1,175 +1,111 @@
 # Lessons Learned — Tubewell Manager
 
-> At session start: scan headings only. Read the full section only if relevant to today's task.
-> Add lessons IMMEDIATELY after any correction. Never delete. Add superseding lessons if behavior changes.
+> **Last Updated: 2026-10-05**
+> At session start, scan the headings only and read a section when the task touches it.
+> Add a lesson immediately after any correction. Never silently delete one: move it to "Superseded" with a reason.
+> The full v1 text of every lesson is in [archive/v1-2026-10/tasks/lessons.md](../archive/v1-2026-10/tasks/lessons.md).
+
+Format: **Title** · Mistake · Rule · Impact · Date.
 
 ---
 
-## Lesson Format
+## Active lessons
 
-**[Short descriptive title]**
-- Mistake: [what went wrong]
-- Root cause: [why it happened]
-- Rule: [specific actionable rule to prevent recurrence]
-- Impact: [low / medium / high / critical]
-- Date: [YYYY-MM-DD]
+### Database and migrations
 
----
+**Migrations applied outside the repo must be committed immediately**
+- Mistake: v1 migrations applied via the Supabase MCP existed only in the live DB.
+- Rule: after every `apply_migration` (or dashboard SQL), write the same SQL to `supabase/migrations/NNN_name.sql` and commit it at once.
+- Impact: high. Date: 2026-04.
 
-## 🗄️ Database & Migrations
+**IST timezone conversion bug**
+- Mistake: `(date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata'` double-converted and pushed 1 April IST into March.
+- Rule: for a `timestamptz`, use `x AT TIME ZONE 'Asia/Kolkata'` once. In app code, use the single shared IST function. Always test times near midnight IST (see fixture E20).
+- Impact: high. Date: 2026-04.
 
-**Migrations applied via MCP don't auto-commit to repo**
-- Mistake: 3 of 4 production migrations (`add_month_closings`, `add_for_month_and_indexes`, `add_is_disabled_to_farmers`) live only in Supabase, not in `supabase/migrations/` folder
-- Root cause: Using Supabase MCP `apply_migration` only changes the live DB; it doesn't write a `.sql` file to the repo
-- Rule: After every `apply_migration` call, ALSO write the same SQL to `supabase/migrations/NNN_name.sql` and commit it
-- Impact: high
-- Date: 2026-04
+**JOIN double-counting when verifying with SQL**
+- Mistake: a verification query that joined two one-to-many tables doubled a farmer's payments (₹1,000 instead of ₹500).
+- Rule: verify aggregates with subqueries or CTEs (`SELECT SUM(...) FROM payments WHERE ...`), never with multiplying JOINs.
+- Impact: critical. Date: 2026-04.
 
-**IST timezone bug in `for_month` backfill**
-- Mistake: First migration to backfill `for_month` from existing payment dates used `(date AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Kolkata'` — double conversion shifted dates into the wrong month (April 1 IST → "March 2026")
-- Root cause: `TIMESTAMPTZ` columns are already UTC in storage; the first `AT TIME ZONE 'UTC'` was a no-op that confused the second conversion
-- Rule: For IST conversion of a `TIMESTAMPTZ`, use `date AT TIME ZONE 'Asia/Kolkata'` directly. Verify dates near month boundaries (00:00-04:00 UTC) before deploying any timezone-sensitive migration.
-- Impact: high
-- Date: 2026-04
+### Active-farmer filtering (idea kept, mechanism to rethink)
 
----
+**Filtering only the farmer list is not enough**
+- Mistake: v1 pages filtered farmers but not their entries and payments, so ghost months and inflated totals appeared.
+- Rule (rebuild): apply the active filter ONCE in the data layer, to every collection derived from farmers. Pages never re-filter.
+- Impact: high. Date: 2026-04.
 
-## 🔢 Payment Allocation & Month Math
+**Disabled AND deleted must both be excluded**
+- Mistake: after `is_disabled` was added, some filters still checked only `is_deleted`.
+- Rule: the definition of "active" lives in one function, and every new status flag updates that function.
+- Impact: high. Date: 2026-04.
 
-**Filtering payments by `payment.date` for monthly views**
-- Mistake: MonthsPage and Dashboard's Monthly view filtered payments using `payment.date` to bucket by month — but a payment made April 5 might be FOR March
-- Root cause: Conflating "when paid" with "what month it pays for"
-- Rule: For any monthly bucket, ALWAYS use `payment.for_month`, never `payment.date`. Yearly view uses `payment.date` (different semantics — calendar year). All-time view uses no date filter.
-- Impact: critical (caused wrong "Remaining" numbers shown to user)
-- Date: 2026-04
+### Build, TypeScript and tooling
 
-**Naive `totalAmount − totalPaid` for remaining**
-- Mistake: MonthsPage computed monthly remaining as `Σ usage − Σ paid` across all farmers — Farmer A's overpayment masked Farmer B's underpayment
-- Root cause: Treating dues as fungible across farmers — but they aren't
-- Rule: Monthly remaining = `Σ per-farmer max(0, usage_i − paid_i)`. Same pattern for all-time due per farmer (`max(0, ...)`).
-- Impact: high
-- Date: 2026-04
+**`verbatimModuleSyntax` requires `import type`**
+- Mistake: plain imports of interfaces broke the build.
+- Rule: use `import type { X }` for type-only imports.
+- Impact: medium. Date: 2026-04.
 
-**Recovery rate exceeded 100%**
-- Mistake: If a farmer overpaid, recovery rate showed values like 120% or 150%
-- Root cause: No cap on `collected / usage × 100`
-- Rule: Always wrap recovery percentages in `Math.min(100, Math.round(...))`
-- Impact: low (cosmetic, but trust-eroding)
-- Date: 2026-04
+**Renamed library exports (shadcn components after dependency bumps)**
+- Mistake: `react-resizable-panels` v4 renamed `PanelGroup`/`PanelResizeHandle`.
+- Rule: when a generated UI component stops compiling after a bump, check the library's changelog for renamed exports first.
+- Impact: medium. Date: 2026-04.
 
----
+**pnpm `node_modules` can break silently**
+- Mistake: `pnpm install` said "Already up to date" while `node_modules/typescript` was missing. This was reproduced again on 2026-10-04.
+- Rule: if `tsc`/`vite` can't be found, do a fresh `pnpm install`, or build in a clean copy (`git archive HEAD` into a temp dir) to verify.
+- Impact: medium. Date: 2026-05-23, confirmed 2026-10-04.
 
-## 👥 Active-Farmer Filtering
+**Edit tools can save `\u` escapes as literal characters**
+- Mistake: `—`, ` ` etc. typed into an edit-tool string were written to disk as the real (sometimes invisible) characters, including inside the push-gate regex.
+- Rule: for security-relevant code, generate the file with a script, or verify with a byte-level scan that no U+00A0, U+202F, U+200B–U+200F, U+2060 or U+FEFF remain.
+- Impact: medium. Date: 2026-10-05.
 
-**Three separate pages forgot active-farmer filter (UsagePage, PaymentsPage, MonthsPage)**
-- Mistake: Counts and totals included deleted/disabled farmer entries because the entries themselves weren't filtered after fetching
-- Root cause: Fetching all entries and filtering ONLY the farmer list — entries from inactive farmers still leak into counts and `rawUsage` month dropdowns
-- Rule: Fetch active farmer IDs FIRST (`is_deleted=false AND is_disabled=false`), then filter every downstream collection (`usage_entries`, `payments`, derived `rawUsage`, computed month lists) by that ID set. Don't trust that filtering the farmer list alone is sufficient.
-- Impact: high (caused ghost months in dropdowns, inflated entry counts, miscounted dues)
-- Date: 2026-04
+### Process and deployment
 
-**Disabled vs Deleted both must be filtered out**
-- Mistake: After adding `is_disabled` column, some places only filtered `is_deleted=false` and let disabled farmers leak into calculations
-- Root cause: Adding a second flag means every existing filter needs updating
-- Rule: Active = `is_deleted=false AND is_disabled=false`. Both conditions, always. If you grep for `is_deleted` in the codebase, every hit should have `is_disabled` next to it.
-- Impact: high
-- Date: 2026-04
+**"Live" does not mean "tested"**
+- Mistake: three latent v1 calculation bugs survived several deploys because no end-to-end audit was done.
+- Rule: after any change touching calculations or filters, cross-check totals against the per-farmer breakdowns, and run the fixture tests (E1–E22).
+- Impact: high. Date: 2026-04.
 
----
+**Backup format needs version handling**
+- Mistake: importing an older backup failed on a missing field.
+- Rule: every backup carries a version header. The importer treats newly added fields as optional and branches on version.
+- Impact: medium. Date: 2026-04.
 
-## 💾 Backup & Restore
+**Docs held a stale Netlify site ID from a different account**
+- Mistake: v1 docs named site `cfff021f-…` and URL `tubewell-manager.netlify.app`. The real site had moved to `tubewellhisab.netlify.app` in a new account.
+- Rule: treat infrastructure IDs in docs as claims. Verify them, and record which account they belong to.
+- Impact: medium. Date: 2026-10-05.
 
-**Replace mode deletion order must respect FK constraints**
-- Mistake: Early Replace logic tried to delete `farmers` before `usage_entries` / `payments` — FK constraint violation
-- Root cause: `usage_entries.farmer_id` and `payments.farmer_id` reference `farmers(id) ON DELETE CASCADE`, but `month_closings.farmer_id` also references — and Postgres needs children gone first if you're not using CASCADE on every path
-- Rule: Replace mode delete order: `month_closings → payments → usage_entries → farmers`. Always.
-- Impact: medium
-- Date: 2026-04
-
-**Backup backward-compat needs explicit version handling**
-- Mistake: Importing a v1.0 backup (no `month_closings` field) failed because the importer assumed the field existed
-- Root cause: No null/undefined check on optional new fields
-- Rule: When bumping backup version, treat all newly-added fields as optional in importer (`month_closings ?? []`). Add a version field to backup JSON so importers can branch.
-- Impact: medium
-- Date: 2026-04
+**Netlify build credits make frequent pushes costly**
+- Rule: no pushes during the rebuild. Netlify stays disabled until Phase 10. When it is re-enabled, keep branch deploys and deploy previews OFF.
+- Impact: medium. Date: 2026-10-05.
 
 ---
 
-## 🛠️ Build & TypeScript
+## Tooling-only (environment-specific; kept for reference)
 
-**`verbatimModuleSyntax` requires `import type` for interfaces**
-- Mistake: Initial build failed with 20+ errors because interface imports used regular `import { Foo }`
-- Root cause: TS option `verbatimModuleSyntax` enforces explicit `import type` for type-only imports
-- Rule: When importing from `types/index.ts` or any file that only exports types/interfaces, use `import type { Foo }` — never plain `import { Foo }`
-- Impact: medium (build break)
-- Date: 2026-04
+**Stale file view in the old Cowork sandbox mount**
+- After an Edit/Write, the bash mount sometimes showed a truncated old copy of the file, so builds failed on errors that didn't exist.
+- Rule: if build errors don't match the Read-tool view of the file, suspect the mount and re-sync.
+- Date: 2026-05-18.
 
-**`react-resizable-panels` v4 renamed exports**
-- Mistake: `resizable.tsx` from shadcn template used `PanelGroup` / `PanelResizeHandle` — v4 renamed them to `Group` / `Separator`
-- Root cause: Major version upgrade with API rename
-- Rule: When a shadcn ui/ component fails to compile after a dependency bump, check the dep's CHANGELOG for renamed exports before assuming the component is broken
-- Impact: medium (build break)
-- Date: 2026-04
+**`.git/index.lock` stuck on the Windows mount (old sandbox)**
+- The Linux sandbox couldn't delete a lock file created on the Windows filesystem.
+- Rule: if it recurs, the owner removes `.git\index.lock` from Windows. Note that the old workaround text used the wrong path `Documents\GitHub\…`; the repo is at `Documents\tubewell-manager`.
+- Date: 2026-05-23.
 
 ---
 
-## 🧪 SQL Verification Pitfalls
+## Superseded (v1) — kept for history, do not apply
 
-**JOIN multiplication in verification queries**
-- Mistake: SQL query to verify a farmer's total paid amount used `JOIN payments` against another table — multi-row join multiplied the payment rows, showing ₹1000 paid instead of actual ₹500
-- Root cause: Cartesian-style multiplication when joining two one-to-many tables to the same parent
-- Rule: For aggregate verification, use subqueries or CTEs (`SELECT SUM(amount) FROM payments WHERE ...`) — NOT JOINs that multiply rows. The app code uses separate `.reduce()` calls (not JOINs), so app numbers are the trustworthy source.
-- Impact: critical (almost led to "fixing" a non-existent bug)
-- Date: 2026-04
-
----
-
-## ⚙️ General Mistakes
-
-**Don't assume "live in production" means "tested"**
-- Mistake: After Round 4 deployment, three latent bugs (UsagePage filter, PaymentsPage rawUsage filter, MonthsPage per-farmer remaining) survived because no end-to-end audit was done
-- Root cause: Deployed each round individually; assumed each round's narrow fix was complete; didn't audit interaction with prior rounds
-- Rule: After any round that touches calculation/filter logic, do a full sweep of every page that reads the same data. Cross-check stat-card totals against per-farmer breakdowns — they should always reconcile.
-- Impact: high
-- Date: 2026-04
-
----
-
-## 🛠 Claude Workflow & Tooling
-
-**Claude bash mount can show truncated content for files written via Edit/Write tools**
-- Mistake: After using the Edit or Write tool to modify an existing file, the bash mount sometimes returned a stale/truncated view of the file content (correct beginning, cut off mid-line) — making local `tsc -b` build appear to fail with confusing JSX/brace errors that didn't exist in the real file.
-- Root cause: VFS caching layer between the file tools (which write to the user's Windows-native filesystem) and the bash sandbox mount. The Read tool sees actual disk state; the bash mount sometimes lags or holds a stale snapshot. Doesn't affect the user's machine or Netlify build — purely a Claude verification artifact.
-- Rule: If a `tsc` or `vite build` reports errors that don't match the Read-tool view of the same file, suspect the bash mount. Force-sync by rewriting the file via `cat > /sessions/.../path <<'EOF' ... EOF`. After heredoc rewrite, bash and Read tool agree, and the build passes.
-- Diagnostic: `stat <file>` showing a `Modify` time from before your edit + bytes count matching original size = stale mount. `tail -3 <file>` showing the file cut off mid-token confirms it.
-- Impact: high (caused multiple confusing "build broken" detours in Session 2 Phase 2)
-- Date: 2026-05-18
-
-**`pnpm` reports "Already up to date" even when node_modules is broken**
-- Mistake: After session restart, `pnpm install` in the mounted workspace returned "Already up to date" in <1s, but `pnpm run build` failed with "Cannot find module .../typescript/bin/tsc". The pnpm symlink farm was inconsistent because the previous session's install was on a different mount.
-- Root cause: pnpm checks the lockfile timestamp + `.modules.yaml` to decide if install is needed. After session reset, the lockfile says "complete" but the actual symlinks in `node_modules/.bin/` may be broken or missing binaries from `node_modules/.pnpm/<pkg>/node_modules/<pkg>/`.
-- Rule: To validate a build during Cowork sessions, copy the source files (NOT node_modules) to `/tmp/<dir>` and run `pnpm install` there — fresh install always works, ~10-20s. Don't trust an in-place `pnpm install --force` on the mounted folder; it can't remove existing files (`Operation not permitted` on the Windows mount).
-- Diagnostic: `ls node_modules/.bin/tsc` returns the symlink path but `ls node_modules/typescript` errors with "Input/output error" = broken pnpm farm.
-- Impact: medium (slows down build verification; workaround takes ~30s)
-- Date: 2026-05-23
-
-**Multi-month payments → split into N rows sharing payment_group_id, NOT a new schema**
-- Mistake (almost made): Tempting to add a `payment_allocations` join table for multi-month payments, treating each user action as one row with N child allocations.
-- Why rejected: Would require re-auditing every page that computes monthly dues (5 pages, ~16 historical bugs). Bigger blast radius than the feature deserves.
-- Rule: For multi-month payments, insert N independent rows (one per month) sharing a single `payment_group_id` UUID. All existing calculations stay row-wise on `for_month` — zero change. `payment_group_id` is UI hint only (badges, group resend, edit warning). NEVER use `payment_group_id` in any due/balance/total calculation.
-- Impact: high (avoided regression risk class)
-- Date: 2026-05-23
-
-**Multi-month WhatsApp message MUST exclude the entire group from `paid_before`, not just one row**
-- Mistake-trap: When computing `previous_due` for a multi-month send, the natural query `paid_before = Σ payments WHERE for_month = M AND id != current_row.id` is WRONG — it includes the OTHER rows of the same group in `paid_before`, making "previous due" appear smaller than it actually was before the user took action.
-- Rule: For multi-month, `paid_before = Σ payments WHERE for_month = M AND (payment_group_id IS NULL OR payment_group_id != current_group_id)`. Easiest: fetch all payments for the months in one query, filter client-side on `p.payment_group_id !== groupId` (cleanly handles the SQL NULL semantics where `!= 'uuid'` excludes NULL rows).
-- Impact: high (would have produced incorrect message totals)
-- Date: 2026-05-23
-
-**`.git/index.lock` stuck on Windows-mount — cannot be removed from Linux sandbox**
-- Mistake: Tried `rm -f .git/index.lock` after a partial `git add` left a stale lock. The Linux sandbox got `Operation not permitted` even though `ls -la` showed the file is owned by the sandbox user.
-- Root cause: Windows-side filesystem driver holds an exclusive handle on the lock file once git creates it; the Linux sandbox can read but not delete certain mounted files.
-- Rule: For git operations during Cowork sessions, prefer letting the USER run `git commit` + `git push` from their native Windows terminal. Stage files via the sandbox if convenient (`git add` works), but commits should be the user's job. If you must commit from sandbox, do it BEFORE any tmp_obj write fails — the lock appears only after a failed/interrupted git op.
-- Workaround for the user: Close any open editor with the repo, then in PowerShell: `cd C:\Users\<u>\Documents\GitHub\tubewell-manager; Remove-Item .git\index.lock; git status`. The lock is just a marker, no data loss.
-- Impact: medium (blocked auto-push from sandbox)
-- Date: 2026-05-23
+| v1 lesson | Why superseded | Principle that survives |
+|---|---|---|
+| Filter monthly payments by `payment.for_month`, never `payment.date` | Payments have no month; FIFO allocation (ledger L5–L6) | Cash received (by payment date) and charge settled are different concepts (L10) |
+| Monthly remaining = Σ per-farmer `max(0, usage − paid)` per month | The per-month ₹0 cap lost credit; replaced by the FIFO waterfall with carry-forward | **One farmer's credit must never offset another farmer's due** (L8, L11) |
+| Multi-month payments = N rows sharing `payment_group_id` | No month selection, so no grouping is needed | — |
+| Multi-month WhatsApp `paid_before` must exclude the whole group | WhatsApp and grouping are both removed | Messages and figures must be computed from current DB data, not stale screen state |
+| Replace-mode delete order `month_closings → payments → usage_entries → farmers` | Tables changed. Also, its stated cause was wrong: the v1 foreign keys were `ON DELETE CASCADE`, so child rows cascaded anyway | Replace mode still needs a defined order and a double confirmation (`.claude/rules/backup-restore.md`) |
+| Recovery rate capped at 100% | Dashboard metrics are redefined in the ledger spec (L11) | Never show a misleading percentage |

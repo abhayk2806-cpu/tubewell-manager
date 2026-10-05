@@ -1,292 +1,134 @@
 # Tubewell Manager — Project Status
 
-> Last updated: 2026-05-29 | Session 5 (Entry-level payment coverage — built locally, awaiting build + push) | Phase: **Live in production — maintenance mode**
+> **Last Updated: 2026-10-05**
+> **Current phase:** 1 — Documentation foundation (in progress)
+> **Branch:** `rebuild/fresh-system` (local only, no upstream). `main` = old v1 production, untouched.
+
+**Update policy.** Update this file:
+- after each phase or task;
+- after a failed task (record the attempt, the failure and the correction);
+- after schema changes;
+- when a major bug is found or fixed;
+- when a decision changes.
+
+Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-DD).
 
 ---
 
-## Current Phase & Top Priority
+## Phase Plan
 
-**🎉 Session 4 (Navigation & UX features) — SHIPPED, pushed (commit `85f0b2e`), Netlify auto-deployed, and verified by owner on https://tubewell-manager.netlify.app on 2026-05-26.**
+| # | Phase | Status |
+|---|---|---|
+| 0 | System understanding, rebuild branch, push gate | ✅ Done (2026-10-04, closed 2026-10-05) |
+| 1 | Documentation foundation | 🔄 In progress (2026-10-05) |
+| 2 | New Supabase schema + project foundation (`.env`, `pnpm install`, migrations from 001, RLS, auth user) | ⬜ Not started |
+| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E22) — **before any UI** | ⬜ Not started |
+| 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started |
+| 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
+| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
+| 7 | Dashboard + months view | ⬜ Not started |
+| 8 | Backup / restore | ⬜ Not started |
+| 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
+| 10 | Data wipe on owner approval, cutover to `main`, Netlify re-enable, final docs | ⬜ Not started (wipe scope **PENDING OWNER DECISION**, see Open Questions) |
 
-Four features built end-to-end to address the owner's pain points: "har chij dekhne ke liye tab to tab move karna padta hai" and "settled farmers ki entries Pani section mein confusion karti hain".
+## Next Action
 
-1. **Farmer Detail Page (`/farmers/:id`)** — NEW. Tap any farmer card (Farmers page, Dashboard pending list, or global search) → land on a per-farmer page with summary cards (total usage / paid / due), month-wise breakdown (cleared vs pending, with a "Pura ₹X bharo" quick-pay button per pending month), and a full chronological ledger (entries + payments interleaved). Two quick-action buttons at top: "Pani Add karo" and "Payment Add karo" navigate to the existing pages with farmer pre-selected via URL params.
-2. **Settled-entries hide in Usage page** — when a specific month is selected, farmer cards whose month-balance is ₹0 (usage fully paid for that month) are hidden by default. Toggle reveals them; settled farmers show a green "Cleared" badge + green avatar tint when visible. Header summary mentions "N cleared (hidden)". The default view is now "what still needs attention".
-3. **Dashboard pending dues widget enhancement** — the existing "Kisan-wise Baki" list now has clickable farmer rows (→ detail page) plus per-row quick actions: green "Pay" button (deep-links to PaymentsPage with farmer pre-selected) and a WhatsApp icon (only if farmer has WA enabled) that opens wa.me with a hard-coded Hindi reminder message and logs the send with `message_type='reminder'` (new value — no DB migration required, DB column has no CHECK constraint).
-4. **Global farmer search in header** — search icon in the top header opens an overlay with a text input. As you type, results filter live (name / mobile / whatsapp_number). Click → navigate to that farmer's detail page. Esc / X / backdrop click closes. Closes automatically on route change.
-
-**Plumbing:** `useSearchParams` deep-link pattern added to PaymentsPage and UsagePage — opens the Add form pre-filled from URL. Single-shot (params cleared with `setSearchParams({}, { replace: true })` after handling). Used by Farmer Detail Page action buttons and Dashboard "Pay" button.
-
-**Shipped Session 3 features (still live in production):**
-
-Two improvements live:
-1. **"Pura ₹X bharo" auto-fill** — in the payment add form (single mode), when farmer + for_month is chosen, a green chip appears showing the exact pending and one click auto-fills the amount input. Saves typing + eliminates "wrong amount" errors.
-2. **Multi-month payment** — mode toggle "Ek month / Multiple months" in the form. Multi mode shows chip-style cards for every month with pending balance; check the months, each one pre-fills its full pending amount (editable), live total auto-sums. On save: N rows are inserted in one transaction sharing a `payment_group_id` UUID. All existing calculations stay row-wise on `for_month` — zero math changes elsewhere.
-
-WhatsApp behavior for multi-month: single summary message listing each month's previous_due / abhi diya / new_due. Hard-coded format (templates only support single-month placeholders, by design). Resend on a grouped row sends the full summary again.
-
-**🎉 Track A — WhatsApp Integration: SHIPPED (all 7 phases complete) — Session 2.**
-
-The WhatsApp feature is functionally complete, build-verified, knowledge-files-updated, and pushed. Farmers can be enabled per-account via FarmersPage. Templates editable in Setup page. Banners fire after every save (usage + payment). Manual re-send button on every entry. Audit log captures every send. Backup v2.2 includes WhatsApp tables + payment_group_id.
-
-**No active project right now.** Owner picks next move. See "Next Actions" below.
+Owner reviews the Phase 1 docs and answers the Open Questions. Then Phase 2 begins with the owner's manual action #1.
 
 ---
 
-## Active Blockers
+## Owner Manual Actions (Claude cannot do these)
 
-No active blockers.
+| # | When | Action | Status |
+|---|---|---|---|
+| 1 | Phase 2 | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | Pending |
+| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, re-enable the site with **branch deploys OFF and deploy previews OFF** | Pending |
+| 3 | After cutover | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
+| 4 | Optional | GitHub branch protection on `main` (extra layer on top of the push gate) | Optional |
 
----
+## Open Questions (owner)
 
-## Open Questions
-
-- **Tests** — zero test coverage. Calculation logic (now including 2 WhatsApp helpers) is the highest-risk area. Worth adding Vitest? — owner decides
-- **README.md** — still default Vite template. Replace or leave? — owner decides
-- **Nav crowding (7 tabs)** — bottom nav has 7 items. Monitor in real use — if owner reports cramping on narrow phones, consider moving Backup or Setup to a header gear icon.
-- **Track B (advance credit tracking)** — deferred future project. Owner picks timing. See Decisions Log 2026-05-17.
-
-✅ RESOLVED 2026-05-17: Migration drift — backfill complete.
-✅ RESOLVED 2026-05-18: Track A scope (all 7 phases shipped).
-
----
+1. **Monthly/Yearly dashboard.** Do "outstanding" and "credit" in these views mean: the balance as of the period end, the current balance, or that period's buckets only? → [ledger spec](docs/LEDGER_AND_ALLOCATION.md) L11.
+2. **As-of view.** For rows edited or soft-deleted after the as-of date, should the current row state be used? → L9.
+3. **Status label for a charge-0 (payment-only) month.**
+4. **Per-entry rounding.** Confirm that a bucket is the sum of individually rounded entries (three 10-min entries = ₹50.01; E6b).
+5. **Trail presentation.** When a payment predates the usage it covers: plain future-month pieces, or an "advance, later used for <month>" label?
+6. **Rate precision.** Is the rate limited to 2 decimal places?
+7. **DB money type.** `bigint` paise vs `numeric(12,2)`; per-entry `amount` / `total_minutes` stored (generated columns) vs computed in the engine only. → [ARCHITECTURE](docs/ARCHITECTURE.md).
+8. **Phase 10 "data wipe".** What exactly is wiped: test data in the NEW project before you re-enter real data, the OLD project, or both?
 
 ## Known Risks
 
-- **Open RLS policy** — `USING (true) WITH CHECK (true)` for authenticated users on all 6 tables. Any account created in Supabase Auth dashboard can read/modify all data. — likelihood: low (closed user list) — mitigation: monitor Auth dashboard users list
-- **Backup Replace mode = full data wipe** — irreversible. Wipes WhatsApp tables too (Phase 6). — likelihood: low (double-confirmed in UI) — mitigation: documented critical rule
-- **Calculation regressions** — Phase 4 + 5 both use send-time DB query (NOT React state). Pattern locked in. Future feature touches must follow same pattern. — likelihood: low going forward — mitigation: rule documented in CLAUDE.md Critical Rules section
-- **`whatsapp_log` status = `'initiated'` only** — cannot confirm delivery via wa.me. — likelihood: medium — mitigation: documented in `src/lib/whatsapp.ts`, types, `tasks/lessons.md`
-- **Bash sandbox file-tool sync (Claude-internal)** — workaround: heredoc rewrite for any large or repeatedly-edited file. — likelihood: medium per session — mitigation: documented in `tasks/lessons.md`
-- **Consent timestamp preservation** — preserved on edit. Only uncheck → recheck creates a fresh timestamp. — likelihood: low — mitigation: documented in FarmersPage logic
-- **WhatsApp send on edit** — banner reappears, math stays correct via send-time DB exclude-this-row pattern. — likelihood: low — mitigation: documented behavior
-- **Overpayment in WhatsApp message** — `new_due = ₹0` (Option 1 cap). — likelihood: low — mitigation: documented in Decisions Log 2026-05-17
-- **Backup v2.1 importer on v1.0 file** — v1 backups missing `month_closings`, `whatsapp_*`. Importer defaults all to `[]`. Replace mode will WIPE existing WhatsApp data when importing a v1 backup. — likelihood: low (owner aware of Replace risk) — mitigation: preview shows version note warning
-
-✅ RESOLVED 2026-05-17: Schema drift — backfill complete
-
----
-
-## Next Actions (Priority Order)
-
-**No active project. Owner picks next move.**
-
-1. **Test WhatsApp end-to-end in production** (~15 min) — enable 1 farmer, add an entry, click banner, verify message lands. Then a payment. Then a re-send. Confirm `whatsapp_log` rows. Smoke test before rolling out widely.
-2. **Track B — Advance credit tracking across months** — the deferred major refactor. 3-5 sessions, touches all 5 calculation pages, opens the regression-risk class that took 16 historical bugs to fix. Do NOT bundle with anything else. See Decisions Log 2026-05-17.
-3. **Add Vitest + minimal calculation tests** — 5-10 unit tests on the formulas in PROJECT_MEMORY.md section 6 + section A5 (WhatsApp math). Would catch the most common bug class. ~1-2 hours.
-4. **Replace default Vite README.md** — quick cleanup.
-5. **Other backlog** — see `tasks/todo.md` for full list (WhatsApp reminders, statement share, GDrive backup, etc.)
+| Risk | Likelihood | Mitigation |
+|---|---|---|
+| Accidental push to `main` deploys over production | Low | Push gate hook (only on this branch); never push unless asked; optional branch protection |
+| Session started on `main` has no push gate | Low | Session Start Protocol step 1 (stop if on `main`) |
+| Calculation drift between screens | Medium | One engine, no page formulas, fixture tests E1–E22, Phase 9 verification |
+| Timezone month errors | Medium | One IST function; E20 boundary fixtures |
+| Silent row truncation (Supabase 1,000-row default) | Medium | Paginate every read in the data layer; Phase 9 >1,000-row test |
+| Frequent pushes burn Netlify credits | Medium | Netlify disabled until Phase 10; no pushes during rebuild |
+| Old Supabase project auto-deleted after 90 days paused | Low | Only a fallback; no migration planned |
 
 ---
 
 ## Decisions Log
 
-### 2026-05-29 — Entry-level payment coverage is DERIVED, never stored (Session 5)
-**Decision:** Show which usage entries a payment has covered (paid / partial / unpaid) by computing it live, not by storing per-entry paid state. New pure helper `src/lib/allocation.ts::allocateMonth(entries, totalPaidForMonth)` distributes the month's total paid across entries FIFO (oldest-first) and returns per-entry `{ paidAmount, dueAmount, paidMinutes, status }`.
-**Allocation unit is MONEY, not hours.** `rate_per_hour` is stored per-entry, so two entries in one month can have different rates — converting ₹→hours globally would be wrong. We allocate rupees; each entry's paid-minutes is derived from THAT entry's own rate. Overpayment beyond usage is reported as `leftoverPaid` and otherwise ignored (consistent with the ₹0-due cap).
-**Alternatives considered & rejected:** A stored `paid_status` column / `payment_allocations` table — same blast-radius objection as the 2026-05-23 `payment_group_id` decision. Stored state also goes stale on entry/payment edits; derived is self-correcting. Month-level due math was already correct; only the per-entry breakdown was missing, and that is a pure function of (entries, total paid).
-**Impact:** Zero schema change, zero migration, zero new write path. The sacred row-wise `for_month` due math is untouched — this is a display layer on top. Surfaced in: FarmerDetailPage ledger (badge per usage row), UsagePage entry cards (badge, only when a specific month is selected — hidden in "Sabhi Months"), and PaymentsPage (post-payment coverage card after a single-month save, computed fresh from DB). Multi-month payments skip the coverage card (banner already lists the months). `payment_group_id` stays out of the math — the pool is simply the sum of `for_month` payments.
+### 2026-10-04 — Full fresh rebuild instead of patching v1
+v1's month-by-hand allocation lost overpayment credit. In live data on 2026-10-04 there was ₹1,336.68 overpaid across 5 farmer-months, and the summed monthly dues (₹2,850) disagreed with the netted all-time dues (₹2,213.32). The rebuild is built around a continuous per-farmer ledger with automatic FIFO allocation.
 
-### 2026-04 — Built on React + Supabase + Netlify free tier
-**Decision:** This exact stack for v1
-**Impact:** Stack locked in; zero-cost operation
+### 2026-10-04 — Rebuild on `rebuild/fresh-system`; `main` untouched until cutover
+`main` auto-deploys production. A push gate hook blocks pushes to `main` unless the owner sends the exact approval phrase. It was built on 2026-10-04, committed as `b91fe36` on 2026-10-05, and hardened in `bbe7911` on 2026-10-05.
 
-### 2026-04 — Soft delete only, never hard delete
-**Decision:** Use `is_deleted` + `is_disabled` boolean flags
-**Impact:** All queries filter active farmers; backup Replace is only deletion path
+### 2026-10-04 — NEW Supabase project
+`tubewell-hisab` (`ciszgagzhfubuqhpmyeh`, ap-south-1, org `digital-store`). The OLD project `vsgptyuvnistwjjmrfby` is paused as a fallback.
 
-### 2026-04 — Option B for payment allocation (`for_month`, not date)
-**Impact:** All 5 pages rewritten; backup v2.0; FIFO auto-select
+### 2026-10-05 — Approval phrase accepts dash variants
+The whole message must be `CUTOVER APPROVED — PUSH TO MAIN NOW`. Em dash, en dash or hyphen are accepted, and whitespace is normalized. A hook fidelity test confirmed that typed, pasted, em-dash and multi-line messages reach the hook unchanged.
 
-### 2026-04 — Disable vs Delete as separate user actions
-**Impact:** `is_disabled` column; FarmersPage 3-tab UI
+### 2026-10-05 — Scope decisions
+- **WhatsApp:** out of the rebuild.
+- **Data migration:** none. Old data is wiped and re-entered by the owner after the new system is verified and approved.
+- **Usage entries and payments:** soft-delete only.
+- **Users:** a single user.
+- **Month Close:** removed.
+- **`for_month` and `payment_group_id`:** removed.
+- **Old data wipe:** only at the end, on explicit owner approval.
+- **Timezone:** Asia/Kolkata everywhere.
+- **Phases:** 0–10 as in the table above.
 
-### 2026-05-17 — WhatsApp delivery via wa.me click-to-send (Track A)
-**Decision:** wa.me links, NOT WhatsApp Business API
-**Impact:** No backend. `whatsapp_log.status` always `'initiated'`.
+### 2026-10-05 — Ledger rules L1–L18
+Transcribed into [docs/LEDGER_AND_ALLOCATION.md](docs/LEDGER_AND_ALLOCATION.md) as the authoritative spec. Worked examples E1–E22 were verified by an independent script and will become the test fixtures. The owner's original Ramu example totals 17h45m = ₹1,775.00 (not 16h45m).
 
-### 2026-05-17 — Overpayment behavior stays consistent (₹0 cap)
-**Decision:** Messages show `new_due = max(0, ...)` — overpayment NOT mentioned
-**Impact:** Helper enforces `Math.max(0, ...)`. Track B deferred.
+### 2026-10-05 — Netlify facts
+The live site is `tubewellhisab.netlify.app` in the owner's NEW Netlify account. It is deliberately disabled. The old site ID `cfff021f-…` is stale. When the site is re-enabled in Phase 10: branch deploys OFF, previews OFF.
 
-### 2026-05-17 — Track B (advance credit tracking) intentionally separated
-**Impact:** Track B in backlog with full scope
-
-### 2026-05-17 — Templates page in bottom-nav (7-tab)
-**Impact:** Nav padding tightened
-
-### 2026-05-18 — Consent timestamp preservation policy
-**Decision:** Edit-save preserves original `whatsapp_consent_at`.
-
-### 2026-05-18 — WhatsApp send decoupled from data save
-**Decision:** Save first, banner offer to send, click triggers wa.me + log. Errors never roll back save.
-
-### 2026-05-18 — Send-time DB calculation for message totals
-**Decision:** Both Phase 4 + 5 helpers query Supabase, excluding current entry/payment. NOT React state.
-**Impact:** Eliminates "wrong total in message" bug class
-
-### 2026-05-18 — Phase 5 payment message math
-**Decision:** Parallel queries for usage (by month) + payments (by for_month, neq id). `previous_due = max(0, usage_sum − paid_before)`, `new_due = max(0, usage_sum − paid_after)`.
-**Impact:** Symmetric with Dashboard / MonthsPage math
-
-### 2026-05-18 — Backup v2.1 format
-**Decision:** Backup version `"2.0"` → `"2.1"`. Adds optional `whatsapp_message_templates` + `whatsapp_log`. Importer backward-compat with v1 + v2.
-**Impact:** `BackupPage.tsx` exports/imports 2 extra tables. Constant `CURRENT_BACKUP_VERSION` at top. Replace delete order updated. Templates upsert on `template_type`, log on `id`.
-
-### 2026-05-23 — Multi-month payments via shared payment_group_id
-**Decision:** Migration 006 adds nullable `payment_group_id uuid` to `payments`. When the user picks N months in one save, N independent payment rows are inserted sharing the same UUID. Every existing calculation continues to operate row-wise on `for_month` — `payment_group_id` is a UI hint only (badges, group resend, edit warning) and is NEVER used in any due/balance math.
-**Alternatives considered & rejected:** A new `payment_allocations` join table — would have required re-auditing every page that computes monthly dues. Blast radius too big for a UX convenience.
-**Impact:** `PaymentsPage.tsx` adds mode toggle, multi-month chip selector, "Pura ₹X bharo" auto-fill in single mode, multi-month WhatsApp summary message. `types/index.ts` adds `Payment.payment_group_id?`. `BackupPage` bumps to v2.2; export auto-includes the field via `select('*')`.
-
-### 2026-05-23 — Multi-month WhatsApp message is a single summary, hard-coded format
-**Decision:** When a multi-month payment is sent, build ONE message listing each month's `previous_due` / `amount paid` / `new_due`. Format is hard-coded in `PaymentsPage.tsx::buildAndLogMultiMonthPaymentWhatsApp` — NOT template-driven, because `whatsapp_message_templates.payment_received` only supports single-month placeholders (`{previous_due}`, `{amount_paid}`, etc.). Single-month payments continue to use the editable DB template.
-**Impact:** User edits to the payment_received template still apply to single-month sends (the 95% case). Multi-month edits to the message format require code changes — acceptable trade-off since multi-month payments are infrequent and the summary format is functional.
-
-### 2026-05-23 — Pura pending bharo auto-fill (single-month UX)
-**Decision:** In the single-month payment form, when farmer + for_month are selected, a green chip button shows the calculated pending and one click fills the amount input. Same math as everywhere else (`max(0, usage_sum − paid_so_far)`). Just exposes the existing calculation as a button — no new logic.
-**Impact:** Faster data entry. Eliminates "₹500 typed as ₹50" errors. Hidden when pending = ₹0.
-
-### 2026-05-25 — Farmer Detail Page added as the per-farmer home (Session 4)
-**Decision:** New route `/farmers/:id` with a per-farmer landing page (summary + month breakdown + chronological ledger). All other pages link into it — FarmersPage cards (left side), Dashboard pending list rows, and global search results. Action buttons on the detail page (Pani Add / Payment Add / per-month "Pura ₹X bharo") deep-link to existing pages via URL search params; the existing pages stay as the source of truth for create/edit flows. No duplication of business logic.
-**Alternatives considered & rejected:** Inline add/edit modals on the detail page — would have duplicated the WhatsApp send-time math, validation, and grouped-payment UI from PaymentsPage. Better to keep one canonical add flow and just deep-link in.
-**Impact:** Owner's "tab-to-tab navigation" pain solved without forking calculation logic. All existing critical rules stay in force (payment allocation by `for_month`, send-time DB query, active-farmer filter).
-
-### 2026-05-25 — Deep-link URL prefill pattern (Session 4)
-**Decision:** `useSearchParams` on PaymentsPage and UsagePage. When `?farmer_id=xxx[&for_month=...][&amount=...]` is present after data loads, the Add form opens pre-filled. Single-shot — params are cleared via `setSearchParams({}, { replace: true })` so refresh / re-navigation doesn't re-open. A `prefillHandled` boolean state prevents double-trigger.
-**Impact:** Detail page and Dashboard quick actions reuse existing flows. No prop drilling or context. Refresh-safe.
-
-### 2026-05-25 — Settled hidden by default in Usage page (Session 4)
-**Decision:** A farmer's card in Usage page is "settled" when, for the selected month, `usage_amount − paid (for_month=selected) ≤ 0`. Settled cards are hidden by default; a toggle reveals them. When "Sabhi Months" is selected (no month scope), the concept doesn't apply and all cards show.
-**Math:** Same `for_month`-bucketed math as Dashboard and MonthsPage. No new calculation logic. UsagePage now fetches `payments` in `loadData` to compute the per-farmer-per-month balance client-side. Active-farmer filter still applied to both entries and payments.
-**Impact:** Default Usage page view answers "kiska kaam baki hai" instead of "saari history". Confusion ko kam karega.
-
-### 2026-05-25 — Global farmer search in header (Session 4)
-**Decision:** Search icon button in Layout header opens an overlay. In-memory filter over an `/farmers` select with `is_deleted=false AND is_disabled=false`. Re-fetches every open (~10 rows is cheap). Click result → `/farmers/:id`. Auto-closes on route change.
-**Impact:** Bypasses bottom-nav for the most common "find this farmer" intent.
-
-### 2026-05-25 — `whatsapp_log.message_type='reminder'` added (Session 4)
-**Decision:** Dashboard "WhatsApp" button on a pending-due row builds a simple Hindi reminder message (hard-coded, NOT template-driven), opens wa.me, and logs with `message_type='reminder'`. The DB column has no CHECK constraint — no migration needed; the TypeScript `WhatsAppMessageType` union was extended in `src/types/index.ts`.
-**Alternatives considered & rejected:** Re-using `'manual_resend'` would have been semantic abuse (resend implies there was a prior send). A template-driven message would mean an additional template row in `whatsapp_message_templates` — overkill for a one-line reminder. Acceptable future work: add a `'reminder'` template row if owner wants to edit the wording.
-**Impact:** Owner can poke a pending-due farmer in one tap from the Dashboard. Audit log still captures the send.
-
----
-
-## Key Project State
-
-- **Source files (hand-edited):** ~15 files in src/. New in Session 4: `src/pages/FarmerDetailPage.tsx`. Modified in Session 4: `src/App.tsx`, `src/components/Layout.tsx`, `src/pages/FarmersPage.tsx`, `src/pages/UsagePage.tsx`, `src/pages/PaymentsPage.tsx`, `src/pages/Dashboard.tsx`, `src/types/index.ts`.
-- **DB tables:** 6 (farmers, usage_entries, payments, month_closings, whatsapp_message_templates, whatsapp_log)
-- **Migrations applied to prod:** 6 (added 006_add_payment_group_id on 2026-05-23) — Session 4 needed ZERO new migrations
-- **Migrations in repo:** 6 (drift closed)
-- **Routes:** 9 protected + 1 public + catch-all (added `/farmers/:id`)
-- **Bottom nav tabs:** 7
-- **Total farmers in DB:** 20
-- **Active farmers:** ~9
-- **Farmers with WhatsApp enabled:** 0 (UI ready; owner enables per-farmer when ready)
-- **WhatsApp templates seeded:** 2 (editable via Setup page) + 1 hard-coded reminder format in Dashboard.tsx
-- **WhatsApp log entries:** 0 (no sends yet — push and test in production)
-- **Bundle:** 354KB JS / 105KB gzipped (Session 4 build, fresh `/tmp` install)
-- **App version (package.json):** 0.0.0
-- **Backup format version:** 2.2
-- **Production URL:** https://tubewell-manager.netlify.app
-- **Supabase project:** `vsgptyuvnistwjjmrfby` (ap-south-1, free tier)
-- **Netlify site ID:** `cfff021f-a629-41ef-af45-394f09e5c3d0`
-
----
-
-## Environment & Infrastructure
-
-| Item | Status | Environment | Notes |
-|---|---|---|---|
-| `VITE_SUPABASE_URL` | ✅ set | local `.env` + Netlify | |
-| `VITE_SUPABASE_ANON_KEY` | ✅ set | local `.env` + Netlify | |
-| Supabase RLS | ✅ enabled | all 6 tables | open policy |
-| Netlify auto-deploy | ✅ live | GitHub `main` → auto-build | |
-| Backups | ⚠️ manual | local file via BackupPage export | v2.1 — includes WhatsApp tables |
+### 2026-10-05 — v1 docs archived
+Archived to `archive/v1-2026-10/`. The v1 `CLAUDE.md` was renamed `CLAUDE.v1.md` so Claude Code never auto-loads it.
 
 ---
 
 ## Session Log
 
-### 2026-05-29 — Session 5 — Entry-level payment coverage (derived) — built locally, awaiting build + push
+### 2026-10-04 — Phase 0: system understanding
+- Read-only audit of the v1 code, live DB and docs.
+- Created `rebuild/fresh-system` from `main@46e3872`.
+- Added the push gate (`b91fe36`).
 
-**New file:**
-- `src/lib/allocation.ts` — pure helper. `allocateMonth(entries, totalPaidForMonth)` → FIFO money allocation across entries, per-entry `{ paidAmount, dueAmount, paidMinutes, status: paid|partial|unpaid }`, plus `leftoverPaid`, `totalUsage`, `totalDue`. `formatMinutes()` renders "1h 30m". No I/O.
+### 2026-10-05 — Phase 0 closure
+- One repository copy confirmed (`C:\Users\Abhay Kumar\Documents\tubewell-manager`).
+- Phrase matcher made dash-tolerant.
+- Hook-input fidelity test passed; the diagnostic was removed.
 
-**Modified:**
-- `src/pages/FarmerDetailPage.tsx` — `entryAllocations` useMemo (Map keyed by entry.id, built per-month from `monthBreakdown`); `PaidBadge` component renders in each usage row of the ledger. Partial shows "Xm of Ym paid · ₹Z baki".
-- `src/pages/UsagePage.tsx` — per-entry badge in the expanded entry list. `allocMap` computed per farmer from `allocateMonth(fEntries, paid)`, only when a specific month is selected (null in "Sabhi Months").
-- `src/pages/PaymentsPage.tsx` — `coverage` state + `computeCoverage(farmerId, forMonth, name)` (fresh DB query, send-time-DB style). Called after a single-month save (regardless of WhatsApp). Renders a coverage card after the WhatsApp banner listing each entry's status. Cleared on openAdd / multi-save / delete. Multi-month saves skip it.
+### 2026-10-05 — Phase 1: documentation foundation
+- **Guard hardening** (`bbe7911`): literal invisible/dash characters replaced with `\u` escapes. The byte scan is clean. Self-test 63/63; end-to-end 11/11 and 46/46.
+- **v1 docs archived** (`8d604b6`).
+- **New docs written:** `CLAUDE.md`, this file, `BUSINESS_KNOWLEDGE.md`, `README.md`, `tasks/todo.md`, `tasks/lessons.md`, `docs/ARCHITECTURE.md`, `docs/LEDGER_AND_ALLOCATION.md`, and 4 `.claude/rules` files.
+- **Failed attempt:** none.
 
-**Verification done in sandbox:**
-- Logic unit-tested (node): Rampal ₹350/6h → E1+E2 paid, E3 partial (25m of 1h30m, ₹108.33 baki), E4 unpaid, ₹250 due ✓. Mixed-rate, overpayment (leftover tracked), and ₹0-paid cases all correct.
-- `allocation.ts` + `types/index.ts` type-check clean under TS 6.0.3 with the exact project flags (strict, verbatimModuleSyntax, noUnusedLocals).
+---
 
-**NOT yet done (sandbox limitation):** Full `pnpm run build` (`tsc -b && vite build`) could not run — the sandbox has no npm registry access and the mounted pnpm `node_modules` symlinks are unreadable. **Owner must run `pnpm run build` locally before `git push`.** Page edits follow existing patterns; only the helper was independently type-checked.
+## Known Local Issues
 
-**Status:** Built locally. Awaiting local build verification + owner push. NOT pushed.
-
-### 2026-05-17 — Session 1 — Knowledge system initialization
-**New:** All knowledge files initialized.
-
-### 2026-05-17 — Session 2 — Track A Phase 1 (schema + types + drift)
-**New:** Migrations `002`-`005`; production Supabase changes.
-**Fixed:** Schema drift gap.
-
-### 2026-05-18 — Session 2 (continued) — Track A Phases 2-6
-**Phase 2:** `src/lib/whatsapp.ts`, `src/pages/SettingsPage.tsx`, route + nav tab.
-**Phase 3:** `src/pages/FarmersPage.tsx` (397 → 579) — WhatsApp section in modal.
-**Phase 4:** `src/pages/UsagePage.tsx` (329 → 555) — send helper + banner + per-entry re-send.
-**Phase 5:** `src/pages/PaymentsPage.tsx` (586 → 829) — send helper with `for_month`-scoped math + banner + per-payment re-send.
-**Phase 6:** `src/pages/BackupPage.tsx` (263 → 314) — v2.1 export/import, backward compat, replace delete order.
-**Verified at each phase:** `tsc -b --force` exit 0, `vite build` exit 0. Final bundle: 877KB JS / 247KB gz.
-
-### 2026-05-18 — Session 2 (continued) — Track A Phase 7 (final knowledge updates) — TRACK A COMPLETE
-**Updated:**
-- `project/PROJECT_MEMORY.md` — appended "Track A Addendum" (sections A1-A9): Why wa.me, schema additions, Feature 8, default templates, send-time math, helper library spec, backup v2.1 details, known behaviors, what's still NOT built.
-- `BUSINESS_KNOWLEDGE.md` — appended "WhatsApp Terminology (Round 7)" + Round 7 evolution log entry.
-- `CLAUDE.md` — full rewrite. New critical-rules sections: send-time DB calculation, WhatsApp number & templates. Updated directory map (8 routes, lib/whatsapp.ts, types). Updated technical debt + conflict resolution to reference new files.
-- `PROJECT_STATUS.md` — this file. Marked Track A COMPLETE. Phase set to "Live in production — maintenance mode". No active project.
-- `tasks/todo.md` — Track A all 7 phases moved to Done. New "Next Up" list with recommended owner actions.
-
-**Status:** Track A fully shipped end-to-end. Pushed and live in production.
-
-### 2026-05-23 — Session 3 — Payment UX improvements
-**New: migration 006**
-- `supabase/migrations/006_add_payment_group_id.sql` — applied to prod via MCP, committed to repo. Adds nullable `payment_group_id uuid` to `payments` + partial index. UI grouping hint only; NOT used in any due/balance calculation.
-
-**Modified:**
-- `src/types/index.ts` — `Payment.payment_group_id?: string | null` (optional). BackupData comment updated to "2.0, 2.1, or 2.2 (current)".
-- `src/pages/PaymentsPage.tsx` — major. Mode toggle "Ek month / Multiple months". Single mode adds a green chip "Pura ₹X bharo" that auto-fills the selected month's pending. Multi mode shows chip-style cards for every month with balance > 0; each card has its own allocation input pre-filled with full pending; live total summary. New helper `buildAndLogMultiMonthPaymentWhatsApp` builds the single-summary multi-month message at send-time from DB (correctly excludes the entire payment_group from `paid_before`). Payment list shows "Part of ₹X (N-month payment)" badge on grouped rows. Delete on grouped row warns user. Resend on grouped row sends the full summary.
-- `src/pages/BackupPage.tsx` — `CURRENT_BACKUP_VERSION` `"2.1"` → `"2.2"`. Version-note updated. Export auto-includes `payment_group_id` via `select('*')`.
-
-**Verified:** `tsc -b && vite build` exit 0 in fresh `/tmp` install. Bundle: 354KB JS / 105KB gzipped (lower than 2.1 — pnpm resolve seems to have de-duped something during fresh install).
-
-**Lint:** No new errors introduced by my changes. Pre-existing 15 errors across pages (`react-hooks/set-state-in-effect` on `useEffect(() => loadData(), [])` pattern) are untouched.
-
-**Status:** Shipped — pushed to GitHub `main`, Netlify auto-deployed, owner-verified end-to-end in production. Both single-month auto-fill and multi-month payment + WhatsApp summary are confirmed working with real farmer data on 2026-05-23.
-
-**Owner-confirmed test scenarios (2026-05-23):**
-- "Pura ₹X bharo" chip fills the right pending amount → ✅
-- Multi-month creation persists as N rows with shared payment_group_id → ✅
-- Multi-month WhatsApp summary opens with correct per-month breakdown → ✅
-- Existing single-month flow + WhatsApp template still works unchanged → ✅
-
-### 2026-05-25 — Session 4 — Navigation & UX features (built locally, awaiting push)
-
-**New file:**
-- `src/pages/FarmerDetailPage.tsx` (~430 lines) — `/farmers/:id` route. Loads farmer + all entries + all payments + month_closings in parallel. Renders: 3 summary cards (Total Usage / Total Paid / Baki, with secondary line for hours-and-minutes / payment count / pending-months count), 2 quick-action buttons ("Pani Add karo" / "Payment Add karo" with URL prefill, the latter disabled when due=0), month-wise breakdown card (each row shows usage hours+amount, paid, balance, cleared/pending/closed badges, per-month "Pura ₹X bharo" green action if due > 0), full chronological ledger (entries blue, payments green, multi-month badge, per-payment WhatsApp resend button using send-time DB math). Back button uses `navigate(-1)`. Not-found and disabled/deleted states handled.
-
-**Modified:**
-- `src/App.tsx` — imports `FarmerDetailPage`, adds route `/farmers/:id` (after `/farmers`).
-- `src/components/Layout.tsx` (96 → 247 lines) — added Search icon button in header. Click opens overlay with auto-focused input + live-filtered active-farmer results (name / mobile / whatsapp_number contains). Esc / X / backdrop closes. Closes on route change. Re-fetches farmer list every open (cheap query). Max 30 results displayed with "narrow karo" hint when truncated. WhatsApp icon on results with WA enabled.
-- `src/pages/FarmersPage.tsx` — left side of each farmer card is now a button that navigates to `/farmers/:id`. Right-side action buttons (edit / delete / restore / enable) unchanged. New chevron icon for affordance.
-- `src/pages/UsagePage.tsx` — added `useSearchParams` deep-link prefill (`?farmer_id=xxx`). Fetches `payments` in `loadData` for settled-status calc. Adds `showSettled` toggle + filter logic on `grouped`. Settled cards default-hidden when a specific month is selected; green "Cleared" badge + green avatar tint when shown. Header line summarizes "N kisan · M cleared (hidden)". Empty-state for "all settled" case has celebratory copy + pointer to toggle. Per-card paid-amount and balance shown when in a month view.
-- `src/pages/PaymentsPage.tsx` — added `useSearchParams` deep-link prefill (`?farmer_id=xxx&for_month=...&amount=...`). Opens Add form pre-populated, clears params after handling. Single-shot via `prefillHandled` boolean. No other behavioral changes.
-- `src/pages/Dashboard.tsx` — "Kisan-wise Baki" list rows are now interactive: clickable name area → detail page; green "Pay" button → `/payments?farmer_id=...`; WhatsApp icon (if `whatsapp_enabled`) → hard-coded Hindi reminder message via wa.me + audit log entry with new `message_type='reminder'`. Toast for success/failure. Loading state per-row via `sendingWaForFarmer`.
-- `src/types/index.ts` — `WhatsAppMessageType` union extends with `'reminder'`. DB column has no CHECK constraint, so no migration needed.
-
-**Verified:** `tsc -b && vite build` exit 0 in fresh `/tmp` install. Bundle: 354KB JS / 105KB gzipped (no size regression).
-
-**Lint:** 19 errors total, all `react-hooks/set-state-in-effect` warnings on the existing `useEffect(() => loadData(), [])` pattern that's been in the codebase the whole time. 4 new warnings from new useEffects added in Session 4 — same pattern, eslint-disable comments added on the prefill effects where appropriate. NOT a deploy gate (Netlify runs only `npm run build`).
-
-**Status:** ✅ SHIPPED + VERIFIED. Pushed as commit `85f0b2e` (`0b56abb..85f0b2e main -> main`), Netlify auto-deployed, owner confirmed site live on production 2026-05-26.
+- No `.env` file exists locally (created in Phase 2 for the NEW project).
+- Local `node_modules` is broken: `tsc` is missing. Run `pnpm install` in Phase 2.
+- `netlify.toml` builds with `npm run build` while the repo uses pnpm. Review in Phase 10.
