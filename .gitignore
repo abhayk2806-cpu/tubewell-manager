@@ -39,5 +39,3 @@ CLAUDE.local.md
 
 # Push-to-main approval marker (main-push-guard hook) — short-lived, never commit
 .claude/.main-push-unlocked
-# main-push-guard diagnostic output — never commit
-.claude/.hookcheck.log

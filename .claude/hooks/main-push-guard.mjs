@@ -28,7 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-export const APPROVAL_PHRASE = 'CUTOVER APPROVED — PUSH TO MAIN NOW';
+export const APPROVAL_PHRASE = 'CUTOVER APPROVED \u2014 PUSH TO MAIN NOW';
 export const FRESHNESS_MS = 5 * 60 * 1000; // 5 minutes
 export const MARKER_NAME = '.main-push-unlocked';
 const PROTECTED_BRANCH = 'main';
@@ -96,13 +96,13 @@ function removeMarker(input) {
 // Anything else — lowercase, extra words, quotes/backticks, trailing
 // punctuation, the phrase inside a longer message — does not match.
 
-export const APPROVAL_RE = /^CUTOVER APPROVED ?[—–-] ?PUSH TO MAIN NOW$/;
-const APPROVAL_INSIDE_RE = /CUTOVER APPROVED ?[—–-] ?PUSH TO MAIN NOW/i;
+export const APPROVAL_RE = /^CUTOVER APPROVED ?[\u2014\u2013-] ?PUSH TO MAIN NOW$/;
+const APPROVAL_INSIDE_RE = /CUTOVER APPROVED ?[\u2014\u2013-] ?PUSH TO MAIN NOW/i;
 
 export function normalizePrompt(s) {
   return String(s)
     .normalize('NFC')
-    .replace(/[  ]/g, ' ')
+    .replace(/[\u00A0\u202F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -505,23 +505,23 @@ function selftest() {
   process.stdout.write(`\n${cases.length - fail}/${cases.length} command cases passed\n\n`);
 
   // Approval-phrase matcher cases: [label, message, expectAccept]
-  const P = 'CUTOVER APPROVED — PUSH TO MAIN NOW';
+  const P = 'CUTOVER APPROVED \u2014 PUSH TO MAIN NOW';
   const phraseCases = [
     ['canonical em dash', P, true],
-    ['en dash', 'CUTOVER APPROVED – PUSH TO MAIN NOW', true],
+    ['en dash', 'CUTOVER APPROVED \u2013 PUSH TO MAIN NOW', true],
     ['hyphen-minus', 'CUTOVER APPROVED - PUSH TO MAIN NOW', true],
-    ['em dash, no spaces', 'CUTOVER APPROVED—PUSH TO MAIN NOW', true],
-    ['en dash, no spaces', 'CUTOVER APPROVED–PUSH TO MAIN NOW', true],
+    ['em dash, no spaces', 'CUTOVER APPROVED\u2014PUSH TO MAIN NOW', true],
+    ['en dash, no spaces', 'CUTOVER APPROVED\u2013PUSH TO MAIN NOW', true],
     ['hyphen, no spaces', 'CUTOVER APPROVED-PUSH TO MAIN NOW', true],
     ['hyphen, space before only', 'CUTOVER APPROVED -PUSH TO MAIN NOW', true],
-    ['em dash, space after only', 'CUTOVER APPROVED— PUSH TO MAIN NOW', true],
+    ['em dash, space after only', 'CUTOVER APPROVED\u2014 PUSH TO MAIN NOW', true],
     ['leading/trailing whitespace + newline', `  \n${P}\n\t `, true],
-    ['non-breaking spaces', 'CUTOVER APPROVED — PUSH TO MAIN NOW', true],
-    ['narrow no-break spaces', 'CUTOVER APPROVED  — PUSH TO MAIN NOW', true],
-    ['runs of spaces/tabs collapsed', 'CUTOVER   APPROVED\t—  PUSH TO   MAIN NOW', true],
+    ['non-breaking spaces', 'CUTOVER\u00A0APPROVED\u00A0\u2014\u00A0PUSH\u00A0TO\u00A0MAIN\u00A0NOW', true],
+    ['narrow no-break spaces', 'CUTOVER\u202FAPPROVED \u202F\u2014 PUSH TO MAIN NOW', true],
+    ['runs of spaces/tabs collapsed', 'CUTOVER   APPROVED\t\u2014  PUSH TO   MAIN NOW', true],
     ['NFD-decomposed input still NFC-normalizes', P.normalize('NFD'), true],
     ['lowercase', P.toLowerCase(), false],
-    ['title case word', 'Cutover APPROVED — PUSH TO MAIN NOW', false],
+    ['title case word', 'Cutover APPROVED \u2014 PUSH TO MAIN NOW', false],
     ['extra word before', `OK ${P}`, false],
     ['extra word after', `${P} PLEASE`, false],
     ['inside a longer message', `Here it is:\n${P}\nthanks`, false],
@@ -531,9 +531,9 @@ function selftest() {
     ['trailing period', `${P}.`, false],
     ['trailing exclamation', `${P}!`, false],
     ['double hyphen', 'CUTOVER APPROVED -- PUSH TO MAIN NOW', false],
-    ['two spaces kept around dash? (collapsed → accepted)', 'CUTOVER APPROVED  —  PUSH TO MAIN NOW', true],
-    ['minus sign U+2212 (not allowed)', 'CUTOVER APPROVED − PUSH TO MAIN NOW', false],
-    ['figure dash U+2012 (not allowed)', 'CUTOVER APPROVED ‒ PUSH TO MAIN NOW', false],
+    ['two spaces kept around dash? (collapsed -> accepted)', 'CUTOVER APPROVED  \u2014  PUSH TO MAIN NOW', true],
+    ['minus sign U+2212 (not allowed)', 'CUTOVER APPROVED \u2212 PUSH TO MAIN NOW', false],
+    ['figure dash U+2012 (not allowed)', 'CUTOVER APPROVED \u2012 PUSH TO MAIN NOW', false],
     ['no separator', 'CUTOVER APPROVED PUSH TO MAIN NOW', false],
     ['wrapped in <pasted_content> tag', `<pasted_content id="x">\n${P}\n</pasted_content>`, false],
     ['empty', '', false],
