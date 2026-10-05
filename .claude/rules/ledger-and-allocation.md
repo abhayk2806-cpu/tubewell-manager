@@ -7,7 +7,7 @@ paths:
 
 # Ledger engine rules
 
-The authoritative spec is `docs/LEDGER_AND_ALLOCATION.md` (rules L1–L18, worked examples E1–E22). Read it before changing engine code or tests. Do not restate or reinterpret its rules here or in code comments; link to the rule number instead.
+The authoritative spec is `docs/LEDGER_AND_ALLOCATION.md` (rules L1–L18, worked examples E1–E24). Read it before changing engine code or tests. Do not restate or reinterpret its rules here or in code comments; link to the rule number instead.
 
 Five invariants. Breaking any of them is a bug:
 
@@ -30,6 +30,6 @@ Five invariants. Breaking any of them is a bug:
    - If a screen needs a new figure, add it to the engine with a test.
 
 Testing:
-- Worked examples E1–E22 are the fixtures. Expected values are exact paise, not approximations.
+- Worked examples E1–E24 are the fixtures. Expected values are exact paise, not approximations.
 - Any change to engine behaviour needs a fixture that fails before the change.
 - If a rule is marked PENDING OWNER DECISION, don't implement a guess; ask the owner.

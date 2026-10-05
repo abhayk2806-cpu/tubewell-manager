@@ -67,7 +67,7 @@
 **L9. As-of view (D2).**
 - An as-of view for IST day D includes the entries and payments whose timestamp ≤ end of D (23:59:59.999 IST).
 - Each row is taken in its **current** state: its current amount, and whether it is currently deleted.
-- **Limitation:** there is no edit history. A row edited or soft-deleted *after* D therefore changes the as-of figures for D. As-of views are a recomputation from today's data, not a frozen snapshot.
+- **Limitation:** there is no edit history. A row edited or soft-deleted *after* D therefore changes the as-of figures for D. As-of views are a recomputation from the current data, not a frozen snapshot.
 
 **L10. Two different concepts.**
 - *Cash received in a period* is the payments dated in that period.

@@ -6,16 +6,17 @@
 ## Phases
 
 - [x] **0** — System understanding, rebuild branch, push gate (2026-10-04, closed 2026-10-05)
-- [ ] **1** — Documentation foundation (in progress 2026-10-05)
+- [x] **1** — Documentation foundation (done 2026-10-05)
   - [x] Guard escapes hardened
   - [x] v1 docs archived
   - [x] New context docs, ledger spec, architecture, `.claude/rules`
-  - [ ] Owner review + answers to the open questions in PROJECT_STATUS
-- [ ] **2** — New Supabase schema + project foundation
+  - [x] Owner decisions D1–D8 recorded; push policy added
+  - [x] First push of `rebuild/fresh-system` to `origin` (branch now backed up)
+- [ ] **2** — New Supabase schema + project foundation ← **next**
   - [ ] Owner action #1: auth user + sign-ups off
   - [ ] `pnpm install`, `.env` for the NEW project
   - [ ] Migrations from 001, committed to the repo
-- [ ] **3** — Ledger engine + tests (fixtures E1–E22), before any UI
+- [ ] **3** — Ledger engine + tests (fixtures E1–E24), before any UI
 - [ ] **4** — Farmers + Pani Entry
 - [ ] **5** — Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore
 - [ ] **6** — Farmer profile

@@ -67,7 +67,7 @@ What is NOT stored:
 
 ## Testing approach
 
-- **Phase 3:** unit-test the engine before any UI exists. Fixtures are the worked examples E1–E22 in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md). The test framework is chosen in Phase 3 (Vitest is the natural fit for Vite).
+- **Phase 3:** unit-test the engine before any UI exists. Fixtures are the worked examples E1–E24 in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md). The test framework is chosen in Phase 3 (Vitest is the natural fit for Vite).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
   - an edge-case matrix (timezone boundaries, rounding, soft-delete/restore, duplicates, disabled farmers, more than 1,000 rows).

@@ -66,7 +66,7 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 
 **"Live" does not mean "tested"**
 - Mistake: three latent v1 calculation bugs survived several deploys because no end-to-end audit was done.
-- Rule: after any change touching calculations or filters, cross-check totals against the per-farmer breakdowns, and run the fixture tests (E1–E22).
+- Rule: after any change touching calculations or filters, cross-check totals against the per-farmer breakdowns, and run the fixture tests (E1–E24).
 - Impact: high. Date: 2026-04.
 
 **Backup format needs version handling**
@@ -80,8 +80,13 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Impact: medium. Date: 2026-10-05.
 
 **Netlify build credits make frequent pushes costly**
-- Rule: no pushes during the rebuild. Netlify stays disabled until Phase 10. When it is re-enabled, keep branch deploys and deploy previews OFF.
+- Rule: push only `rebuild/fresh-system`, once at the end of a completed task, via the prompt's push step. This rule was updated on 2026-10-05; it originally said "no pushes during the rebuild". Netlify stays disabled until Phase 10. When it is re-enabled, keep branch deploys and deploy previews OFF.
 - Impact: medium. Date: 2026-10-05.
+
+**Shell commands must not mention the push guard's marker filename**
+- Mistake: twice in Phase 0/1, a harmless read-only check (`git check-ignore`, a `node -e` link check) named the guard's marker file together with `echo`/`node`. The guard blocked it, failing closed.
+- Rule: never put the marker filename in a shell command. Put any such check in a script file, and match hidden `.claude/` files generically. The guard deletes its own marker, so no manual cleanup command is needed.
+- Impact: low (blocked work, no harm). Date: 2026-10-05.
 
 ---
 
