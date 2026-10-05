@@ -15,7 +15,7 @@ At the start of EVERY session, in this order:
    - **If it prints `main`, STOP and tell the owner.** The push-gate hook files exist only on `rebuild/fresh-system`, so on `main` nothing blocks a production push.
    - If it prints anything else, ask the owner before continuing.
 2. Read `PROJECT_STATUS.md`: current phase, next action, open questions, owner actions.
-3. **Verify** its claims against `git log`, the code and (once Phase 2 exists) the live DB before trusting them. Report any mismatch.
+3. **Verify** its claims against `git log`, the code and the live DB (schema live since Phase 2A) before trusting them. Report any mismatch.
 4. Load other docs only on demand (see the doc map below). Scan `tasks/lessons.md` headings when the task touches that area.
 
 ## Doc map (one owner per kind of information — link, never duplicate)
@@ -94,7 +94,7 @@ At the start of EVERY session, in this order:
 
 ```bash
 pnpm install              # first setup / repair (local node_modules is currently broken)
-pnpm run dev              # Vite dev server (needs .env — none exists yet; created in Phase 2)
+pnpm run dev              # Vite dev server (needs .env — none exists yet; created in Phase 2B)
 pnpm run build            # tsc -b && vite build — must pass before committing code
 pnpm run lint             # eslint .
 node .claude/hooks/main-push-guard.mjs selftest   # push-gate self-test (expects 63/63)
@@ -117,6 +117,15 @@ node .claude/hooks/main-push-guard.mjs selftest   # push-gate self-test (expects
 - **`archive/`**: reference only. Move or add files there; don't edit history.
 
 Only the NEW Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`) may be changed, and only in the phase that calls for it.
+
+**Database access rule.**
+- Pass `project_id: ciszgagzhfubuqhpmyeh` explicitly on EVERY Supabase MCP call.
+- Never call the old project or StreakForge. If a call would run without that ID, stop.
+- Details: `.claude/rules/database-and-migrations.md`.
+
+**Public-repo rule.** The GitHub repo is PUBLIC (owner accepted, 2026-10-05).
+- Never commit real farmer names, phone numbers or amounts, backup exports, or secrets.
+- Tests and examples use fictional data only.
 
 ## What to Challenge (don't just implement)
 

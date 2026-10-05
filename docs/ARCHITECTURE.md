@@ -1,14 +1,18 @@
 # Architecture — Tubewell Manager (rebuild)
 
-> **DRAFT until Phases 2 and 3 implement it** (written 2026-10-05). Once code exists, the code and the live database beat this file. Update this file when they differ.
+> **Status (2026-10-05):**
+> - The **database schema is live** (Phase 2A, migrations 001–003).
+> - The app layers below are the plan that Phases 2B–3 implement.
+> - The code and the live database beat this file. Update this file when they differ.
+>
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
 
 ## Stack
 
 - React 19 + TypeScript + Vite + Tailwind 3 + shadcn/ui; UI in Hinglish.
 - Supabase: Postgres + Auth + RLS.
-  - NEW project `tubewell-hisab`, ID `ciszgagzhfubuqhpmyeh`, region ap-south-1, org `digital-store`.
-  - Empty as of 2026-10-05.
+  - NEW project `tubewell-hisab`, ID `ciszgagzhfubuqhpmyeh`, region ap-south-1, org `digital-store`, Postgres 17.
+  - Schema applied on 2026-10-05; no data yet.
 - Netlify static hosting (site `tubewellhisab.netlify.app`, currently disabled by the owner).
 - pnpm package manager. Repo: `abhayk2806-cpu/tubewell-manager`; rebuild branch `rebuild/fresh-system`.
 
@@ -26,27 +30,85 @@ Rules that follow from this:
 - **No calculation inside a component or page.**
 - Every figure on every screen comes from the same engine call, so totals always reconcile.
 
-## Data model sketch (Phase 2 will finalise it as SQL migrations from 001)
+## Database schema (live, migrations 001–003, 2026-10-05)
 
-Common audit columns on every business table:
-- `created_at`, `created_by`, `updated_at`, `updated_by`
-- `deleted_at`, `deleted_by` (soft delete; NULL = live)
+Sources:
+- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`.
+- Checks: `supabase/tests/001_schema_checks.sql` (68 checks, all rolled back) plus a residue check.
 
-The `*_by` columns reference `auth.users`. There is only one user, so no "entry by" UI.
+All tables are in `public`. IDs are `uuid` with default `gen_random_uuid()`. Timestamps are `timestamptz`. Money is integer paise in `bigint`.
 
-| Table | Key columns | Notes |
+**Common audit and soft-delete columns** (on all three tables):
+
+| Column | Type | Rules |
 |---|---|---|
-| `farmers` | `id`, `name`, `mobile`, `notes`, `is_disabled`, audit columns | Delete is soft (`deleted_at`); disable is separate and restorable |
-| `usage_entries` | `id`, `farmer_id`, `started_at timestamptz`, `hours`, `minutes`, `total_minutes` (generated: `hours*60+minutes`), `rate_paise bigint`, audit columns | CHECKs: hours ≥ 0, minutes 0–59, total_minutes > 0, rate_paise > 0. **No stored money amount** |
-| `payments` | `id`, `farmer_id`, `paid_at timestamptz`, `amount_paise bigint`, `note`, audit columns | CHECK amount_paise > 0. **No month column** |
+| `created_at` | timestamptz NOT NULL | Set to `now()` on insert by trigger; immutable |
+| `created_by` | uuid NULL | `auth.uid()` on insert by trigger; immutable |
+| `updated_at` | timestamptz NOT NULL | `now()` on every insert and update (trigger) |
+| `updated_by` | uuid NULL | `auth.uid()` on every insert and update (trigger) |
+| `deleted_at` | timestamptz NULL | Soft delete: NULL = live. Forced NULL on insert |
+| `deleted_by` | uuid NULL | Trigger-only: `auth.uid()` when `deleted_at` goes NULL→set, cleared on restore, never client-editable |
 
-Money storage (decided 2026-10-05, D7):
-- All money is **integer paise in `bigint`**: `rate_paise` on usage entries, `amount_paise` on payments.
-- `total_minutes` is a generated column.
-- The usage entry's money amount is **not stored**. Only the ledger engine computes it, using the L2 integer formula, so the rounding exists in exactly one implementation. The Phase 9 verification script recomputes it independently.
-- See [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md) (L2, D7).
+The `*_by` columns are plain uuids **with no foreign key**, so the audit trail survives user deletion (D9). `auth.uid()` is NULL for SQL run without a JWT.
 
-What is NOT stored:
+**`farmers`**
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | uuid PK | default `gen_random_uuid()` |
+| `name` | text NOT NULL | `farmers_name_not_blank`: `length(btrim(name)) > 0` |
+| `mobile`, `notes` | text NULL | — |
+| `is_disabled` | boolean NOT NULL | default `false` (temporary pause, separate from soft delete) |
+
+**`usage_entries`** (no stored money amount)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | uuid PK | default `gen_random_uuid()` |
+| `farmer_id` | uuid NOT NULL | FK → `farmers(id)` ON DELETE RESTRICT |
+| `used_at` | timestamptz NOT NULL | no default; the app always sends it |
+| `hours` | integer NOT NULL | `hours >= 0` |
+| `minutes` | integer NOT NULL | `minutes between 0 and 59` |
+| `total_minutes` | integer | GENERATED ALWAYS AS `hours * 60 + minutes` STORED; `hours * 60 + minutes > 0` |
+| `rate_paise` | bigint NOT NULL | default `10000`; `rate_paise > 0` |
+
+**`payments`** (no month column)
+
+| Column | Type | Constraints |
+|---|---|---|
+| `id` | uuid PK | default `gen_random_uuid()` |
+| `farmer_id` | uuid NOT NULL | FK → `farmers(id)` ON DELETE RESTRICT |
+| `paid_at` | timestamptz NOT NULL | no default; the app always sends it |
+| `amount_paise` | bigint NOT NULL | `amount_paise > 0` |
+| `note` | text NULL | — |
+
+**Indexes** (partial, for reads of live rows), in addition to the 3 primary keys:
+- `usage_entries (farmer_id, used_at) WHERE deleted_at IS NULL`
+- `usage_entries (used_at) WHERE deleted_at IS NULL`
+- `payments (farmer_id, paid_at) WHERE deleted_at IS NULL`
+- `payments (paid_at) WHERE deleted_at IS NULL`
+
+**Triggers (D12):** one function, `public.set_audit_columns()`.
+- `SECURITY INVOKER`, `search_path = ''`, with EXECUTE revoked from `public`, `anon` and `authenticated`.
+- Attached BEFORE INSERT OR UPDATE to all three tables as `farmers_set_audit`, `usage_entries_set_audit` and `payments_set_audit`.
+
+**RLS and privileges (D11):**
+- RLS is enabled on all three tables.
+- 9 policies: SELECT, INSERT and UPDATE per table, for role `authenticated` only. The condition is `(select auth.uid()) is not null`.
+- **No DELETE policy.**
+- Extra hardening beyond the policies: `anon` has no table privileges at all, and `authenticated` has no DELETE or TRUNCATE privilege.
+
+**Consequences of D10/D11:**
+- The app can never hard-delete; soft delete is an UPDATE of `deleted_at`.
+- The Phase 8 "Replace" restore must be designed without client-side DELETE (for example soft-delete everything then insert, or a controlled database function).
+- The Phase 10 test-data wipe is done with SQL by Claude Code, only on explicit owner approval.
+
+**Money storage (D7):**
+- The usage amount is computed only by the ledger engine (L2 integer formula), so the rounding exists in exactly one implementation.
+- The Phase 9 script recomputes it independently.
+- See [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
+
+**What is NOT stored:**
 - No month text and no totals, balances, entry amounts or allocations.
 - No `for_month`, `payment_group_id`, month closings or WhatsApp tables.
 
@@ -60,8 +122,8 @@ What is NOT stored:
 ## Auth and security
 
 - Single user (the owner): email + password.
-- Public sign-ups are disabled in the Supabase dashboard (owner action, Phase 2).
-- RLS is enabled on every table. Policies allow only the `authenticated` role.
+- Public sign-ups are disabled in the Supabase dashboard (owner action, needed before Phase 2B).
+- RLS is enabled on every table. Policies allow only the `authenticated` role (see Database schema).
 - The anon key is public by design. The service-role key never goes in `VITE_*` vars or in the repo.
 - Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (local `.env`, gitignored; Netlify env in Phase 10).
 

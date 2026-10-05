@@ -28,6 +28,22 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: verify aggregates with subqueries or CTEs (`SELECT SUM(...) FROM payments WHERE ...`), never with multiplying JOINs.
 - Impact: critical. Date: 2026-04.
 
+**Prove the applied migration equals the committed file**
+- Practice (Phase 2A): write the SQL file first and apply exactly that text. Then compare `md5(array_to_string(statements, ''))` from `supabase_migrations.schema_migrations` with the file's md5.
+- Keep migration files pure ASCII with LF line endings, so the hashes match.
+- Impact: medium. Date: 2026-10-05.
+
+**Running SQL tests through the MCP**
+- Finding: `execute_sql` returns only the LAST result set. A final `SELECT` before `ROLLBACK` is still returned.
+- Collect PASS/FAIL lines in a transaction-local setting (`set_config(..., true)`), not a temp table, so the results keep recording after `SET LOCAL ROLE anon/authenticated`.
+- Run the residue check as a separate call after the rollback.
+- Impact: medium. Date: 2026-10-05.
+
+**`btrim()` trims spaces only**
+- Finding: the `farmers_name_not_blank` check uses `btrim(name)`, which removes only spaces. A tab-only name passes the DB check.
+- Rule: app forms must trim all whitespace before saving. Don't rely on the DB check alone.
+- Impact: low. Date: 2026-10-05.
+
 ### Active-farmer filtering (idea kept, mechanism to rethink)
 
 **Filtering only the farmer list is not enough**

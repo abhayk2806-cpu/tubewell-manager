@@ -7,37 +7,51 @@ paths:
 
 **Project.**
 - Only the NEW Supabase project may be changed: `tubewell-hisab`, ID `ciszgagzhfubuqhpmyeh` (org `digital-store`, ap-south-1).
-- **Never** touch the OLD project `vsgptyuvnistwjjmrfby` (paused fallback).
-- **Never** touch StreakForge `xiyayueijkgyxrqrykqx` (a different app in the same org).
-- Before any MCP call, confirm the project ID.
+- Pass `project_id: ciszgagzhfubuqhpmyeh` explicitly on EVERY MCP call.
+- **Never** touch the OLD project `vsgptyuvnistwjjmrfby` (paused fallback) or StreakForge `xiyayueijkgyxrqrykqx`.
 
 **Migrations.**
-- Number them from `001` in `supabase/migrations/NNN_name.sql`. The v1 files are in `archive/v1-2026-10/supabase-migrations/` and must not be reused.
-- Commit every SQL change to the repo **immediately** after applying it (MCP `apply_migration`, dashboard or CLI). The live DB and the repo must never drift.
-- State the plan and get owner confirmation before any schema change. For a bulk update or delete, show the affected row count first.
+- Live: `001_core_tables`, `002_audit_triggers`, `003_rls_policies`. Next is `004_…`. v1 files in `archive/` are never reused.
+- Write the SQL file first, apply that exact text (MCP `apply_migration`), then verify identity: `md5(array_to_string(statements, ''))` in `supabase_migrations.schema_migrations` must equal the file's md5. Commit immediately.
+- Schema change: state the plan and confirm with the owner first. Bulk update or delete: show the affected row count first.
+
+**Tests.** `supabase/tests/001_schema_checks.sql`:
+- Section A is one transaction ending in ROLLBACK, printing PASS/FAIL per check. Section B checks for residue.
+- Re-run both after any schema change. Use fictional data only; never commit real farmer data (the repo is public).
+
+**Actual columns.**
+- `farmers`: `name` (not blank), `mobile`, `notes`, `is_disabled`.
+- `usage_entries`:
+  - `farmer_id`, `used_at` (no default), `hours`, `minutes`;
+  - `total_minutes` (generated, never written);
+  - `rate_paise` (bigint, default 10000).
+- `payments`: `farmer_id`, `paid_at` (no default), `amount_paise` (bigint), `note`.
+- All three tables have `id uuid` plus `created_at/by`, `updated_at/by`, `deleted_at/by`.
+- Money is integer paise in `bigint`. The usage amount is **not stored**; the engine computes it (D7, ledger L2).
+- No month text, totals, balances or allocations (L1).
 
 **Time.**
-- Timestamps are `timestamptz`. Business dates and months are computed in Asia/Kolkata.
-- In SQL, use `ts AT TIME ZONE 'Asia/Kolkata'` exactly once. Never double-convert (see `tasks/lessons.md`).
-- Do not store month text.
+- `timestamptz` only. IST months and days are computed in the app's one IST function.
+- In SQL, use `ts AT TIME ZONE 'Asia/Kolkata'` exactly once.
 
-**Rows.**
-- Business tables (`farmers`, `usage_entries`, `payments`) carry audit columns: `created_at`, `created_by`, `updated_at`, `updated_by`, `deleted_at`, `deleted_by`.
-- Soft delete only. No `DELETE` from app code.
-- No stored totals, balances or allocations. See `docs/LEDGER_AND_ALLOCATION.md` (L1).
-
-**Constraints.**
-- Enforce validation in the DB too, with CHECK constraints: hours ≥ 0, minutes 0–59, total_minutes > 0, rate_paise > 0, amount_paise > 0.
-- Use NOT NULL where required.
+**Decisions.**
+- **D9:** `created_by`, `updated_by` and `deleted_by` are plain uuids with no foreign key.
+- **D10:** foreign keys to `farmers` are ON DELETE RESTRICT. There are no hard deletes by design.
+- **D11:** RLS is on for all three tables.
+  - SELECT, INSERT and UPDATE policies for `authenticated` only, using `(select auth.uid()) is not null`.
+  - **No DELETE policy.** `anon` has no privileges, and `authenticated` has no DELETE or TRUNCATE.
+  - Consequences:
+    - soft delete is an UPDATE of `deleted_at`;
+    - the Phase 8 Replace restore must not rely on client DELETE;
+    - the Phase 10 test-data wipe is SQL by Claude Code, on explicit owner approval only.
+- **D12:** the trigger `public.set_audit_columns()` maintains the audit columns.
+  - It is SECURITY INVOKER with `search_path = ''`, and EXECUTE is revoked.
+  - Client values for `created_*` are ignored on insert and immutable on update.
+  - `updated_*` is always set to `now()` / `auth.uid()`.
+  - `deleted_by` is trigger-only.
+  - `deleted_at` is forced NULL on insert.
 
 **Security.**
-- RLS is enabled on every table, with policies for the `authenticated` role only. There is no anon access to data.
-- Sign-ups are disabled (owner action).
-- Never put the service-role key in code or in `VITE_*` vars.
-
-**Money type (decided 2026-10-05, D7).**
-- All money is integer paise as `bigint`: `usage_entries.rate_paise` and `payments.amount_paise`.
-- `usage_entries.total_minutes` is a generated column (`hours*60+minutes`).
-- The usage entry's money amount is **not stored** (the engine computes it). No `numeric` money columns, and no floats.
-
-See `docs/ARCHITECTURE.md` and `docs/LEDGER_AND_ALLOCATION.md` (L2).
+- Never use or print the service-role key. Never put it in code or in `VITE_*` vars.
+- Auth settings and Auth users are owner actions in the dashboard.
+- Run `get_advisors` (security and performance) after every DDL change.

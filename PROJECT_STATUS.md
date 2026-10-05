@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-05**
-> **Current phase:** 1 done; 2 next (not started)
+> **Current phase:** 2A done (database schema, pending owner review); 2B next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -20,8 +20,9 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | # | Phase | Status |
 |---|---|---|
 | 0 | System understanding, rebuild branch, push gate | ✅ Done (2026-10-04, closed 2026-10-05) |
-| 1 | Documentation foundation | ✅ Done (2026-10-05, including the closure with owner decisions D1–D8 and the first branch push) |
-| 2 | New Supabase schema + project foundation (`.env`, `pnpm install`, migrations from 001, RLS, auth user) | ⬜ Not started (next) |
+| 1 | Documentation foundation | ✅ Done (2026-10-05, including the closure with decisions D1–D8 and the first branch push) |
+| 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), pending owner review |
+| 2B | Project foundation: owner's Auth user + sign-ups off (owner action #1), `pnpm install`, `.env`, generated types, Supabase client | ⬜ Not started (next) |
 | 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ⬜ Not started |
 | 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
@@ -33,7 +34,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 ## Next Action
 
-**Phase 2: Supabase schema + project foundation.** The prompt will be written by the owner's assistant. It starts with Owner Manual Action #1.
+1. Owner reviews Phase 2A: the schema in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and decisions D9–D12 below.
+2. **Phase 2B: project foundation.** It needs Owner Manual Action #1 done first. The prompt will be written by the owner's assistant.
 
 ---
 
@@ -41,14 +43,16 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 | # | When | Action | Status |
 |---|---|---|---|
-| 1 | Phase 2 | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | Pending |
+| 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups**. Optional: turn on leaked-password protection if your plan offers it. | Pending |
 | 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, re-enable the site with **branch deploys OFF and deploy previews OFF** | Pending |
 | 3 | After cutover | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
 | 4 | Optional | GitHub branch protection on `main` (extra layer on top of the push gate) | Optional |
 
 ## Open Questions (owner)
 
-None open. The 8 questions from Phase 1 were answered on 2026-10-05; see the Decisions Log (D1–D8).
+None blocking. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
+
+Phase 2A raised notes for the owner's review, listed in the 2026-10-05 Phase 2A session entry. None of them blocks Phase 2B.
 
 ## Known Risks
 
@@ -60,7 +64,8 @@ None open. The 8 questions from Phase 1 were answered on 2026-10-05; see the Dec
 | Timezone month errors | Medium | One IST function; E20 boundary fixtures |
 | Silent row truncation (Supabase 1,000-row default) | Medium | Paginate every read in the data layer; Phase 9 >1,000-row test |
 | Frequent pushes burn Netlify credits | Medium | Netlify disabled until Phase 10; only `rebuild/fresh-system` is pushed, once per completed task; branch deploys and previews OFF when the site is re-enabled |
-| A pushed commit leaks a secret | Low | Secrets scan before every push (Push Policy in `CLAUDE.md`) |
+| A pushed commit leaks a secret or real farmer data (the repo is PUBLIC) | Low | Secrets scan before every push; fictional data only in tests; public-repo rule in `CLAUDE.md` |
+| A Supabase call hits the wrong project | Low | Always pass `project_id ciszgagzhfubuqhpmyeh`; never the old project or StreakForge (`CLAUDE.md`) |
 | Old Supabase project auto-deleted after 90 days paused | Low | Only a fallback; no migration planned |
 
 ---
@@ -99,7 +104,7 @@ The live site is `tubewellhisab.netlify.app` in the owner's NEW Netlify account.
 ### 2026-10-05 — v1 docs archived
 Archived to `archive/v1-2026-10/`. The v1 `CLAUDE.md` was renamed `CLAUDE.v1.md` so Claude Code never auto-loads it.
 
-### 2026-10-05 — Owner decisions D1–D8 (answers to the Phase 1 open questions)
+### 2026-10-05 — Decisions D1–D8 (answers to the Phase 1 open questions; proposed by the assistant under the owner's delegation, approved by the owner)
 Recorded in [docs/LEDGER_AND_ALLOCATION.md](docs/LEDGER_AND_ALLOCATION.md) → "Decided".
 
 - **D1 — Dashboard Monthly/Yearly.**
@@ -131,6 +136,26 @@ Recorded in [docs/LEDGER_AND_ALLOCATION.md](docs/LEDGER_AND_ALLOCATION.md) → "
 
 Rules: `CLAUDE.md` → Deploy Safety.
 
+### 2026-10-05 — GitHub repo is PUBLIC (owner accepted)
+- The repo `abhayk2806-cpu/tubewell-manager` is public, and the owner accepted this.
+- Never commit real farmer names, phone numbers, amounts, backup exports or secrets. Tests use fictional data. Rule: `CLAUDE.md`.
+
+### 2026-10-05 — Decisions D9–D12 (Phase 2A database; proposed by the assistant under the owner's delegation)
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
+- **D9 — Audit user columns.** `created_by`, `updated_by` and `deleted_by` are plain uuids with **no foreign keys**, so the trail survives user deletion.
+- **D10 — Foreign keys.** Foreign keys to `farmers` use **ON DELETE RESTRICT**. There are no hard deletes by design.
+- **D11 — RLS.**
+  - Enabled on all three tables, with policies only for role `authenticated`.
+  - SELECT, INSERT and UPDATE use `((select auth.uid()) is not null)`. There is **no DELETE policy**.
+  - Hardening added in migration 003: `anon` has no table privileges, and `authenticated` has no DELETE or TRUNCATE.
+  - Consequences:
+    - the Phase 8 "Replace" restore must work without client-side DELETE (for example soft-delete everything then insert, or a controlled database function);
+    - the Phase 10 test-data wipe is done with SQL by Claude Code, only on explicit owner approval.
+- **D12 — Audit triggers.**
+  - One trigger function, `public.set_audit_columns()` (`search_path = ''`, EXECUTE revoked), runs BEFORE INSERT OR UPDATE on all three tables.
+  - `created_*` is set on insert and immutable afterwards. `updated_*` is always `now()` / `auth.uid()`.
+  - `deleted_by` is trigger-only (set on soft delete, cleared on restore). `deleted_at` is forced NULL on insert.
+
 ---
 
 ## Session Log
@@ -161,10 +186,24 @@ Rules: `CLAUDE.md` → Deploy Safety.
 - **First push:** the last step of this closure was the first push, `git push -u origin rebuild/fresh-system`, after a secrets scan. `main` unchanged at `46e3872`.
 - **Failed attempt:** none.
 
+### 2026-10-05 — Phase 2A: database schema (NEW project `ciszgagzhfubuqhpmyeh`)
+- **Migrations** `001_core_tables`, `002_audit_triggers`, `003_rls_policies` applied with the MCP and committed (`60e540a`). The stored SQL md5 equals the repo file md5 for all three.
+- **Tests:** `supabase/tests/001_schema_checks.sql` (`65db277`). 68/68 checks PASS (T1–T5) inside one rolled-back transaction, and T6 found 0 rows left.
+- **Advisors:**
+  - Security: none.
+  - Performance: INFO `unused_index` on the 4 new indexes. Expected with no data yet; not a blocker.
+- **Repo vs live:** the live `public` schema contains exactly the objects from migrations 001–003.
+- **Notes for owner review (none blocking):**
+  1. `btrim()` trims spaces only, so a tab-only farmer name passes the DB check. The app form must trim all whitespace.
+  2. The audit trigger always sets `created_at`/`created_by` and clears `deleted_*` on insert. So a Phase 8 restore through plain inserts cannot keep original timestamps or soft-deleted state; it will need a controlled database function (D11 consequence).
+  3. Hardening went beyond the prompt: anon has no privileges, authenticated has no DELETE/TRUNCATE, and EXECUTE on the trigger function is revoked. All of this is tested in T5.
+  4. Within one transaction `now()` is constant, so T3 proves "`updated_at` is set by the trigger" (client value ignored), not a different timestamp from `created_at`.
+- **Failed attempt:** none.
+
 ---
 
 ## Known Local Issues
 
-- No `.env` file exists locally (created in Phase 2 for the NEW project).
-- Local `node_modules` is broken: `tsc` is missing. Run `pnpm install` in Phase 2.
+- No `.env` file exists locally (created in Phase 2B for the NEW project).
+- Local `node_modules` is broken: `tsc` is missing. Run `pnpm install` in Phase 2B.
 - `netlify.toml` builds with `npm run build` while the repo uses pnpm. Review in Phase 10.

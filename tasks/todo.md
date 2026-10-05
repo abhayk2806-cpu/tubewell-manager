@@ -12,10 +12,10 @@
   - [x] New context docs, ledger spec, architecture, `.claude/rules`
   - [x] Owner decisions D1–D8 recorded; push policy added
   - [x] First push of `rebuild/fresh-system` to `origin` (branch now backed up)
-- [ ] **2** — New Supabase schema + project foundation ← **next**
-  - [ ] Owner action #1: auth user + sign-ups off
-  - [ ] `pnpm install`, `.env` for the NEW project
-  - [ ] Migrations from 001, committed to the repo
+- [x] **2A** — Database schema: migrations 001–003, SQL tests, advisors (done 2026-10-05; pending owner review)
+- [ ] **2B** — Project foundation ← **next**
+  - [ ] Owner action #1: Auth user + sign-ups off
+  - [ ] `pnpm install`, `.env` for the NEW project, generated types, Supabase client
 - [ ] **3** — Ledger engine + tests (fixtures E1–E24), before any UI
 - [ ] **4** — Farmers + Pani Entry
 - [ ] **5** — Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore

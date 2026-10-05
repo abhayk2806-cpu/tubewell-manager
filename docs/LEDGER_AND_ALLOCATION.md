@@ -1,6 +1,6 @@
 # Ledger and Allocation — Authoritative Spec
 
-> **Status:** owner-approved rules, transcribed 2026-10-05. Owner decisions D1–D8 were recorded on 2026-10-05 (see "Decided" at the end). Tests come first, in Phase 3.
+> **Status:** owner-approved rules, transcribed 2026-10-05. Decisions D1–D8 (proposed by the assistant under the owner's delegation, approved by the owner) were recorded on 2026-10-05 (see "Decided" at the end). Tests come first, in Phase 3.
 > **This file is the single source of truth** for every money and time calculation in the app.
 > Code, other docs and `.claude/rules/` must point here; they must not restate the rules.
 > Every number in the worked examples was checked on 2026-10-05 with an independent throwaway script (integer paise).
@@ -324,7 +324,7 @@ The farmer profile and the Months table show the **current** figures (E1), not t
   - A usage entry (1h00) stored at `2025-12-31T18:40:00Z` is IST 2026-01-01 00:10, i.e. month 2026-01.
   - It counts in the **2026** view: charges 100.00. The 2025 view shows charges 0.00.
 
-## Decided (owner, 2026-10-05)
+## Decided (proposed by the assistant under the owner's delegation, approved by the owner; 2026-10-05)
 
 | # | Decision | Where |
 |---|---|---|
