@@ -49,6 +49,8 @@ export interface UsageFormDialogProps {
   /** Every usage row, for the duplicate warning. */
   readonly allUsage: readonly UsageRow[];
   readonly now: IstMoment;
+  /** New entry only: the farmer pre-selected in the picker (still changeable). Ignored when editing. */
+  readonly initialFarmerId?: string;
   readonly saving: boolean;
   onSave(input: UsageInput): Promise<UsageMutationResult>;
   onSaved(entry: UsageRow): void;
@@ -56,8 +58,8 @@ export interface UsageFormDialogProps {
 }
 
 /** Add / edit a Pani Entry. Errors sit next to their fields; warnings never block (L14). */
-export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, now, saving, onSave, onSaved, onClose }: UsageFormDialogProps) {
-  const [form, setForm] = useState<UsageForm>(() => (entry === null ? newUsageForm(now) : usageFormFromRow(entry)));
+export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, now, initialFarmerId, saving, onSave, onSaved, onClose }: UsageFormDialogProps) {
+  const [form, setForm] = useState<UsageForm>(() => (entry === null ? newUsageForm(now, initialFarmerId) : usageFormFromRow(entry)));
   const [showErrors, setShowErrors] = useState(false);
   const [warnings, setWarnings] = useState<UsageWarning<UsageRow>[]>([]);
   const [saveError, setSaveError] = useState('');

@@ -55,6 +55,8 @@ export interface PaymentFormDialogProps {
   readonly usageRows: readonly UsageRow[];
   readonly usageStatus: LoadStatus;
   readonly now: IstMoment;
+  /** New entry only: the farmer pre-selected in the picker (still changeable). Ignored when editing. */
+  readonly initialFarmerId?: string;
   readonly saving: boolean;
   onSave(input: PaymentInput): Promise<PaymentMutationResult>;
   onSaved(payment: PaymentRow): void;
@@ -63,8 +65,8 @@ export interface PaymentFormDialogProps {
 
 /** Add / edit a payment with a live FIFO preview from the engine (L16). Warnings never block (L14). */
 export function PaymentFormDialog(props: PaymentFormDialogProps) {
-  const { payment, activeFarmers, allFarmers, allPayments, usageRows, usageStatus, now, saving, onSave, onSaved, onClose } = props;
-  const [form, setForm] = useState<PaymentForm>(() => (payment === null ? newPaymentForm(now) : paymentFormFromRow(payment)));
+  const { payment, activeFarmers, allFarmers, allPayments, usageRows, usageStatus, now, initialFarmerId, saving, onSave, onSaved, onClose } = props;
+  const [form, setForm] = useState<PaymentForm>(() => (payment === null ? newPaymentForm(now, initialFarmerId) : paymentFormFromRow(payment)));
   const [showErrors, setShowErrors] = useState(false);
   const [warnings, setWarnings] = useState<PaymentWarning<PaymentRow>[]>([]);
   const [saveError, setSaveError] = useState('');
