@@ -9,6 +9,7 @@
 > - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
 > - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The **Months screen exists** (Phase 7B): see [Months screen](#months-screen-phase-7b-d30).
 > - **Backup and restore exist** (Phase 8): migration 007 adds `restore_backup`; see [Backup and restore](#backup-and-restore-phase-8-d31).
+> - **Audit gap fixes** (PR1, D32): balances in the Kisan list and the Pani section, trails in the Paisa list, picker search, "Pura ₹X bharo", Pani time on the Dashboard and profile; see [Audit gap fixes](#audit-gap-fixes-pr1-d32).
 > - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >
@@ -172,7 +173,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 
 ## Data-access rules
 
-- **Active-farmer filter is applied in ONE place** (the data layer). A farmer is active when `deleted_at IS NULL` and not disabled. Pages never re-implement it.
+- **Active-farmer filter is applied in ONE place.** The rule itself lives in `src/lib/ledger/farmers.ts` (`isActiveFarmer`: `deleted_at IS NULL` and not disabled) and is applied through the data layer; pages never re-implement it.
 - **Soft-delete filter:** normal reads exclude rows with `deleted_at`. The Recently Deleted view reads them explicitly.
 - **Pagination:** Supabase/PostgREST returns at most 1,000 rows per request by default. Every list read (including backup) must page until exhausted, or be provably bounded.
 - **Every Supabase call checks `error`.** supabase-js returns errors and does not throw them.
@@ -341,6 +342,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `payments.ts` | Payment queries and mutations, Phase 5 |
 | `timeline.ts` | Private helpers shared by the usage and payment rules: newest-first sort, IST month/day, month list (Phase 5) |
 | `profileRules.ts` | Pure Kisan ka Hisaab rules: one `buildFarmerLedger` call per profile, joins and display splits only (Phase 6) |
+| `balanceRules.ts` | Pure per-farmer balances and per-payment trails from `buildFarmerLedger` (rows grouped once) for the Kisan, Pani and Paisa screens (PR1, D32) |
 | `monthsRules.ts` | Pure Months rules: wraps `buildAllFarmersMonths` and per-farmer `buildFarmerProfile` months; order, year filter, strip (`sumPaise`), deep link (Phase 7B) |
 | `dashboardRules.ts` | Pure Dashboard rules: wraps `buildDashboard` and `buildAllFarmersMonths`; names, order, search, summary, Band note, chart bars, recent activity (Phase 7A) |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
@@ -566,6 +568,41 @@ visiblePart(rows, shown): { visible, hidden }      nextShownCount(total, shown) 
 - States: loading; error with retry; the `refreshFailed` line; a bad-data message that hides all figures.
 - Saved confirmations reuse `USAGE_COPY.done.created` / `PAYMENTS_COPY.done.created`.
 - **Dialog prop.** `UsageFormDialog` and `PaymentFormDialog` have an optional `initialFarmerId` (new entry only; ignored when editing). It feeds `newUsageForm` / `newPaymentForm`.
+
+## Audit gap fixes (PR1, D32)
+
+The requirements audit (step PAUDIT) found no wrong figure; it found missing information and connections. PR1 adds them with the existing engine only (no new algorithm).
+
+**Data** (additive, pure):
+
+```ts
+// src/lib/data/balanceRules.ts
+buildFarmerBalances({ farmers, usageRows, paymentRows }): Map<farmerId, { ok: true, outstandingPaise, creditPaise } | { ok: false }>
+buildPaymentTrails({ usageRows, paymentRows }): Map<paymentId, { ok: true, pieces, unappliedPaise } | { ok: false }>
+// src/lib/data/dashboardRules.ts
+buildDashboardScreen(...).screen.time { totalMinutes, hours, minutes }   .activeFarmerCount   periodTime(months, view)
+// src/lib/data/profileRules.ts
+buildFarmerProfile(...).profile.time { totalMinutes, hours, minutes }
+// src/lib/data/timeline.ts (private helper, now shared): splitMinutes(totalMinutes)
+```
+
+- Rows are grouped by farmer ONCE; each farmer's figures are `buildFarmerLedger` on that farmer's own rows, exactly what the profile shows. Balances cover every non-deleted farmer (Chalu and Band); trails cover every live payment (any farmer). Bad data for a farmer gives that farmer `{ ok: false }`.
+- Dashboard time = the engine's month rows (`buildAllFarmersMonths`, active farmers) inside the period, added with `sumPaise`; payment-only months add 0. Profile time = the sum of its month rows.
+- **Active-farmer rule:** defined once in `src/lib/ledger/farmers.ts` (`isActiveFarmer`) and applied through the data layer (`classifyFarmers`, `rowsByActiveFarmer` inside the engine's cross-farmer views). Pani and Paisa lists and the CSV exports still list entries of Band and deleted farmers (owner decision, D24 h).
+
+**Screens:**
+
+| Screen | Added | Source |
+|---|---|---|
+| Kisan list | "Abhi baaki" (due) or "Baaki nahi" (muted) + separate "Advance / Credit" badge (credit) on Chalu and Band rows; none on deleted rows. Delete dialog: "Band karo (delete nahi)" | `buildFarmerBalances` |
+| Pani | Chosen farmer's position in the entry form; a strip above a list filtered to one farmer; name-or-mobile search in the picker | `buildFarmerBalances`, `matchesFarmerSearch` |
+| Paisa | Allocation trail on each live payment; picker options with the position as text; search; "Pura ₹X bharo" (new payment, Baaki > 0) | `buildPaymentTrails`, `buildFarmerBalances`, `paiseToDecimalString` |
+| Dashboard | "Pani ka samay" (water) and "Chalu kisan" tiles | `screen.time`, `screen.activeFarmerCount` |
+| Profile | "Total pani ka samay" (water) | `profile.time` |
+
+**Decision D32** (owner, 2026-10-06): fix the audit gaps in one step as listed above. Not built (owner choice): changing which entries the Pani / Paisa lists or CSVs show, grouping lists by farmer, a global search, a recovery % or pie, separate reports, "hide settled farmers", per-entry paid badges, lazy routes (later polish), renaming "Baaki" to "Kitna Baki Hai".
+
+**Consistency tests** (`balanceRules.test.ts`): Kisan figure = profile totals = Dashboard All Time row for every Chalu farmer; Paisa trail = profile trail; Dashboard time = sum of the Mahine month times (All Time, a year, every month); a usage date moved into another IST month moves its charge and re-allocates.
 
 ## Months screen (Phase 7B, D30)
 

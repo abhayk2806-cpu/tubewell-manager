@@ -26,6 +26,8 @@ Never label one figure with the other's words, and never add them together.
 - Credit is shown as **"Advance / Credit"**.
 - Outstanding is shown as **"Baki"** / "Kitna Baki Hai".
 - Never show credit as a negative Baki. Never show a cross-farmer figure that nets credit against dues.
+- **D32 (owner, 2026-10-06):** the screens keep the spelling **"Baaki"** ("Abhi baaki", "Baaki nahi"); "Kitna Baki Hai" is not used. Picker options read "Naam — Baaki ₹x" / "Naam — Advance ₹x" / "Naam — Baaki nahi".
+- Other D32 labels: "Pura ₹X bharo" (fill the full Baaki), "Band karo (delete nahi)", "Pani ka samay", "Total pani ka samay", "Chalu kisan", "Kisan dhundo (naam ya mobile)", "Kahan laga" (a payment's trail).
 
 **Month status words:** "Settled", "Partial", "Unpaid".
 - A month with charge 0 and cash received > 0 shows the badge **"Sirf Payment"** (D3, 2026-10-05).

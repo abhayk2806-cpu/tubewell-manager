@@ -62,3 +62,9 @@ Every kind of information has ONE fixed colour chosen by its meaning, the same o
 - Success lines (backup downloaded, CSV downloaded, safety backup, "Verified"): `cash` notice.
 - Restore preview: `info` soft panel; its four totals use `MONEY_TONE` (Charge `water`, Cash Mila `cash`, Baaki `due`, Advance / Credit `credit`), never netted.
 - Replace warning, file problems, failed export / restore and a verification mismatch: the existing `destructive` style with words.
+
+**Audit gap fixes mapping (PR1, D32).**
+- Farmer position (Kisan rows, Pani form and strip): "Abhi baaki" amount `due`; "Baaki nahi" `muted`; the "Advance / Credit" badge `credit` (soft badge). Never one combined figure.
+- Paisa list trail: month pieces `cash`, the "Advance / Credit" remainder `credit` (same as the profile).
+- Dashboard "Pani ka samay" and profile "Total pani ka samay": `water` (text + bar). "Chalu kisan": neutral text with the `info` bar.
+- Picker options carry the position as plain text (no colour inside a native select).

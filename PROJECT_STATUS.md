@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 8 done (Backup / restore, migration 007, D31, pending owner review); Phase 9 (Verification) next
+> **Current phase:** PR1 done (audit gap fixes, D32, pending owner review); Phase 9 (Verification) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -33,6 +33,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), pending owner review |
 | 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), pending owner review |
 | 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), pending owner review |
+| PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started (next) |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
@@ -45,7 +46,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 5. Owner smoke-tests the Dashboard (Phase 7A) with the worked numbers and confirms or revisits D29. See the 2026-10-06 Phase 7A session entry.
 6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
 7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
-8. **Phase 9: Verification.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
+9. **Phase 9: Verification.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -220,6 +222,11 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 ### 2026-10-06 — D30 Months screen (Phase 7B; manager design choices (a)–(j), owner may revisit)
 - Explanation block; "Saal" filter (default all years); strip with time, Charge and Cash Mila only; month cards newest first with the profile's words and tones; farmer-wise breakdown per month (Baaki first, profile links); `?month=` deep link, linked from the Dashboard's Mahina view.
 - Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Months screen.
+
+### 2026-10-06 — D32 Audit gap fixes (PR1; owner decision)
+- Fix the requirements-audit gaps in one step: balances in the Kisan list and Pani section, Pani time and Chalu count on the Dashboard, total time on the profile, the allocation trail on each Paisa row, a farmer search in the Pani and Paisa pickers, "Pura ₹X bharo", "Band karo (delete nahi)" in the delete dialog, tests for the audited gaps.
+- Not built (owner choice): different rows in the Pani / Paisa lists or CSVs (D24 h stays), grouping by farmer, global search, recovery % or pie, reports, "hide settled", per-entry badges, lazy routes (later), renaming "Baaki".
+- Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Audit gap fixes.
 
 ### 2026-10-06 — D31 Backup and restore (Phase 8; manager design choices (a)–(j), owner may revisit)
 - Versioned JSON backup of every row (soft-deleted included) with counts and the engine All Time summary; validation before any database call; Excel CSV exports (not restorable); Merge / Replace through the migration-007 function in one transaction; preview; Replace safety (safety backup first, typed REPLACE); verification; a per-browser reminder with one Dashboard note.
@@ -457,6 +464,15 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Tests:** 45 files / 839 tests (before: 42 / 766). Gates green. JS chunk 657 kB (the 500 kB warning, as before).
 - **Not verified:** a real-browser look at 360 px (behind the owner's login) and a live round trip through the app (the function itself is proven by the rolled-back SQL tests).
 - **Failed attempts:** (1) the Write tool turned `\u00a0` / `\ufeff` escapes into real characters (lint caught the NBSP; files re-escaped). (2) One commit (`7c01354`) went in with a test type error because a piped `tail` hid the exit code; fixed in `f866141`.
+
+### 2026-10-06 — PR1: audit gap fixes
+- **Preconditions:** HEAD = origin = `0212272`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–007. Row counts at the start: farmers 7, usage_entries 6, payments 9; unchanged at the end. Baseline gates: 45 files / 839 tests.
+- **Code:** `src/lib/data/balanceRules.ts` (`buildFarmerBalances`, `buildPaymentTrails`), additive `time` / `activeFarmerCount` on the Dashboard screen and `time` on the profile, `splitMinutes` shared from `timeline.ts`; screen changes in Kisan, Pani, Paisa, Dashboard and profile. No engine, hook, migration or dependency change; `.gitignore` ignores `.claude/launch.json`.
+- **Decision D32:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Audit gap fixes.
+- **Tests:** 46 files / 875 tests (before: 45 / 839). Gates green. JS chunk 666 kB (the 500 kB warning, as before).
+- **Changed expectations (by design):** the Kisan list test no longer asserts "no money"; the Paisa picker options carry the position; a payment row shows its amount twice (amount and trail).
+- **Not verified:** a real-browser look at 360 px (behind the owner's login).
+- **Failed attempt:** none.
 
 ---
 

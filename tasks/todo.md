@@ -57,6 +57,11 @@
   - [x] Migration 007 `restore_backup` (keeps every column incl. `deleted_at` and audit columns) + SQL T9 (134/134)
   - [x] `src/lib/backup/` pure modules, `backupData.ts` I/O, Backup screen at `/backup`, Dashboard note (D31)
   - [ ] Owner: smoke-test export, Merge, Replace (test data only) and the CSV files in Excel; confirm or revisit D31
+- [x] **PR1** — Audit gap fixes (done 2026-10-06; pending owner review)
+  - [x] `balanceRules.ts` (balances, trails), Dashboard and profile Pani time, tests for the audited gaps (date move, 2,500-row paging)
+  - [x] Kisan balances + Band karo in the delete dialog; Pani form and strip; Paisa trails, picker positions, search, "Pura ₹X bharo"; Dashboard time and Chalu tiles; profile total time (D32)
+  - [ ] Owner: smoke-test with test data
+  - [ ] Later polish (not in PR1): lazy routes for a smaller bundle
 - [ ] **9** — Verification: independent script + edge-case matrix ← **next**
   - [ ] An independent script (not the app's engine) recomputes every figure from raw rows and compares with the app (Dashboard, profile, Months, backup summary).
   - [ ] Edge-case matrix: IST midnight / month / year boundaries, rounding (D7), soft delete and restore, duplicates, Band / deleted farmers, credit carry-forward, more than 1,000 rows per table (paging in every read and in the backup).
