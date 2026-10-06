@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
-// Stubbed clock: "now" is 2026-10-06 14:05 IST.
+// Stubbed clock: "now" is 2026-10-06 14:05 IST. A test may move the moment to check that a dialog
+// takes a fresh one when it opens (C-2).
+const PAGE_LOAD_MOMENT = { dateKey: '2026-10-06', timeKey: '14:05', monthKey: '2026-10' };
+const clock = vi.hoisted(() => ({ moment: { dateKey: '2026-10-06', timeKey: '14:05', monthKey: '2026-10' } }));
 vi.mock('@/lib/data/clock', () => ({
   nowIso: () => '2026-10-06T08:35:00.000Z',
-  currentIstMoment: () => ({ dateKey: '2026-10-06', timeKey: '14:05', monthKey: '2026-10' }),
+  currentIstMoment: () => clock.moment,
 }));
 const farmerApi = vi.hoisted(() => ({
   listFarmers: vi.fn(),
@@ -83,6 +86,7 @@ async function openAdd() {
 }
 
 beforeEach(() => {
+  clock.moment = PAGE_LOAD_MOMENT;
   Object.values(farmerApi).forEach((fn) => fn.mockReset());
   Object.values(usageApi).forEach((fn) => fn.mockReset());
   farmerApi.listFarmers.mockResolvedValue([ramu, shyam, band, gone]);
@@ -333,5 +337,13 @@ describe('UsagePage', () => {
     expect(usageApi.createUsage).toHaveBeenCalledTimes(1);
     save.resolve(u1);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('a dialog takes the IST moment of opening, not of page load (C-2)', async () => {
+    await renderReady();
+    clock.moment = { dateKey: '2026-10-07', timeKey: '00:10', monthKey: '2026-10' };
+    await openAdd();
+    expect(screen.getByLabelText('Tarikh')).toHaveValue('2026-10-07');
+    expect(screen.getByLabelText('Samay')).toHaveValue('00:10');
   });
 });

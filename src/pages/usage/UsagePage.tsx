@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { currentIstMoment, filterUsage, listUsageMonths, sortFarmersByName, usageAmountPaise } from '@/lib/data';
-import type { FarmerRow, UsageRow } from '@/lib/data';
+import type { FarmerRow, IstMoment, UsageRow } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
 import { useUsage, type UsageMutationResult } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,8 @@ const SEGMENTS: readonly UsageSegment[] = ['live', 'deleted'];
 const ALL = 'all';
 
 type Notice = { readonly tone: 'success' | 'error'; readonly text: string };
-type FormState = { readonly entry: UsageRow | null } | null;
+/** The open form and the IST moment taken when it was opened (date / time defaults, future-date check). */
+type FormState = { readonly entry: UsageRow | null; readonly now: IstMoment } | null;
 
 const selectClass =
   'flex h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
@@ -110,7 +111,7 @@ export function UsagePage() {
           disabled={busy || status !== 'ready' || amounts === null}
           onClick={() => {
             setNotice(null);
-            setForm({ entry: null });
+            setForm({ entry: null, now: currentIstMoment() });
           }}
         >
           <Plus aria-hidden="true" />
@@ -222,7 +223,7 @@ export function UsagePage() {
                   busy={busy}
                   onEdit={(e) => {
                     setNotice(null);
-                    setForm({ entry: e });
+                    setForm({ entry: e, now: currentIstMoment() });
                   }}
                   onDelete={setDeleteTarget}
                   onRestore={(e) => void restore(e)}
@@ -240,7 +241,7 @@ export function UsagePage() {
           activeFarmers={farmers.lists.active}
           allFarmers={farmers.all}
           allUsage={usage.all}
-          now={now}
+          now={form.now}
           saving={usage.pending?.kind === 'create' || usage.pending?.kind === 'update'}
           onSave={(input) => (form.entry === null ? usage.create(input) : usage.update(form.entry, input))}
           onSaved={() => {

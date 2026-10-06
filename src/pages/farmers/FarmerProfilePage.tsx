@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Droplets, Wallet } from 'lucide-react';
 import { formatRupees } from '@/lib/ledger';
 import { buildFarmerProfile, currentIstMoment, findProfileFarmer } from '@/lib/data';
+import type { IstMoment } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -16,7 +17,8 @@ import { PaymentFormDialog } from '../payments/PaymentFormDialog';
 import { PROFILE_COPY, PROFILE_DATA_ERROR_TEXT } from './profileCopy';
 import { LedgerLines, MonthCards, PaymentHistory, UsageHistory } from './ProfileSections';
 
-type Dialog = 'usage' | 'payment' | null;
+/** The open shortcut dialog and the IST moment taken when it was opened (its date and time defaults). */
+type Dialog = { readonly kind: 'usage' | 'payment'; readonly now: IstMoment } | null;
 
 function Figure({ label, paise, testId, tone, highlight = false }: { label: string; paise: number; testId: string; tone: Tone; highlight?: boolean }) {
   return (
@@ -37,7 +39,6 @@ export function FarmerProfilePage() {
   const farmers = useFarmers();
   const usage = useUsage();
   const payments = usePayments();
-  const [now] = useState(currentIstMoment);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -129,11 +130,11 @@ export function FarmerProfilePage() {
 
       {active && (
         <div className="grid grid-cols-2 gap-2">
-          <Button className="h-11" disabled={busy} onClick={() => { setNotice(null); setDialog('usage'); }}>
+          <Button className="h-11" disabled={busy} onClick={() => { setNotice(null); setDialog({ kind: 'usage', now: currentIstMoment() }); }}>
             <Droplets aria-hidden="true" />
             {PROFILE_COPY.addUsage}
           </Button>
-          <Button className="h-11" disabled={busy} onClick={() => { setNotice(null); setDialog('payment'); }}>
+          <Button className="h-11" disabled={busy} onClick={() => { setNotice(null); setDialog({ kind: 'payment', now: currentIstMoment() }); }}>
             <Wallet aria-hidden="true" />
             {PROFILE_COPY.addPayment}
           </Button>
@@ -182,14 +183,14 @@ export function FarmerProfilePage() {
         </>
       )}
 
-      {dialog === 'usage' && (
+      {dialog?.kind === 'usage' && (
         <UsageFormDialog
           entry={null}
           initialFarmerId={farmer.id}
           activeFarmers={farmers.lists.active}
           allFarmers={farmers.all}
           allUsage={usage.all}
-          now={now}
+          now={dialog.now}
           saving={usage.pending?.kind === 'create'}
           onSave={(input) => usage.create(input)}
           onSaved={() => {
@@ -199,7 +200,7 @@ export function FarmerProfilePage() {
           onClose={() => setDialog(null)}
         />
       )}
-      {dialog === 'payment' && (
+      {dialog?.kind === 'payment' && (
         <PaymentFormDialog
           payment={null}
           initialFarmerId={farmer.id}
@@ -208,7 +209,7 @@ export function FarmerProfilePage() {
           allPayments={payments.all}
           usageRows={usage.all}
           usageStatus={usage.status}
-          now={now}
+          now={dialog.now}
           saving={payments.pending?.kind === 'create'}
           onSave={(input) => payments.create(input)}
           onSaved={() => {

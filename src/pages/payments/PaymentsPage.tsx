@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { currentIstMoment, filterPayments, listPaymentMonths, sortFarmersByName } from '@/lib/data';
-import type { FarmerRow, PaymentRow } from '@/lib/data';
+import type { FarmerRow, IstMoment, PaymentRow } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments, type PaymentMutationResult } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -26,7 +26,8 @@ const SEGMENTS: readonly PaymentSegment[] = ['live', 'deleted'];
 const ALL = 'all';
 
 type Notice = { readonly tone: 'success' | 'error'; readonly text: string };
-type FormState = { readonly payment: PaymentRow | null } | null;
+/** The open form and the IST moment taken when it was opened (date / time defaults, future-date check). */
+type FormState = { readonly payment: PaymentRow | null; readonly now: IstMoment } | null;
 
 const selectClass =
   'flex h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
@@ -104,7 +105,7 @@ export function PaymentsPage() {
           disabled={busy || status !== 'ready'}
           onClick={() => {
             setNotice(null);
-            setForm({ payment: null });
+            setForm({ payment: null, now: currentIstMoment() });
           }}
         >
           <Plus aria-hidden="true" />
@@ -206,7 +207,7 @@ export function PaymentsPage() {
                   busy={busy}
                   onEdit={(row) => {
                     setNotice(null);
-                    setForm({ payment: row });
+                    setForm({ payment: row, now: currentIstMoment() });
                   }}
                   onDelete={setDeleteTarget}
                   onRestore={(row) => void restore(row)}
@@ -226,7 +227,7 @@ export function PaymentsPage() {
           allPayments={payments.all}
           usageRows={usage.all}
           usageStatus={usage.status}
-          now={now}
+          now={form.now}
           saving={payments.pending?.kind === 'create' || payments.pending?.kind === 'update'}
           onSave={(input) => (form.payment === null ? payments.create(input) : payments.update(form.payment, input))}
           onSaved={() => {
