@@ -391,3 +391,36 @@ describe('DashboardPage backup note (D31 i)', () => {
     }
   });
 });
+
+describe('DashboardPage Pani time and Chalu kisan (D32)', () => {
+  it('All Time: 3 h 35 + 2 h 00 = 5 h 35 min for the three Chalu farmers; Band and deleted rows excluded', async () => {
+    await renderReady();
+    expect(value('dash-time')).toBe('5 ghante 35 minute');
+    expect(value('dash-farmers')).toBe('3');
+    expect(screen.getByTestId('dash-time').querySelector('dd')).toHaveClass('text-tone-water');
+    // The four money tiles are unchanged.
+    expect(tiles()).toEqual([`${R}558.33`, `${R}350.00`, `${R}258.33`, `${R}50.00`]);
+  });
+
+  it('a month shows only that month\'s time; a payment-only month shows 0', async () => {
+    await renderReady();
+    fireEvent.click(screen.getByRole('button', { name: 'Mahina' }));
+    fireEvent.change(screen.getByLabelText('Mahina chuno'), { target: { value: '2026-09' } });
+    expect(value('dash-time')).toBe('2 ghante 0 minute');
+    fireEvent.change(screen.getByLabelText('Mahina chuno'), { target: { value: '2026-08' } });
+    expect(value('dash-time')).toBe('0 ghante 0 minute');
+    expect(value('dash-farmers')).toBe('3');
+  });
+
+  it('a saved Pani entry updates the time tile', async () => {
+    await renderReady();
+    const created = usageRow({ id: 'u9', farmer_id: 'c', used_at: '2026-10-06T08:35:00+00:00', hours: 1, minutes: 0 });
+    usageApi.createUsage.mockResolvedValue(created);
+    usageApi.listUsage.mockResolvedValue([aUse, bUse, dUse, eUse, created]);
+    fireEvent.click(screen.getByRole('button', { name: 'Chhotu Test: Pani add' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Ghante'), { target: { value: '1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(value('dash-time')).toBe('6 ghante 35 minute'));
+  });
+});

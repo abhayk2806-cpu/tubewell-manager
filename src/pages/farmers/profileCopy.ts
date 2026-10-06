@@ -26,6 +26,8 @@ export const PROFILE_COPY = {
     paid: 'Total mila',
     outstanding: 'Abhi baaki',
     credit: 'Advance / Credit',
+    /** Total Pani time of all months (D32). */
+    time: 'Total pani ka samay',
   },
   months: {
     heading: 'Mahine ke hisaab',

@@ -291,3 +291,33 @@ describe('FarmerProfilePage shortcuts', () => {
     expect(within(dialog).getByLabelText('Samay')).toHaveValue('00:10');
   });
 });
+
+describe('FarmerProfilePage total Pani time (D32)', () => {
+  it('shows the total time of all months and updates after a Pani add', async () => {
+    await renderReady();
+    expect(value('total-time')).toBe('3 ghante 35 minute');
+    expect(screen.getByTestId('total-time').querySelector('dd')).toHaveClass('text-tone-water');
+    const added = usageRow({ id: 'u2', farmer_id: 'r', used_at: '2026-10-06T08:35:00+00:00', hours: 1, minutes: 0 });
+    usageApi.createUsage.mockResolvedValue(added);
+    usageApi.listUsage.mockResolvedValue([entry, added]);
+    fireEvent.click(screen.getByRole('button', { name: 'Pani add' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Ghante'), { target: { value: '1' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(value('total-time')).toBe('4 ghante 35 minute'));
+    expect(value('total-charges')).toBe(`${R}458.33`);
+  });
+
+  it('a Paisa add from the profile updates Abhi baaki and the payment trail', async () => {
+    paymentApi.listPayments.mockResolvedValue([]);
+    await renderReady();
+    paymentApi.createPayment.mockResolvedValue(p100);
+    paymentApi.listPayments.mockResolvedValue([p100]);
+    fireEvent.click(screen.getByRole('button', { name: 'Paisa add' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Rakam (rupaye)'), { target: { value: '100' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(value('total-outstanding')).toBe(`${R}258.33`));
+    expect(screen.getByTestId('payment-p100')).toBeInTheDocument();
+  });
+});

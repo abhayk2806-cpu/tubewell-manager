@@ -174,6 +174,12 @@ export function FarmerProfilePage() {
                 tone={MONEY_TONE.credit}
                 highlight={result.profile.totals.creditPaise > 0}
               />
+              <div className={cn('col-span-2 rounded-lg border bg-card p-3', TONE[MONEY_TONE.charge].bar)} data-testid="total-time">
+                <dt className="text-xs text-muted-foreground">{PROFILE_COPY.totals.time}</dt>
+                <dd className={cn('text-lg font-semibold', TONE[MONEY_TONE.charge].text)}>
+                  {PROFILE_COPY.months.duration(result.profile.time.hours, result.profile.time.minutes)}
+                </dd>
+              </div>
             </dl>
           </section>
           <MonthCards months={result.profile.months} />

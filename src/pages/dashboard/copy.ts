@@ -40,6 +40,10 @@ export const DASHBOARD_COPY = {
     cash: 'Cash Mila',
     outstanding: 'Baaki',
     credit: 'Advance / Credit',
+    /** Pani time of the period and the Chalu farmer count (D32). */
+    time: 'Pani ka samay',
+    duration: (hours: number, minutes: number) => `${hours} ghante ${minutes} minute`,
+    farmers: 'Chalu kisan',
   },
   summary: {
     baaki: (count: number, name: string, amountText: string) => `${count} kisan ka baaki hai. Sabse zyada: ${name} ${amountText}.`,

@@ -4,7 +4,7 @@ import { ChevronRight, Droplets, Wallet } from 'lucide-react';
 import { formatRupees, istDateKey, istTimeKey } from '@/lib/ledger';
 import type { Dashboard, DashboardView } from '@/lib/ledger';
 import { filterDashboardRows } from '@/lib/data';
-import type { BandNote, ChartMonth, DashboardRow, DashboardSummary, PeriodOptions, RecentItem } from '@/lib/data';
+import type { BandNote, ChartMonth, DashboardRow, DashboardSummary, DashboardTime, PeriodOptions, RecentItem } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -117,7 +117,28 @@ function Tile({ label, paise, tone, testId }: { label: string; paise: number; to
   );
 }
 
-export function Tiles({ dashboard, summary, periodHasActivity }: { dashboard: Dashboard; summary: DashboardSummary; periodHasActivity: boolean }) {
+function TextTile({ label, value, tone, testId }: { label: string; value: string; tone: Tone; testId: string }) {
+  return (
+    <div className={cn('rounded-lg border bg-card p-3', TONE[tone].bar)} data-testid={testId}>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={cn('text-lg font-semibold', tone === 'info' ? undefined : TONE[tone].text)}>{value}</dd>
+    </div>
+  );
+}
+
+export function Tiles({
+  dashboard,
+  summary,
+  periodHasActivity,
+  time,
+  activeFarmerCount,
+}: {
+  dashboard: Dashboard;
+  summary: DashboardSummary;
+  periodHasActivity: boolean;
+  time: DashboardTime;
+  activeFarmerCount: number;
+}) {
   const c = DASHBOARD_COPY.tiles;
   const s = DASHBOARD_COPY.summary;
   return (
@@ -127,6 +148,10 @@ export function Tiles({ dashboard, summary, periodHasActivity }: { dashboard: Da
         <Tile testId="dash-cash" label={c.cash} paise={dashboard.cashReceivedPaise} tone={MONEY_TONE.cash} />
         <Tile testId="dash-outstanding" label={c.outstanding} paise={dashboard.outstandingPaise} tone={MONEY_TONE.outstanding} />
         <Tile testId="dash-credit" label={c.credit} paise={dashboard.creditPaise} tone={MONEY_TONE.credit} />
+      </dl>
+      <dl className="grid grid-cols-2 gap-2">
+        <TextTile testId="dash-time" label={c.time} value={c.duration(time.hours, time.minutes)} tone={MONEY_TONE.charge} />
+        <TextTile testId="dash-farmers" label={c.farmers} value={String(activeFarmerCount)} tone="info" />
       </dl>
       {!periodHasActivity && <p className="text-sm text-muted-foreground">{DASHBOARD_COPY.noActivity}</p>}
       <div className="space-y-0.5 text-sm" data-testid="dash-summary">

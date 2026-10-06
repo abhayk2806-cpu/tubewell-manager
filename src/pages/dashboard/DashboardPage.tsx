@@ -149,7 +149,7 @@ export function DashboardPage() {
         ) : (
           <>
             <PeriodSelector view={view} options={s.periodOptions} onSelectKind={selectKind} onChange={setView} />
-            <Tiles dashboard={s.dashboard} summary={s.summary} periodHasActivity={s.periodHasActivity} />
+            <Tiles dashboard={s.dashboard} summary={s.summary} periodHasActivity={s.periodHasActivity} time={s.time} activeFarmerCount={s.activeFarmerCount} />
             <MonthChart
               chart={s.chart}
               selectedMonthKey={view.kind === 'month' ? view.monthKey : null}
