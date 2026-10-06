@@ -98,6 +98,34 @@ export function istDateKey(ms: number): string {
   return `${wall.getUTCFullYear()}-${pad2(wall.getUTCMonth() + 1)}-${pad2(wall.getUTCDate())}`;
 }
 
+/** IST clock time of an instant, "HH:mm" (24 hour; IST has no DST). */
+export function istTimeKey(ms: number): string {
+  const wall = istWallClock(ms);
+  return `${pad2(wall.getUTCHours())}:${pad2(wall.getUTCMinutes())}`;
+}
+
+const TIME_TEXT_PATTERN = /^(\d{2}):(\d{2})$/;
+
+/**
+ * ISO text with the fixed IST offset for an IST date "YYYY-MM-DD" and clock time "HH:mm" typed by
+ * the owner, e.g. "2026-10-06T14:05:00+05:30". Returns null (never throws) when the text is
+ * malformed, the date does not exist or the time is outside 00:00-23:59. The result is verified by
+ * a round trip through parseInstantMs, istDateKey and istTimeKey.
+ */
+export function istWallClockToIso(dateKey: string, timeText: string): string | null {
+  if (typeof dateKey !== 'string' || typeof timeText !== 'string') return null;
+  if (!isDateKey(dateKey)) return null;
+  const match = TIME_TEXT_PATTERN.exec(timeText);
+  if (match === null || Number(match[1]) > 23 || Number(match[2]) > 59) return null;
+  const iso = `${dateKey}T${timeText}:00+05:30`;
+  try {
+    const ms = parseInstantMs(iso);
+    return istDateKey(ms) === dateKey && istTimeKey(ms) === timeText ? iso : null;
+  } catch {
+    return null;
+  }
+}
+
 export function isDateKey(key: string): boolean {
   const match = typeof key === 'string' ? DATE_KEY_PATTERN.exec(key) : null;
   return match !== null && utcFields(Number(match[1]), Number(match[2]), Number(match[3]), 0, 0, 0, 0) !== null;

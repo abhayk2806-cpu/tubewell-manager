@@ -10,12 +10,14 @@ export {
   istDateKey,
   istMonthKey,
   istMonthRangeMs,
+  istTimeKey,
+  istWallClockToIso,
   istYearKey,
   istYearRangeMs,
   parseInstantMs,
 } from './time';
 export type { InstantRange } from './time';
-export { assertPaise, intDiv, paiseToDecimalString, parseRupeesToPaise, sumPaise } from './money';
+export { assertPaise, formatRupees, intDiv, paiseToDecimalString, parseRupeesToPaise, sumPaise } from './money';
 export { entryAmountPaise } from './entry';
 export { buildFarmerLedger } from './ledger';
 export { previewPayment } from './preview';

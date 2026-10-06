@@ -45,6 +45,35 @@ export function parseRupeesToPaise(text: string): number {
   return Number(digits);
 }
 
+/** The rupee sign U+20B9, built at runtime so engine sources stay ASCII. */
+const RUPEE_SIGN = String.fromCharCode(0x20b9);
+
+/** Indian digit grouping of a whole-number digit string: last 3 digits, then pairs ("12345678" -> "1,23,45,678"). */
+function groupIndian(digits: string): string {
+  if (digits.length <= 3) return digits;
+  const groups = [digits.slice(-3)];
+  let rest = digits.slice(0, -3);
+  while (rest.length > 2) {
+    groups.unshift(rest.slice(-2));
+    rest = rest.slice(0, -2);
+  }
+  groups.unshift(rest);
+  return groups.join(',');
+}
+
+/**
+ * Display text for paise: rupee sign, Indian grouping, exactly 2 decimals, "-" before the sign for
+ * negatives (e.g. 177500 -> "<rupee>1,775.00", -50 -> "-<rupee>0.50"). Built on paiseToDecimalString.
+ */
+export function formatRupees(paise: number): string {
+  assertPaise(paise, 'paise');
+  const plain = paiseToDecimalString(paise);
+  const negative = plain.startsWith('-');
+  const unsigned = negative ? plain.slice(1) : plain;
+  const dot = unsigned.indexOf('.');
+  return `${negative ? '-' : ''}${RUPEE_SIGN}${groupIndian(unsigned.slice(0, dot))}${unsigned.slice(dot)}`;
+}
+
 /** Paise to plain decimal rupees: exactly 2 decimals, "-" for negatives, no symbol or grouping. */
 export function paiseToDecimalString(paise: number): string {
   assertPaise(paise, 'paise');
