@@ -4,6 +4,7 @@
 > **This file is the single source of truth** for every money and time calculation in the app.
 > Code, other docs and `.claude/rules/` must point here; they must not restate the rules.
 > Every number in the worked examples was checked on 2026-10-05 with an independent throwaway script (integer paise).
+> Amended 2026-10-06 (docs only, owner approved): E9 and E19 now show the payment-only 2026-09 row required by L11; no number changed.
 
 ## Definitions
 
@@ -216,6 +217,7 @@ Inputs: E1 with the May entry soft-deleted. 2026-05 disappears from the months l
 | 2026-06 | 441.67 | 441.67 | 0.00 | Settled |
 | 2026-07 | 525.00 | 58.33 | 466.67 | Partial |
 | 2026-08 | 450.00 | 0.00 | 450.00 | Unpaid |
+| 2026-09 | 0.00 | 0.00 | 0.00 | Sirf Payment |
 
 Totals: charges 1,416.67 · outstanding 916.67. Trail: P1 → 06: 441.67, 07: 58.33.
 
@@ -276,7 +278,7 @@ Dashboard: **Σ outstanding 200.00 and Σ credit 200.00, shown separately.** A n
 |---|---|---|---|---|
 | 2026-06-30 | 05, 06 | 800.00 | 0.00 | 800.00 |
 | 2026-09-09 | 05–08 | 1,775.00 | 0.00 | 1,775.00 |
-| 2026-09-10 | 05–08 | 1,775.00 | 500.00 | 1,275.00 |
+| 2026-09-10 | 05–09 (09 = Sirf Payment) | 1,775.00 | 500.00 | 1,275.00 |
 
 ### E20 — IST month boundaries
 | Stored timestamp | IST | Month |

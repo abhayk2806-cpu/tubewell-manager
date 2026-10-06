@@ -24,6 +24,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), pending owner review |
 | 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), pending owner review |
 | 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ✅ Done (2026-10-06), pending owner review |
+| 3B | Repo sync check + docs fixes (spec E9/E19 rows, D19→D20 relabel) | ✅ Done (2026-10-06) |
 | 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started (next) |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
@@ -35,7 +36,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 ## Next Action
 
 1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
-2. Owner reviews Phase 3: decisions D18/D19 and the Phase 3 notes in the 2026-10-06 session entry.
+2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
 3. **Phase 4: Farmers + Pani Entry**, including the data layer `src/lib/data/` that feeds the engine. Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
@@ -56,7 +57,7 @@ None blocking. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisio
 
 Phase 2A and 2B raised notes for the owner's review, listed in their 2026-10-05 session entries. None of them blocks Phase 3.
 
-Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry, D19). None blocks Phase 4.
+Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry, D20). None blocks Phase 4.
 
 ## Known Risks
 
@@ -75,6 +76,8 @@ Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry
 ---
 
 ## Decisions Log
+
+Numbering: D17 and D19 are workflow and prompt decisions kept in the project manager's folder (their results appear here as `previewPayment` and the two money-text helpers, see C10); D18 = engine conventions C1–C10; D20 = Phase 3 engine details.
 
 ### 2026-10-04 — Full fresh rebuild instead of patching v1
 v1's month-by-hand allocation lost overpayment credit. In live data on 2026-10-04 there was ₹1,336.68 overpaid across 5 farmer-months, and the summed monthly dues (₹2,850) disagreed with the netted all-time dues (₹2,213.32). The rebuild is built around a continuous per-farmer ledger with automatic FIFO allocation.
@@ -169,7 +172,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
 - **D15 — v1 app code removed from the rebuild branch.** It stays on `main` and in git history, for reference only via `git show main:<path>`. No v1 code is copied into new files.
 - **D16 — Test runner:** Vitest + jsdom + React Testing Library + jest-dom.
 
-### 2026-10-06 — Decisions D18–D19 (Phase 3 ledger engine)
+### 2026-10-06 — Decisions D18 and D20 (Phase 3 ledger engine)
 Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Ledger engine.
 - **D18 — Engine conventions C1–C10**, given in the Phase 3 prompt:
   - instants with a zone only;
@@ -182,7 +185,7 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
   - total paid;
   - the cross-farmer months list;
   - two rupee text helpers.
-- **D19 — Engine details where the spec and the prompt were silent** (proposed by the assistant, for owner review):
+- **D20 — Engine details where the spec and the prompt were silent** (proposed by the assistant, for owner review):
   - sub-millisecond truncation; seconds optional; instants limited to 1970–9999;
   - integrity throws (two farmers in one ledger, duplicate live ids, `null` `total_minutes`);
   - preview tie order; dashboard list sorted by farmer id;
@@ -276,6 +279,17 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Failed attempt:** none.
   - The `// @vitest-environment node` docblocks first added to the tests were removed, because Vitest 5 does not read them; engine tests run under jsdom.
   - Two first-run test failures were fixed before the commit: the new-candidate id check in `records.ts`, and a comment in `index.ts` that the static guard read as an import.
+
+### 2026-10-06 — Phase 3B: repo sync check and docs fixes
+- **Owner rule D21** (from this step on): every step ends with its own commit(s) and a push of `rebuild/fresh-system`. A step is complete only when `git ls-remote --heads origin` shows the branch tip equal to the local HEAD.
+- **Sync result:**
+  - before this step, local HEAD = `origin/rebuild/fresh-system` = `a530292`, clean tree, no stashes, no other local branch ahead;
+  - all 12 recorded commits (Phase 0 `b91fe36` to Phase 3 `a530292`) are ancestors of the remote branch;
+  - nothing was unpushed or uncommitted.
+- **Spec amended** (docs only, owner approved): E9 gains the 2026-09 "Sirf Payment" row, and E19's 2026-09-10 Months cell reads `05–09 (09 = Sirf Payment)`. No number changed. This resolves Phase 3 spec gaps 2 and 3; gaps 1, 4 and 5 stay open for owner review.
+- **Relabel:** the Phase 3 engine details are now D20 (were "D19"). See the numbering note in the Decisions Log.
+- **Gates:** unchanged behaviour; typecheck, lint, test and build green.
+- **Failed attempt:** none.
 
 ---
 

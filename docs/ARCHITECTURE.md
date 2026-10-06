@@ -263,7 +263,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 - **C9** Cross-farmer months = per-month sums over active farmers; status by C7 on the sums. Credit is never netted.
 - **C10** No currency symbol or grouping in the engine. Rupee text goes in and out only through `parseRupeesToPaise` and `paiseToDecimalString`.
 
-### D19 — Engine details chosen in Phase 3 (where the spec and the prompt were silent; for owner review)
+### D20 — Engine details chosen in Phase 3 (where the spec and the prompt were silent; for owner review)
 
 - **Accepted instants.** Seconds are optional (`T18:40Z`); up to 9 fraction digits. Sub-millisecond digits are truncated, so rows differing only in microseconds tie and fall through to `created_at`, then `id`.
 - **Range.** Instants must lie between 1970-01-01T00:00Z and 9999-12-31 23:59:59.999 IST.

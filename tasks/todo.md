@@ -17,8 +17,9 @@
   - [x] Owner action #1: Auth user exists (verified). Sign-ups off: owner to confirm.
   - [x] v1 code removed, deps + Vitest, `.env`, typed client, generated types, auth, routing, shell, migration 004
 - [x] **3** — Ledger engine + tests (done 2026-10-06; pending owner review)
-  - [x] Engine in `src/lib/ledger/` (D18/D19); fixtures E1–E24, D7 sweep, invariants + oracle, static guard
-  - [ ] Owner: review D19 and the 5 spec gaps (`PROJECT_STATUS.md`, 2026-10-06 entry)
+  - [x] Engine in `src/lib/ledger/` (D18/D20); fixtures E1–E24, D7 sweep, invariants + oracle, static guard
+  - [ ] Owner: review D20 and the open spec gaps 1, 4 and 5 (`PROJECT_STATUS.md`, 2026-10-06 entry; gaps 2 and 3 resolved in 3B)
+- [x] **3B** — Repo sync check (all pushed), spec E9/E19 payment-only rows, D19→D20 relabel (done 2026-10-06)
 - [ ] **4** — Farmers + Pani Entry ← **next**
   - [ ] Data layer `src/lib/data/`: page every read past 1,000 rows, check every `error`, map rows to the engine input types unchanged, filter with `isActiveFarmer`.
   - [ ] Pani Entry form: build `used_at` as ISO with `+05:30` from the typed IST wall clock, parse the rate with `parseRupeesToPaise`, call `validateUsageInput`, and warn with `findDuplicateUsage`.
