@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Droplets, Wallet } from 'lucide-react';
 import type { DashboardView } from '@/lib/ledger';
+import { backupReminder } from '@/lib/backup';
 import { buildDashboardScreen, currentIstMoment, periodView } from '@/lib/data';
 import type { IstMoment } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
@@ -14,6 +15,8 @@ import { USAGE_COPY } from '../usage/copy';
 import { PAYMENTS_COPY } from '../payments/copy';
 import { UsageFormDialog } from '../usage/UsageFormDialog';
 import { PaymentFormDialog } from '../payments/PaymentFormDialog';
+import { readLastBackup } from '../backup/browser';
+import { BACKUP_COPY } from '../backup/copy';
 import { DASHBOARD_COPY, DASHBOARD_DATA_ERROR_TEXT } from './copy';
 import { BandNoteBox, FarmerList, MonthChart, PeriodSelector, RecentActivity, Tiles } from './DashboardSections';
 
@@ -36,6 +39,9 @@ export function DashboardPage() {
   const [query, setQuery] = useState('');
   const [dialog, setDialog] = useState<Dialog>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Last JSON backup time in this browser (D31 i); the note shows only when it is old or missing.
+  const [lastBackup] = useState(readLastBackup);
+  const reminder = backupReminder(lastBackup, now);
 
   const statuses = [farmers.status, usage.status, payments.status];
   const status = statuses.includes('error') ? 'error' : statuses.includes('loading') ? 'loading' : 'ready';
@@ -88,6 +94,14 @@ export function DashboardPage() {
           {DASHBOARD_COPY.addPayment}
         </Button>
       </div>
+      {reminder.kind !== 'ok' && (
+        <p className={cn('flex flex-wrap items-center gap-x-2 rounded-md border px-3 text-sm', TONE[NOTICE_TONE.warning].notice)} data-testid="backup-note">
+          <span>{reminder.kind === 'never' ? BACKUP_COPY.dashboardNote.never : BACKUP_COPY.dashboardNote.old(reminder.days)}</span>
+          <Link to="/backup" className="inline-flex min-h-11 items-center font-medium underline">
+            {BACKUP_COPY.dashboardNote.link}
+          </Link>
+        </p>
+      )}
       <div aria-live="polite" role="status">
         {notice && <p className={cn('rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.success].notice)}>{notice}</p>}
         {(usage.refreshFailed || payments.refreshFailed) && (

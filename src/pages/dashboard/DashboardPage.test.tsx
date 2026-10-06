@@ -358,3 +358,36 @@ describe('DashboardPage current moment (Part 0) and the Months link', () => {
     expect(screen.getByRole('link', { name: /Is mahine ka kisan-wise hisaab/ })).toHaveAttribute('href', '/months?month=2026-09');
   });
 });
+
+describe('DashboardPage backup note (D31 i)', () => {
+  const KEY = 'tubewell-hisab:last-backup-at';
+
+  it('no backup yet: a caution note with a link to /backup', async () => {
+    window.localStorage.removeItem(KEY);
+    await renderReady();
+    const note = screen.getByTestId('backup-note');
+    expect(note).toHaveTextContent('Abhi tak koi backup nahi liya.');
+    expect(note).toHaveClass('text-tone-caution');
+    expect(within(note).getByRole('link', { name: 'Backup lo' })).toHaveAttribute('href', '/backup');
+  });
+
+  it('an old backup: the note says how many days', async () => {
+    window.localStorage.setItem(KEY, '2026-09-25T03:00:00.000Z');
+    try {
+      await renderReady();
+      expect(screen.getByTestId('backup-note')).toHaveTextContent('Pichla backup 11 din pehle liya tha.');
+    } finally {
+      window.localStorage.removeItem(KEY);
+    }
+  });
+
+  it('a recent backup: no note', async () => {
+    window.localStorage.setItem(KEY, '2026-10-06T03:00:00.000Z');
+    try {
+      await renderReady();
+      expect(screen.queryByTestId('backup-note')).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.removeItem(KEY);
+    }
+  });
+});

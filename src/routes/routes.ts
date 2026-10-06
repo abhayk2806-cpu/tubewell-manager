@@ -4,6 +4,7 @@ import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { FarmersPage } from '@/pages/farmers/FarmersPage';
 import { FarmerProfilePage } from '@/pages/farmers/FarmerProfilePage';
 import { MonthsPage } from '@/pages/months/MonthsPage';
+import { BackupPage } from '@/pages/backup/BackupPage';
 import { UsagePage } from '@/pages/usage/UsagePage';
 import { PaymentsPage } from '@/pages/payments/PaymentsPage';
 
@@ -31,7 +32,7 @@ export const FEATURE_ROUTES: FeatureRoute[] = [
   { path: '/usage', title: 'Pani Entry', phase: 4, page: UsagePage },
   { path: '/payments', title: 'Paisa', phase: 5, page: PaymentsPage },
   { path: '/months', title: 'Mahine', phase: 7, page: MonthsPage },
-  { path: '/backup', title: 'Backup', phase: 8 },
+  { path: '/backup', title: 'Backup', phase: 8, page: BackupPage },
 ];
 
 // Bottom navigation: the 6 top-level tabs (the farmer detail page is reached from the list).

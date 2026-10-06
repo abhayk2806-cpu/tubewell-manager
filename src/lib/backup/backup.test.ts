@@ -13,6 +13,7 @@ import {
   monthsCsv,
   parseBackupText,
   paymentsCsv,
+  rowsOnlyInCurrent,
   sameSummary,
   toCsv,
   usageCsv,
@@ -161,6 +162,7 @@ describe('diffBackup', () => {
     expect(d.farmers).toEqual({ fileRows: 5, currentRows: 6, new: 0, changed: 2, same: 3, onlyCurrent: 1 });
     expect(d.usage_entries).toEqual({ fileRows: 4, currentRows: 4, new: 1, changed: 0, same: 3, onlyCurrent: 1 });
     expect(d.payments).toEqual({ fileRows: 4, currentRows: 4, new: 0, changed: 1, same: 3, onlyCurrent: 0 });
+    expect(rowsOnlyInCurrent(d)).toBe(2);
   });
 
   it('the same instant in another spelling is not a change', () => {

@@ -17,6 +17,13 @@ const dataSources = import.meta.glob<string>(
   { query: '?raw', import: 'default', eager: true },
 );
 
+// The pure backup modules (Phase 8): no clock, no float money, no Supabase (D31).
+const backupSources = import.meta.glob<string>(['/src/lib/backup/**/*.ts', '!/src/lib/backup/**/*.test.ts'], {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+});
+
 const allSources = import.meta.glob<string>(['/src/**/*.{ts,tsx}', '!/src/**/*.test.{ts,tsx}'], {
   query: '?raw',
   import: 'default',
@@ -72,6 +79,10 @@ describe('layer guard', () => {
         '/src/pages/months/MonthsPage.tsx',
         '/src/pages/months/MonthsSections.tsx',
         '/src/pages/months/copy.ts',
+        '/src/pages/backup/BackupPage.tsx',
+        '/src/pages/backup/BackupSections.tsx',
+        '/src/pages/backup/browser.ts',
+        '/src/pages/backup/copy.ts',
         '/src/components/ui/dialog.tsx',
       ]),
     );
@@ -80,6 +91,11 @@ describe('layer guard', () => {
 
   it.each(Object.keys(uiSources).sort())('%s has no clock, date math, float money or Supabase import', (file) => {
     const source = uiSources[file] ?? '';
+    expect(UI_FORBIDDEN.filter(([, re]) => re.test(source)).map(([name]) => name)).toEqual([]);
+  });
+
+  it.each(Object.keys(backupSources).sort())('%s (backup module) has no clock, date math, float money or Supabase import', (file) => {
+    const source = backupSources[file] ?? '';
     expect(UI_FORBIDDEN.filter(([, re]) => re.test(source)).map(([name]) => name)).toEqual([]);
   });
 

@@ -23,7 +23,7 @@ export type {
 } from './format';
 export { MAX_PROBLEMS, MAX_RESTORE_BYTES, parseBackupText, validateBackup } from './validate';
 export type { BackupProblem, BackupProblemCode, BackupValidation } from './validate';
-export { diffBackup } from './diff';
+export { diffBackup, rowsOnlyInCurrent } from './diff';
 export type { BackupDiff, TableDiff } from './diff';
 export { csvCell, farmersCsv, monthsCsv, paymentsCsv, toCsv, usageCsv } from './csv';
 export type { CsvInput, CsvLabels, CsvResult } from './csv';

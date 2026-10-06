@@ -72,3 +72,8 @@ export function diffBackup(file: BackupRows, current: BackupRows): BackupDiff {
   }
   return result;
 }
+
+/** How many current rows are not in the file (all tables): what Replace removes for good. */
+export function rowsOnlyInCurrent(diff: BackupDiff): number {
+  return BACKUP_TABLES.reduce((total, table) => total + diff[table].onlyCurrent, 0);
+}
