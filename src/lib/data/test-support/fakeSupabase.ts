@@ -2,6 +2,7 @@
 // resolves to the given result, like a real PostgREST builder. It never touches the network.
 import type { FarmerRow } from '../farmers';
 import type { UsageRow } from '../usage';
+import type { PaymentRow } from '../payments';
 
 export interface RecordedCall {
   readonly method: string;
@@ -46,6 +47,22 @@ export function usageRow(
   return {
     total_minutes: overrides.hours * 60 + overrides.minutes,
     rate_paise: 10000,
+    created_at: '2026-10-01T04:30:00+00:00',
+    created_by: null,
+    updated_at: '2026-10-01T04:30:00+00:00',
+    updated_by: null,
+    deleted_at: null,
+    deleted_by: null,
+    ...overrides,
+  };
+}
+
+/** A fictional payment row with every column. */
+export function paymentRow(
+  overrides: Partial<PaymentRow> & Pick<PaymentRow, 'id' | 'farmer_id' | 'paid_at' | 'amount_paise'>,
+): PaymentRow {
+  return {
+    note: null,
     created_at: '2026-10-01T04:30:00+00:00',
     created_by: null,
     updated_at: '2026-10-01T04:30:00+00:00',

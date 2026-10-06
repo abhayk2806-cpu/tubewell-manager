@@ -4,7 +4,6 @@ import {
   entryAmountPaise,
   findDuplicateUsage,
   istDateKey,
-  istMonthKey,
   istTimeKey,
   istWallClockToIso,
   paiseToDecimalString,
@@ -13,6 +12,7 @@ import {
   validateUsageInput,
 } from '@/lib/ledger';
 import type { ValidationCode } from '@/lib/ledger';
+import { dayOrNull, monthOf, monthsNewestFirst, sortNewestFirst } from './timeline';
 
 /** The engine codes that apply to a usage entry (the payment-only amount codes do not). */
 export type UsageValidationCode = Exclude<
@@ -168,14 +168,6 @@ export type UsageWarning<T> =
 export const LONG_DURATION_HOURS = 24;
 const LONG_DURATION_MINUTES = LONG_DURATION_HOURS * 60;
 
-function dayOf(usedAt: string): string | null {
-  try {
-    return istDateKey(parseInstantMs(usedAt));
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Non-blocking warnings for a valid input: same farmer/IST day/hours/minutes (L14), more than 24
  * hours, or an IST date after today. When editing, pass the entry as `original` (and its id as
@@ -189,8 +181,8 @@ export function describeUsageWarnings<T extends UsageRowLike>(
 ): UsageWarning<T>[] {
   const warnings: UsageWarning<T>[] = [];
   const original = options.original;
-  const day = dayOf(input.used_at);
-  const sameDay = original !== undefined && day !== null && dayOf(original.used_at) === day;
+  const day = dayOrNull(input.used_at);
+  const sameDay = original !== undefined && day !== null && dayOrNull(original.used_at) === day;
 
   const duplicateFieldsUnchanged =
     original !== undefined &&
@@ -212,16 +204,6 @@ export function describeUsageWarnings<T extends UsageRowLike>(
   return warnings;
 }
 
-function compareText(a: string, b: string): number {
-  if (a < b) return -1;
-  return a > b ? 1 : 0;
-}
-
-/** Newest first by used_at, then id. */
-function sortNewestFirst<T extends UsageRowLike>(rows: readonly T[]): T[] {
-  return [...rows].sort((a, b) => parseInstantMs(b.used_at) - parseInstantMs(a.used_at) || compareText(a.id, b.id));
-}
-
 export interface UsageLists<T> {
   readonly live: T[];
   readonly deleted: T[];
@@ -230,8 +212,8 @@ export interface UsageLists<T> {
 /** The ONE soft-delete split for usage: deleted = deleted_at set. Each list newest first. */
 export function classifyUsage<T extends UsageRowLike>(rows: readonly T[]): UsageLists<T> {
   return {
-    live: sortNewestFirst(rows.filter((r) => r.deleted_at === null)),
-    deleted: sortNewestFirst(rows.filter((r) => r.deleted_at !== null)),
+    live: sortNewestFirst(rows.filter((r) => r.deleted_at === null), (r) => r.used_at),
+    deleted: sortNewestFirst(rows.filter((r) => r.deleted_at !== null), (r) => r.used_at),
   };
 }
 
@@ -246,12 +228,11 @@ export function filterUsage<T extends UsageRowLike>(rows: readonly T[], filter: 
   return rows.filter(
     (r) =>
       (filter.farmerId === undefined || r.farmer_id === filter.farmerId) &&
-      (filter.monthKey === undefined || istMonthKey(parseInstantMs(r.used_at)) === filter.monthKey),
+      (filter.monthKey === undefined || monthOf(r.used_at) === filter.monthKey),
   );
 }
 
 /** Distinct IST months of the rows plus the current month, newest first. */
 export function listUsageMonths(rows: readonly UsageRowLike[], currentMonthKey: string): string[] {
-  const months = new Set([currentMonthKey, ...rows.map((r) => istMonthKey(parseInstantMs(r.used_at)))]);
-  return [...months].sort((a, b) => compareText(b, a));
+  return monthsNewestFirst(rows.map((r) => monthOf(r.used_at)), currentMonthKey);
 }
