@@ -406,6 +406,7 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Decision D28:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Semantic colours. New rules file `.claude/rules/ui-color-semantics.md` for future screens.
 - **Tests:** 38 files / 658 tests (before: 37 / 610). No existing test changed. Gates green; JS chunk 593 kB (the 500 kB warning, as before).
 - **Not verified:** a real-browser look at 360 px (the screens sit behind the owner's login). The owner checks by eye.
+- **Fix 1 (2026-10-06, review finding):** `--muted-foreground` darkened to `220 8.9% 41%` (was 4.08:1 on the grey badge and 4.44:1 on the page; now 4.91 and 5.35). The contrast test covers the muted and info tones too. 38 files / 660 tests.
 - **Failed attempt:** Vitest returns an empty string for `.css` modules even with `?raw`, so the contrast test reads `src/index.css` from disk (config changes were out of scope).
 
 ---

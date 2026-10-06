@@ -84,6 +84,17 @@ describe('tone contrast (WCAG, >= 4.5:1)', () => {
     expect(contrast(strong, token(`tone-${tone}-soft`))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('muted text (existing token) is readable on the card, the page and the muted badge background', () => {
+    const mutedText = token('muted-foreground');
+    expect(contrast(mutedText, card)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(mutedText, page)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(mutedText, token('muted'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('info badge text (existing token) is readable on its accent background', () => {
+    expect(contrast(token('accent-foreground'), token('accent'))).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('the contrast maths matches known WCAG values', () => {
     expect(contrast([0, 0, 0], [0, 0, 100])).toBeCloseTo(21, 5);
     expect(contrast([0, 0, 100], [0, 0, 100])).toBeCloseTo(1, 5);

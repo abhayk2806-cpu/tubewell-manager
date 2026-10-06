@@ -33,6 +33,7 @@ Every kind of information has ONE fixed colour chosen by its meaning, the same o
 - Colour never carries meaning alone. Every coloured item keeps its text label (Baaki / Advance / Settled / ...).
 - Each tone's text colour must reach a contrast of at least 4.5:1 on the card, on the page background and on its own soft background. `src/components/tone.test.ts` proves this from `index.css`. Change a token only together with a passing test.
 - Border, bar and dot colours are decorative only.
+- The `muted` and `info` tones reuse existing tokens, and they are tested too: `muted-foreground` on card, page and `muted`; `accent-foreground` on `accent`.
 
 **Forbidden in pages and components** (enforced by `tone.test.ts`):
 - Raw hex colours, inline `style` colours, raw `rgb()` / `hsl()`.

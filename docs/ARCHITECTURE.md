@@ -580,6 +580,8 @@ Every kind of information has ONE fixed tone by meaning, the same on every scree
 
 Errors keep the existing `destructive` tokens; `due` is a separate meaning.
 
+**Fix 1 (2026-10-06):** `--muted-foreground` darkened from `220 8.9% 46.1%` to `220 8.9% 41%` (contrast on card / page / `muted` was 4.83 / 4.44 / 4.08, now 5.82 / 5.35 / 4.91). The contrast test now also covers muted text on card, page and `muted`, and `accent-foreground` on `accent` (info badge, 6.61).
+
 **Module** (`src/components/tone.ts`):
 
 ```ts
