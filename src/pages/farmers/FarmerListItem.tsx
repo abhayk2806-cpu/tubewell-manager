@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { istDateKey, parseInstantMs } from '@/lib/ledger';
-import type { FarmerRow } from '@/lib/data';
+import type { FarmerBalance, FarmerRow } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { TONE } from '@/components/tone';
 import { cn } from '@/lib/utils';
+import { BalanceLine } from './BalanceLine';
 import { FARMERS_COPY, type FarmerSegment } from './copy';
 
 const ACTIONS = FARMERS_COPY.actions;
@@ -12,6 +13,8 @@ const ACTIONS = FARMERS_COPY.actions;
 export interface FarmerListItemProps {
   readonly farmer: FarmerRow;
   readonly segment: FarmerSegment;
+  /** Current Abhi baaki / Advance (D32); undefined while the rows load. Deleted farmers show no money. */
+  readonly balance?: FarmerBalance;
   /** True while any change is being saved: every button is disabled (no double submit). */
   readonly busy: boolean;
   onEdit(farmer: FarmerRow): void;
@@ -20,8 +23,8 @@ export interface FarmerListItemProps {
   onRestore(farmer: FarmerRow): void;
 }
 
-/** One farmer in the list: name, mobile, notes and the actions of its segment. No money is shown here. */
-export function FarmerListItem({ farmer, segment, busy, onEdit, onSetDisabled, onDelete, onRestore }: FarmerListItemProps) {
+/** One farmer in the list: name, mobile, notes, the current position (not for deleted farmers) and the actions. */
+export function FarmerListItem({ farmer, segment, balance, busy, onEdit, onSetDisabled, onDelete, onRestore }: FarmerListItemProps) {
   const buttonClass = 'h-11 min-w-11';
   return (
     <li className={cn('rounded-lg border bg-card p-3 shadow-sm', segment !== 'active' && TONE.muted.bar)}>
@@ -44,6 +47,7 @@ export function FarmerListItem({ farmer, segment, busy, onEdit, onSetDisabled, o
             <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-muted-foreground" />
           </Link>
         )}
+        {segment !== 'deleted' && <BalanceLine balance={balance} testId="farmer-balance" />}
         {farmer.mobile && <p className="text-sm text-muted-foreground">{farmer.mobile}</p>}
         {farmer.notes && <p className="whitespace-pre-line break-words text-sm text-muted-foreground">{farmer.notes}</p>}
         {segment === 'deleted' && farmer.deleted_at !== null && (

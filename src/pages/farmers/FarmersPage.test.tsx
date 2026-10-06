@@ -15,9 +15,19 @@ vi.mock('@/lib/data/farmers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/data/farmers')>()),
   ...api,
 }));
+// Usage and payments feed the current position of each farmer (D32).
+const rowsApi = vi.hoisted(() => ({ listUsage: vi.fn(), listPayments: vi.fn() }));
+vi.mock('@/lib/data/usage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/data/usage')>()),
+  listUsage: rowsApi.listUsage,
+}));
+vi.mock('@/lib/data/payments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/data/payments')>()),
+  listPayments: rowsApi.listPayments,
+}));
 
 import { DataError } from '@/lib/data';
-import { farmerRow } from '@/lib/data/test-support/fakeSupabase';
+import { farmerRow, paymentRow, usageRow } from '@/lib/data/test-support/fakeSupabase';
 import { FarmersPage } from './FarmersPage';
 
 // Fictional farmers only.
@@ -26,6 +36,19 @@ const ramu = farmerRow({ id: 'r', name: 'Ramu Test', notes: 'khet number 4' });
 const band = farmerRow({ id: 'b', name: 'Band Test', is_disabled: true });
 // 2026-10-05T20:00Z is 2026-10-06 01:30 IST: the shown date must be the IST date.
 const gone = farmerRow({ id: 'g', name: 'Gone Test', deleted_at: '2026-10-05T20:00:00+00:00' });
+
+// Worked numbers (rate 100/hour): Amar 3 h 35 min, paid 100.00 -> Abhi baaki 258.33. Ramu paid 50.00
+// with no usage -> Advance 50.00. Band Test 1 h, no payment -> 100.00. Gone Test has rows but is deleted.
+const usage = [
+  usageRow({ id: 'u1', farmer_id: 'a', used_at: '2026-09-10T04:30:00+00:00', hours: 3, minutes: 35 }),
+  usageRow({ id: 'u2', farmer_id: 'b', used_at: '2026-10-04T04:30:00+00:00', hours: 1, minutes: 0 }),
+  usageRow({ id: 'u3', farmer_id: 'g', used_at: '2026-10-04T04:30:00+00:00', hours: 4, minutes: 0 }),
+];
+const payments = [
+  paymentRow({ id: 'p1', farmer_id: 'a', paid_at: '2026-10-01T04:30:00+00:00', amount_paise: 10000 }),
+  paymentRow({ id: 'p2', farmer_id: 'r', paid_at: '2026-08-12T04:30:00+00:00', amount_paise: 5000 }),
+];
+const R = String.fromCharCode(0x20b9);
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {};
@@ -62,7 +85,10 @@ function fill(label: string, value: string) {
 
 beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset());
+  Object.values(rowsApi).forEach((fn) => fn.mockReset());
   api.listFarmers.mockResolvedValue([ramu, amar, band, gone]);
+  rowsApi.listUsage.mockResolvedValue(usage);
+  rowsApi.listPayments.mockResolvedValue(payments);
 });
 
 describe('FarmersPage', () => {
@@ -76,7 +102,7 @@ describe('FarmersPage', () => {
     const names = within(list()).getAllByRole('link').map((a) => a.textContent);
     expect(names).toEqual(['Amar Test', 'Ramu Test']);
     expect(screen.getByText('khet number 4')).toBeInTheDocument();
-    expect(screen.queryByText(/₹|paise|Baki/)).not.toBeInTheDocument();
+    // Since D32 the rows also show the current position; see 'current position and delete choice' below.
   });
 
   it('searches by name and by mobile, with a no-results message', async () => {
@@ -318,5 +344,56 @@ describe('FarmersPage', () => {
     }
     save.resolve(farmerRow({ id: 'p', name: 'Pending Test' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('FarmersPage current position and delete choice (D32)', () => {
+  it('Chalu rows show Abhi baaki (due) or Baaki nahi (muted) and a separate Advance / Credit badge', async () => {
+    await renderReady();
+    await waitFor(() => expect(row('Amar Test').getByTestId('balance-outstanding')).toHaveTextContent(`Abhi baaki ${R}258.33`));
+    expect(row('Amar Test').getByTestId('balance-outstanding').lastChild).toHaveClass('text-tone-due');
+    expect(row('Amar Test').queryByTestId('balance-credit')).not.toBeInTheDocument();
+    expect(row('Ramu Test').getByTestId('balance-none')).toHaveTextContent('Baaki nahi');
+    expect(row('Ramu Test').getByTestId('balance-credit')).toHaveTextContent(`Advance / Credit ${R}50.00`);
+    expect(row('Ramu Test').getByTestId('balance-credit')).toHaveClass('text-tone-credit');
+  });
+
+  it('Band rows show their position; deleted rows show no money', async () => {
+    await renderReady();
+    openSegment('Band');
+    await waitFor(() => expect(row('Band Test').getByTestId('balance-outstanding')).toHaveTextContent(`Abhi baaki ${R}100.00`));
+    openSegment('Deleted');
+    expect(row('Gone Test').queryByTestId('farmer-balance')).not.toBeInTheDocument();
+  });
+
+  it('when the rows cannot load, the list still works and one line offers a retry', async () => {
+    rowsApi.listPayments.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    await renderReady();
+    expect(await screen.findByTestId('balances-failed')).toHaveTextContent('Baaki load nahi ho paya.');
+    expect(row('Amar Test').queryByTestId('farmer-balance')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByTestId('balances-failed')).getByRole('button', { name: 'Dobara try karo' }));
+    await waitFor(() => expect(row('Amar Test').getByTestId('balance-outstanding')).toBeInTheDocument());
+  });
+
+  it('the delete dialog also offers "Band karo (delete nahi)", which disables instead of deleting', async () => {
+    await renderReady();
+    api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
+    fireEvent.click(row('Amar Test').getByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent('dono se kisan saare total se hat jaata hai');
+    expect(within(confirm).getByRole('button', { name: 'Haan, delete karo' })).toBeInTheDocument();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Band karo (delete nahi)' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(api.setFarmerDisabled).toHaveBeenCalledWith('a', true);
+    expect(api.softDeleteFarmer).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent("Amar Test band ho gaya. 'Band' mein milega.");
+  });
+
+  it('a Band farmer\'s delete dialog has no "Band karo" choice', async () => {
+    await renderReady();
+    openSegment('Band');
+    fireEvent.click(row('Band Test').getByRole('button', { name: 'Delete' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(within(confirm).queryByRole('button', { name: 'Band karo (delete nahi)' })).not.toBeInTheDocument();
   });
 });

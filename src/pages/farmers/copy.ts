@@ -52,8 +52,19 @@ export const FARMERS_COPY = {
   deleteDialog: {
     title: (name: string) => `${name} ko delete karein?`,
     body: 'Iska pani aur paisa ka saara hisaab safe rahega. Wapas laane par sab wapas aa jayega.',
+    choice: "Band karo ya Delete: dono se kisan saare total se hat jaata hai. Delete ko 'Deleted' tab se wapas la sakte ho.",
+    disableInstead: 'Band karo (delete nahi)',
     confirm: 'Haan, delete karo',
     cancel: 'Rehne do',
+  },
+  /** A farmer's current position (D32): Baaki and Advance / Credit are always separate. */
+  balance: {
+    outstanding: 'Abhi baaki',
+    none: 'Baaki nahi',
+    credit: 'Advance / Credit',
+    badData: 'Is kisan ka hisaab nahi ban paya (data mein gadbad). Kuch bhi apne aap theek nahi kiya gaya.',
+    loadError: 'Baaki load nahi ho paya.',
+    retry: 'Dobara try karo',
   },
   restoreDialog: {
     title: (name: string) => `${name} ko wapas layein?`,

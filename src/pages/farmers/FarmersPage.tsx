@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { findDuplicateFarmerNames, matchesFarmerSearch } from '@/lib/data';
+import { buildFarmerBalances, findDuplicateFarmerNames, matchesFarmerSearch } from '@/lib/data';
 import type { FarmerRow } from '@/lib/data';
 import { useFarmers, type MutationResult } from '@/hooks/useFarmers';
+import { usePayments } from '@/hooks/usePayments';
+import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
 import { NOTICE_TONE, TONE } from '@/components/tone';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,9 @@ type RestoreState = { readonly farmer: FarmerRow; readonly matches: FarmerRow[] 
 /** Kisan screen: Chalu / Band / Deleted lists, search, add, edit, disable, soft delete and restore. */
 export function FarmersPage() {
   const farmers = useFarmers();
+  // Usage and payments only feed the current position of each farmer (D32); the list never waits for them.
+  const usage = useUsage();
+  const payments = usePayments();
   const [segment, setSegment] = useState<FarmerSegment>('active');
   const [search, setSearch] = useState('');
   const [form, setForm] = useState<FormState>(null);
@@ -38,6 +43,14 @@ export function FarmersPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const busy = farmers.pending !== null;
+  const balances = useMemo(
+    () =>
+      usage.status === 'ready' && payments.status === 'ready'
+        ? buildFarmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
+        : null,
+    [farmers.all, usage.status, usage.all, payments.status, payments.all],
+  );
+  const balancesFailed = usage.status === 'error' || payments.status === 'error';
 
   const report = (result: MutationResult, success: (name: string) => string) => {
     setNotice(result.ok ? { tone: 'success', text: success(result.farmer.name) } : { tone: 'error', text: DATA_ERROR_TEXT[result.error.kind] });
@@ -46,6 +59,13 @@ export function FarmersPage() {
   const handleSetDisabled = async (farmer: FarmerRow, disabled: boolean) => {
     setNotice(null);
     report(await farmers.setDisabled(farmer.id, disabled), disabled ? FARMERS_COPY.done.disabled : FARMERS_COPY.done.enabled);
+  };
+
+  const disableInstead = async () => {
+    if (deleteTarget === null) return;
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    await handleSetDisabled(target, true);
   };
 
   const confirmDelete = async () => {
@@ -154,6 +174,22 @@ export function FarmersPage() {
             ))}
           </div>
 
+          {balancesFailed && segment !== 'deleted' && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="balances-failed">
+              <span>{FARMERS_COPY.balance.loadError}</span>
+              <Button
+                variant="outline"
+                className="h-11"
+                onClick={() => {
+                  if (usage.status === 'error') void usage.reload();
+                  if (payments.status === 'error') void payments.reload();
+                }}
+              >
+                {FARMERS_COPY.balance.retry}
+              </Button>
+            </div>
+          )}
+
           {visible.length === 0 ? (
             <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
               {farmers.lists[segment].length === 0 ? FARMERS_COPY.empty[segment] : FARMERS_COPY.noSearchResults}
@@ -165,6 +201,7 @@ export function FarmersPage() {
                   key={f.id}
                   farmer={f}
                   segment={segment}
+                  balance={balances?.get(f.id)}
                   busy={busy}
                   onEdit={(farmer) => {
                     setNotice(null);
@@ -204,11 +241,17 @@ export function FarmersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>{deleteTarget ? FARMERS_COPY.deleteDialog.title(deleteTarget.name) : ''}</AlertDialogTitle>
             <AlertDialogDescription>{FARMERS_COPY.deleteDialog.body}</AlertDialogDescription>
+            <p className="text-sm text-muted-foreground">{FARMERS_COPY.deleteDialog.choice}</p>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel className="h-11" disabled={busy}>
               {FARMERS_COPY.deleteDialog.cancel}
             </AlertDialogCancel>
+            {deleteTarget !== null && !deleteTarget.is_disabled && (
+              <Button variant="outline" className="h-11" disabled={busy} onClick={() => void disableInstead()}>
+                {FARMERS_COPY.deleteDialog.disableInstead}
+              </Button>
+            )}
             <Button variant="destructive" className="h-11" disabled={busy} onClick={() => void confirmDelete()}>
               {FARMERS_COPY.deleteDialog.confirm}
             </Button>
