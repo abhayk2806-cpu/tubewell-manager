@@ -69,6 +69,9 @@ describe('layer guard', () => {
         '/src/pages/dashboard/DashboardPage.tsx',
         '/src/pages/dashboard/DashboardSections.tsx',
         '/src/pages/dashboard/copy.ts',
+        '/src/pages/months/MonthsPage.tsx',
+        '/src/pages/months/MonthsSections.tsx',
+        '/src/pages/months/copy.ts',
         '/src/components/ui/dialog.tsx',
       ]),
     );
