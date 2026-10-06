@@ -186,7 +186,7 @@ describe('worked examples (docs/LEDGER_AND_ALLOCATION.md)', () => {
   it('E9 soft-delete an old usage entry, then restore it', () => {
     const deleted = e1Usage().map((row) => (row.id === 'u-may' ? { ...row, deleted_at: DELETED_AT } : row));
     const l = ledger(deleted, e1Payments());
-    // The spec table lists 06-08; the payment-only 2026-09 row also exists by L11 (see E1).
+    // The spec table (amended 2026-10-06) lists 06-08 plus the payment-only 2026-09 row (L11).
     expect(months(l)).toEqual([
       m(['2026-06', 265, 44167, 44167, 0, 0, 'settled']),
       m(['2026-07', 315, 52500, 5833, 46667, 0, 'partial']),
@@ -307,7 +307,8 @@ describe('worked examples (docs/LEDGER_AND_ALLOCATION.md)', () => {
     ] as const;
     for (const [day, chargedMonths, charges, paid, outstanding] of cases) {
       const l = ledger(e1Usage(), e1Payments(), endOfIstDayMs(day));
-      // The spec's "Months" column lists the charge months; a payment-only month may follow (L11).
+      // Checks the charge months only. Since the 2026-10-06 amendment the spec's 2026-09-10 row also
+      // names the payment-only month 09 (L11), which this ledger has as well.
       expect(l.months.filter((row) => row.chargePaise > 0).map((row) => row.monthKey)).toEqual(chargedMonths);
       expect([l.totals.chargesPaise, l.totals.totalPaidPaise, l.totals.outstandingPaise]).toEqual([
         charges,
