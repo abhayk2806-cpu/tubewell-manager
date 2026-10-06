@@ -100,3 +100,26 @@ export type {
   ProfileUsage,
   VisiblePart,
 } from './profileRules';
+export {
+  CHART_MIN_PERCENT,
+  CHART_MONTHS,
+  RECENT_LIMIT,
+  buildDashboardScreen,
+  buildPeriodOptions,
+  buildRecentActivity,
+  chartBars,
+  filterDashboardRows,
+  sortDashboardRows,
+  summarizeDashboard,
+} from './dashboardRules';
+export type {
+  BandNote,
+  ChartMonth,
+  DashboardFarmerLike,
+  DashboardRow,
+  DashboardScreen,
+  DashboardScreenResult,
+  DashboardSummary,
+  PeriodOptions,
+  RecentItem,
+} from './dashboardRules';
