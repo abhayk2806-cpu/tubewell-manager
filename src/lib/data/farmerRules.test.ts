@@ -54,6 +54,12 @@ describe('validateFarmerInput (same limits as migration 005)', () => {
     [{ mobile: '98765abc' }, ['mobile_invalid']],
     [{ mobile: '98765/43210' }, ['mobile_invalid']],
     [{ notes: 'n'.repeat(501) }, ['notes_too_long']],
+    [{ mobile: '-' }, ['mobile_invalid']],
+    [{ mobile: '+' }, ['mobile_invalid']],
+    [{ mobile: '+ -' }, ['mobile_invalid']],
+    [{ mobile: ' 9' }, []],
+    [{ mobile: '98765 43210' }, []],
+    [{ mobile: '9' }, []],
     [{ name: '', mobile: 'x', notes: 'n'.repeat(501) }, ['name_required', 'mobile_invalid', 'notes_too_long']],
   ])('%j -> %j', (patch, codes) => {
     expect(validateFarmerInput({ ...ok, ...patch })).toEqual(codes);

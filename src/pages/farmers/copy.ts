@@ -15,6 +15,7 @@ export const FARMERS_COPY = {
   loading: 'Kisan load ho rahe hain...',
   loadError: 'Kisan ki list load nahi ho payi.',
   retry: 'Dobara try karo',
+  refreshFailed: 'Save ho gaya, par list refresh nahi ho payi.',
   empty: {
     active: "Abhi koi chalu kisan nahi hai. 'Naya Kisan' dabao.",
     disabled: 'Koi band kisan nahi hai.',
@@ -75,7 +76,7 @@ export const FARMER_STATE_TEXT = { active: 'Chalu', disabled: 'Band' } as const;
 export const FARMER_VALIDATION_TEXT: Record<FarmerValidationCode, string> = {
   name_required: 'Naam bharo.',
   name_too_long: `Naam ${FARMER_NAME_MAX} akshar se lamba nahi ho sakta.`,
-  mobile_invalid: `Mobile mein sirf number, space, + aur - ho sakte hain (zyada se zyada ${FARMER_MOBILE_MAX}).`,
+  mobile_invalid: `Mobile mein kam se kam ek number ho; sirf number, space, + aur - chalenge (zyada se zyada ${FARMER_MOBILE_MAX}).`,
   notes_too_long: `Notes ${FARMER_NOTES_MAX} akshar se lambe nahi ho sakte.`,
 };
 

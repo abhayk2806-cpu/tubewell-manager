@@ -119,6 +119,37 @@ describe('useFarmers', () => {
     expect(result.current.pending).toBeNull();
   });
 
+  it('saved but the reload failed: keeps the rows, reports ok and sets refreshFailed', async () => {
+    const { result } = renderHook(() => useFarmers());
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
+    api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.setDisabled('a', true);
+    });
+    expect(outcome).toMatchObject({ ok: true });
+    expect(result.current.status).toBe('ready');
+    expect(result.current.refreshFailed).toBe(true);
+    expect(result.current.lists.active.map((f) => f.id)).toEqual(['a']);
+
+    api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'still offline'));
+    await act(() => result.current.retryRefresh());
+    expect([result.current.status, result.current.refreshFailed]).toEqual(['ready', true]);
+
+    api.listFarmers.mockResolvedValue([{ ...amar, is_disabled: true }, band, gone]);
+    await act(() => result.current.retryRefresh());
+    expect(result.current.refreshFailed).toBe(false);
+    expect(result.current.lists.disabled.map((f) => f.id)).toEqual(['a', 'b']);
+  });
+
+  it('a failed initial load still shows the error state', async () => {
+    api.listFarmers.mockRejectedValueOnce(new DataError('permission', '42501', 'denied'));
+    const { result } = renderHook(() => useFarmers());
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current.refreshFailed).toBe(false);
+  });
+
   it('maps each mutation to its data-layer call', async () => {
     const { result } = renderHook(() => useFarmers());
     await waitFor(() => expect(result.current.status).toBe('ready'));

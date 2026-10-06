@@ -100,6 +100,14 @@ export function FarmersPage() {
             {notice.text}
           </p>
         )}
+        {farmers.refreshFailed && farmers.status === 'ready' && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <span>{FARMERS_COPY.refreshFailed}</span>
+            <Button variant="outline" className="h-11" disabled={busy} onClick={() => void farmers.retryRefresh()}>
+              {FARMERS_COPY.retry}
+            </Button>
+          </div>
+        )}
       </div>
 
       {farmers.status === 'loading' && <p className="text-sm text-muted-foreground">{FARMERS_COPY.loading}</p>}

@@ -106,7 +106,7 @@ describe('FarmersPage', () => {
     fill('Mobile (optional)', 'abc');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
     expect(within(dialog).getByText('Naam bharo.')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Mobile mein sirf number/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Mobile mein kam se kam ek number ho/)).toBeInTheDocument();
     expect(screen.getByLabelText('Naam')).toHaveAttribute('aria-invalid', 'true');
     expect(api.createFarmer).not.toHaveBeenCalled();
   });
@@ -248,6 +248,32 @@ describe('FarmersPage', () => {
     expect(alert).toHaveTextContent('Internet nahi mil raha.');
     fireEvent.click(within(alert).getByRole('button', { name: 'Dobara try karo' }));
     await screen.findByRole('button', { name: 'Chalu (2)' });
+  });
+
+  it('a mobile without any digit is rejected (D23)', async () => {
+    await renderReady();
+    fireEvent.click(screen.getByRole('button', { name: 'Naya Kisan' }));
+    const dialog = await screen.findByRole('dialog');
+    fill('Naam', 'Digit Test');
+    fill('Mobile (optional)', '+ -');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    expect(within(dialog).getByText(/Mobile mein kam se kam ek number ho/)).toBeInTheDocument();
+    expect(api.createFarmer).not.toHaveBeenCalled();
+  });
+
+  it('saved but the reload failed: the list stays, with one line and a retry', async () => {
+    await renderReady();
+    api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
+    api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    fireEvent.click(row('Amar Test').getByRole('button', { name: 'Band karo' }));
+    const status = screen.getByRole('status');
+    await waitFor(() => expect(status).toHaveTextContent('Save ho gaya, par list refresh nahi ho payi.'));
+    expect(status).toHaveTextContent('Amar Test band ho gaya.');
+    expect(within(list()).getAllByRole('listitem')).toHaveLength(2);
+    api.listFarmers.mockResolvedValue([ramu, { ...amar, is_disabled: true }, band, gone]);
+    fireEvent.click(within(status).getByRole('button', { name: 'Dobara try karo' }));
+    await waitFor(() => expect(status).not.toHaveTextContent('refresh nahi ho payi'));
+    expect(screen.getByRole('button', { name: 'Band (2)' })).toBeInTheDocument();
   });
 
   it('a failed change shows a Hinglish error message', async () => {

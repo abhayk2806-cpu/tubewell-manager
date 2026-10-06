@@ -49,13 +49,18 @@ function charLength(value: string): number {
 }
 
 const MOBILE_PATTERN = /^[0-9 +-]+$/;
+const HAS_DIGIT = /[0-9]/;
 
 /** Error codes for a NORMALIZED input, in field order. Empty means valid. */
 export function validateFarmerInput(input: FarmerInput): FarmerValidationCode[] {
   const codes: FarmerValidationCode[] = [];
   if (input.name === '') codes.push('name_required');
   else if (charLength(input.name) > FARMER_NAME_MAX) codes.push('name_too_long');
-  if (input.mobile !== null && (!MOBILE_PATTERN.test(input.mobile) || charLength(input.mobile) > FARMER_MOBILE_MAX)) {
+  // A present mobile: only digits, spaces, + and -, at least one digit (D23), at most 20 characters.
+  if (
+    input.mobile !== null &&
+    (!MOBILE_PATTERN.test(input.mobile) || !HAS_DIGIT.test(input.mobile) || charLength(input.mobile) > FARMER_MOBILE_MAX)
+  ) {
     codes.push('mobile_invalid');
   }
   if (input.notes !== null && charLength(input.notes) > FARMER_NOTES_MAX) codes.push('notes_too_long');

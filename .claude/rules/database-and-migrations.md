@@ -11,19 +11,20 @@ paths:
 - **Never** touch the OLD project `vsgptyuvnistwjjmrfby` (paused fallback) or StreakForge `xiyayueijkgyxrqrykqx`.
 
 **Migrations.**
-- Live: `001_core_tables`, `002_audit_triggers`, `003_rls_policies`, `004_lock_rls_to_owner`. Next is `005_…`. v1 files in `archive/` are never reused.
+- Live: `001_core_tables`, `002_audit_triggers`, `003_rls_policies`, `004_lock_rls_to_owner`, `005_farmers_input_checks`. Next is `006_…`. v1 files in `archive/` are never reused.
 - Never put the owner's uid (or any real id) in a migration file. Read it from `auth.users` at apply time, as 004 does.
 - After every migration, regenerate `src/types/database.ts` (`generate_typescript_types`; see `docs/ARCHITECTURE.md`).
 - Write the SQL file first, apply that exact text (MCP `apply_migration`), then verify identity: `md5(array_to_string(statements, ''))` in `supabase_migrations.schema_migrations` must equal the file's md5. Commit immediately.
 - Schema change: state the plan and confirm with the owner first. Bulk update or delete: show the affected row count first.
 
 **Tests.** `supabase/tests/001_schema_checks.sql`:
-- Section A is one transaction ending in ROLLBACK, printing PASS/FAIL per check (80 checks after 004). Section B checks for residue.
+- Section A is one transaction ending in ROLLBACK, printing PASS/FAIL per check (100 checks after 005). Section B checks for residue.
 - T5 simulates the owner by reading the uid from `auth.users` at run time (never written into the file or the output). Another fixed uid checks that non-owners are blocked.
 - Re-run both after any schema change. Use fictional data only; never commit real farmer data (the repo is public).
 
 **Actual columns.**
 - `farmers`: `name` (not blank), `mobile`, `notes`, `is_disabled`.
+  - Migration 005: `name` must not be blank after trimming space, tab, LF, VT, FF, CR and NBSP (`farmers_name_not_blank`). Length limits: name ≤100, mobile ≤20, notes ≤500 characters (NULL mobile/notes allowed).
 - `usage_entries`:
   - `farmer_id`, `used_at` (no default), `hours`, `minutes`;
   - `total_minutes` (generated, never written);
