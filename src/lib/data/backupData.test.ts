@@ -23,7 +23,7 @@ function serve(pages: Record<Table, FakeResult[]>) {
   });
 }
 
-const ok = (data: unknown[]): FakeResult => ({ data, error: null });
+const ok = (data: readonly unknown[]): FakeResult => ({ data, error: null });
 const EMPTY = ok([]);
 
 function dbRows() {
