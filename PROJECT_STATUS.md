@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 6 done (Kisan ka Hisaab profile, pending owner review); Phase 7 (Dashboard + Months) next
+> **Current phase:** 6C done (semantic colours, D28, pending owner review); Phase 7 (Dashboard + Months) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -29,6 +29,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 4B | Usage entry (Pani Entry) + Phase 4A carry-forwards (D23) + 3 additive engine helpers | ✅ Done (2026-10-06), pending owner review |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), pending owner review |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), pending owner review |
+| 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), pending owner review |
 | 7 | Dashboard + months view | ⬜ Not started (next) |
 | 8 | Backup / restore | ⬜ Not started |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
@@ -39,7 +40,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
 2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
 3. Owner smoke-tests Phase 6: open a farmer from the Kisan list (`pnpm run dev`). See the 2026-10-06 Phase 6 session entry.
-4. **Phase 7: Dashboard + Months.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+4. Owner checks the Phase 6C colours by eye (Kisan, Pani, Paisa with preview, Kisan ka Hisaab) and confirms or revisits D28.
+5. **Phase 7: Dashboard + Months.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -201,6 +203,11 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 ### 2026-10-06 — D25 (Phase 4B review carry-forward, owner approved)
 - The long-duration usage warning uses the TOTAL entry time: over 24 h 00 min warns (24 h 01 min and 24 h 30 min warn; exactly 24 h does not). An unchanged edit still does not warn again.
 - `.claude/rules/database-and-migrations.md` updated for migration 006 and 111 SQL checks.
+
+### 2026-10-06 — D28 semantic colours (Phase 6C; manager design choices, owner may revisit)
+- One fixed tone per meaning: `water` (Pani and its charge), `cash` (money received, success), `due` (money owed), `credit` (Advance / Credit), `caution` (warnings, Partial, "saved, list not refreshed"), `info` (actions, links), `muted` (Band, Deleted, zero). Errors keep `destructive`.
+- Restrained use (text, soft badge, thin bar or dot; white cards), labels always kept, contrast >= 4.5:1 tested.
+- The Dashboard, Months screen and every chart or stat tile must use the same tones. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Semantic colours, and `.claude/rules/ui-color-semantics.md`.
 
 ---
 
@@ -392,6 +399,14 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
   1. Month cards label FIFO-settled charge "Charge Clear" and payments dated in the month "Cash Mila (is mahine)" (L10 wording from the UI-copy rules).
   2. Ledger lines show "Pani entry: ₹x" / "Paisa mila: ₹x" with the running balance; the duration is shown in the Pani entries section, not on ledger lines.
 - **Failed attempt:** none. Adding the list link required wrapping the Kisan list tests in a router (expected).
+
+### 2026-10-06 — Phase 6C: semantic colours
+- **Preconditions:** HEAD = origin = `0bf6403`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–006. **Deviation:** row counts at the start were farmers 3, usage_entries 4, payments 5 (not the 3/3/3 given in the prompt; most likely the owner's Phase 6 smoke test). This step makes no DB writes, so 3/4/5 was used as the baseline; unchanged at the end.
+- **Code:** colour tokens in `src/index.css` and `tailwind.config.js` (`tone-*`), `src/components/tone.ts` with tests, and class-level changes to the Kisan, Pani, Paisa (incl. preview) and Kisan ka Hisaab screens. No copy, logic, engine, data-layer, hook, route or DB change; no dependency.
+- **Decision D28:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Semantic colours. New rules file `.claude/rules/ui-color-semantics.md` for future screens.
+- **Tests:** 38 files / 658 tests (before: 37 / 610). No existing test changed. Gates green; JS chunk 593 kB (the 500 kB warning, as before).
+- **Not verified:** a real-browser look at 360 px (the screens sit behind the owner's login). The owner checks by eye.
+- **Failed attempt:** Vitest returns an empty string for `.css` modules even with `?raw`, so the contrast test reads `src/index.css` from disk (config changes were out of scope).
 
 ---
 

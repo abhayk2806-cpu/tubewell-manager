@@ -146,6 +146,11 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: read the range before "fixing" a peer warning. Never upgrade Tailwind to silence it (a major bump needs owner sign-off).
 - Impact: low. Date: 2026-10-05.
 
+**Vitest empties CSS modules, even with `?raw`**
+- Finding (Phase 6C): `import.meta.glob('/src/index.css', { query: '?raw' })` returns `''` under Vitest, so a token test silently parsed nothing.
+- Rule: a test that must read CSS text reads the file from disk (`node:fs` through a dynamic import, as in `src/components/tone.test.ts`). Make the parser throw when a token is missing, so an empty read fails loudly.
+- Impact: low. Date: 2026-10-06.
+
 **Never commit the owner's uid or other real ids**
 - Practice (migration 004): read the owner id from `auth.users` at apply or test time and build the policy with `format(%L)`. The repo is public.
 - Impact: medium. Date: 2026-10-05.

@@ -8,6 +8,7 @@
 > - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
 > - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
 > - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The Months and Dashboard screens are still planned.
+> - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -56,10 +57,11 @@ Rules that follow from this:
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
+| `components/tone.ts` | Semantic colour tones and meaning lookups (Phase 6C, D28) |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
 | `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
-| `index.css` + `tailwind.config.js` | Design tokens as CSS variables (no hex colours or inline styles in components) |
+| `index.css` + `tailwind.config.js` | Design tokens as CSS variables, including the semantic `tone-*` tokens (D28); no hex colours or inline styles in components |
 
 ## Auth flow
 
@@ -191,6 +193,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
   - Phase 5 tests cover the payment rules (including the live preview with the worked numbers), the payments data functions, `usePayments`, the Paisa screen with its preview panel, the shared month label, and the D25 long-duration boundaries.
   - Phase 6 tests cover the profile rules (worked numbers, balances, paging, bad data, one-engine consistency with the Paisa preview), the profile screen, the Kisan list link, and the `initialFarmerId` dialog prop.
+  - Phase 6C tests cover the tone classes and lookups, the WCAG contrast of the tone tokens, and a colour static guard over pages and components.
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
@@ -558,6 +561,46 @@ visiblePart(rows, shown): { visible, hidden }      nextShownCount(total, shown) 
 - States: loading; error with retry; the `refreshFailed` line; a bad-data message that hides all figures.
 - Saved confirmations reuse `USAGE_COPY.done.created` / `PAYMENTS_COPY.done.created`.
 - **Dialog prop.** `UsageFormDialog` and `PaymentFormDialog` have an optional `initialFarmerId` (new entry only; ignored when editing). It feeds `newUsageForm` / `newPaymentForm`.
+
+## Semantic colours (Phase 6C, D28)
+
+Every kind of information has ONE fixed tone by meaning, the same on every screen. The rules for pages, components and future screens are in [.claude/rules/ui-color-semantics.md](../.claude/rules/ui-color-semantics.md).
+
+**Tokens** (`src/index.css`, HSL channels; mapped in `tailwind.config.js` as `tone-<name>`, `tone-<name>-soft`, `tone-<name>-border`):
+
+| Tone | Strong (text) | Soft (badge / notice) | Border | Contrast of strong on card / page / soft | Meaning |
+|---|---|---|---|---|---|
+| `water` | #0c6e68 | #e9f9f7 | #8cd9cf | 6.08 / 5.59 / 5.62 | Pani usage and its charge |
+| `cash` | #137236 | #e9f9ee | #90d5a9 | 6.02 / 5.53 / 5.53 | Money received, success |
+| `due` | #aa1838 | #fdecef | #f1b1bc | 7.27 / 6.68 / 6.39 | Money still owed |
+| `credit` | #652fbc | #f3eefe | #cfbaf3 | 7.83 / 7.20 / 6.90 | Advance / Credit |
+| `caution` | #89420b | #fef6dc | #f3c568 | 7.41 / 6.81 / 6.84 | Warnings, in-between states |
+| `info` | existing `primary` / `accent` | | | (existing) | Actions, links, focus |
+| `muted` | existing `muted-foreground` / `muted` | | | (existing) | Band, Deleted, zero, helper text |
+
+Errors keep the existing `destructive` tokens; `due` is a separate meaning.
+
+**Module** (`src/components/tone.ts`):
+
+```ts
+type Tone = 'water' | 'cash' | 'due' | 'credit' | 'caution' | 'info' | 'muted'
+TONE: Record<Tone, { text, soft, border, bar, dot, badge, notice }>   // complete literal class strings
+MONEY_TONE        { charge: water, cash: cash, outstanding: due, credit: credit }
+MONTH_STATUS_TONE { settled: cash, partial: caution, unpaid: due, payment_only: credit }
+BALANCE_TONE      { baaki: due, advance: credit, zero: muted }
+ENTRY_KIND_TONE   { usage: water, payment: cash }
+NOTICE_TONE       { success: cash, warning: caution, refreshFailed: caution }
+```
+
+**Tests** (`src/components/tone.test.ts`): every tone has every class key; the D28 lookups; WCAG contrast >= 4.5:1 for each new tone's strong text on the card, the page and its soft background, computed from `index.css` (read from disk, because Vitest empties CSS modules even with `?raw`); a static guard over `src/pages/**` and `src/components/**` (shadcn `ui` files included) against raw hex, inline colour styles, raw `rgb()`/`hsl()` and Tailwind default-palette classes.
+
+**Decision D28** (manager design choices, 2026-10-06; the owner may revisit after seeing it):
+- **(a) Meaning map.** One tone per meaning, as in the table above and the rules file.
+- **(b) Restrained use.** Coloured text for key amounts and labels; a soft tint only for small badges and notice boxes; a thin left bar or small dot for the entry type; white cards. At most one tone per element.
+- **(c) Accessibility.** Labels always stay; contrast >= 4.5:1 is tested; borders, bars and dots are decorative.
+- **(d) Applied** to Kisan (Band / Deleted rows muted), Pani (water rows and live amount, caution warnings), Paisa (cash rows; preview: outstanding due, pieces cash, credit and "naya Advance / Credit" credit) and Kisan ka Hisaab (tiles, badge, month cards, payment trail, Pani entries, ledger dots and balances). Success notices use `cash`; "saved, list not refreshed" uses `caution`.
+- **(e) Future screens.** The Dashboard, the Months screen and every chart or stat tile use the same tones (charges water, cash received cash, outstanding due, credit credit), in every series and legend.
+- **(f) No dark mode** in this step.
 
 ## Backup and restore (Phase 8)
 
