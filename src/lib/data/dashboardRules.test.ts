@@ -9,6 +9,7 @@ import {
   buildRecentActivity,
   chartBars,
   filterDashboardRows,
+  periodView,
   sortDashboardRows,
   summarizeDashboard,
 } from './dashboardRules';
@@ -303,6 +304,14 @@ describe('buildRecentActivity', () => {
     expect(items).toHaveLength(RECENT_LIMIT);
     expect(items[0]?.id).toBe('p11');
     expect(items[RECENT_LIMIT - 1]?.id).toBe('p4');
+  });
+});
+
+describe('periodView', () => {
+  it('Abhi tak, the current IST month, the current IST year', () => {
+    expect(periodView('all', now)).toEqual({ kind: 'all' });
+    expect(periodView('month', now)).toEqual({ kind: 'month', monthKey: '2026-10' });
+    expect(periodView('year', now)).toEqual({ kind: 'year', yearKey: '2026' });
   });
 });
 

@@ -152,6 +152,13 @@ export function chartBars(months: readonly MonthRow[]): ChartMonth[] {
   }));
 }
 
+/** The view a selector button opens: All Time, the current IST month, or the current IST year. */
+export function periodView(kind: DashboardView['kind'], now: IstMoment): DashboardView {
+  if (kind === 'month') return { kind: 'month', monthKey: now.monthKey };
+  if (kind === 'year') return { kind: 'year', yearKey: now.monthKey.slice(0, 4) };
+  return { kind: 'all' };
+}
+
 /** Month and year choices for the selector, newest first; the current and the selected ones are always there. */
 export function buildPeriodOptions(monthKeys: readonly string[], now: IstMoment, view: DashboardView): PeriodOptions {
   const months = new Set([now.monthKey, ...monthKeys]);

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { CalendarDays, Database, Droplets, LayoutDashboard, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { FarmersPage } from '@/pages/farmers/FarmersPage';
 import { FarmerProfilePage } from '@/pages/farmers/FarmerProfilePage';
 import { UsagePage } from '@/pages/usage/UsagePage';
@@ -23,7 +24,7 @@ export interface NavTab {
 
 // Feature routes. Each renders the shared placeholder until its phase gives it a `page`.
 export const FEATURE_ROUTES: FeatureRoute[] = [
-  { path: '/', title: 'Dashboard', phase: 7 },
+  { path: '/', title: 'Dashboard', phase: 7, page: DashboardPage },
   { path: '/farmers', title: 'Kisan', phase: 4, page: FarmersPage },
   { path: '/farmers/:id', title: 'Kisan ka Hisaab', phase: 6, page: FarmerProfilePage },
   { path: '/usage', title: 'Pani Entry', phase: 4, page: UsagePage },

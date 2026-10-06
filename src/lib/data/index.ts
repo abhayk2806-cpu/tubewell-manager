@@ -109,6 +109,7 @@ export {
   buildRecentActivity,
   chartBars,
   filterDashboardRows,
+  periodView,
   sortDashboardRows,
   summarizeDashboard,
 } from './dashboardRules';
