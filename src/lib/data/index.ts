@@ -81,3 +81,22 @@ export type {
 } from './paymentRules';
 export { createPayment, listPayments, restorePayment, softDeletePayment, updatePayment } from './payments';
 export type { PaymentRow } from './payments';
+export {
+  PROFILE_PAGE_SIZE,
+  buildFarmerProfile,
+  findProfileFarmer,
+  nextShownCount,
+  toProfileBalance,
+  visiblePart,
+} from './profileRules';
+export type {
+  FarmerProfile,
+  FarmerProfileResult,
+  ProfileBalance,
+  ProfileFarmerLookup,
+  ProfileLedgerLine,
+  ProfileMonth,
+  ProfilePayment,
+  ProfileUsage,
+  VisiblePart,
+} from './profileRules';
