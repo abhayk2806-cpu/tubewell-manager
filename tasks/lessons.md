@@ -1,6 +1,6 @@
 # Lessons Learned — Tubewell Manager
 
-> **Last Updated: 2026-10-05**
+> **Last Updated: 2026-10-06**
 > At session start, scan the headings only and read a section when the task touches it.
 > Add a lesson immediately after any correction. Never silently delete one: move it to "Superseded" with a reason.
 > The full v1 text of every lesson is in [archive/v1-2026-10/tasks/lessons.md](../archive/v1-2026-10/tasks/lessons.md).
@@ -82,6 +82,25 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Finding (Phase 2B): with globals off, RTL cannot register its automatic `afterEach(cleanup)`, so rendered trees leak between tests.
 - Rule: keep `afterEach(cleanup)` in `src/test/setup.ts`.
 - Impact: low. Date: 2026-10-05.
+
+**Vitest 5 ignores `// @vitest-environment` file comments**
+- Finding (Phase 3): per-file `// @vitest-environment node` comments had no effect; the run still created jsdom once per file. Vitest 5's dist has no code that reads such comments.
+- Rule: don't rely on environment comments. The environment comes from `vite.config.ts` only, and changing it needs owner approval. Pure engine tests run fine under jsdom.
+- Impact: low. Date: 2026-10-06.
+
+**Run timezone checks from PowerShell, not Git Bash**
+- Finding (Phase 3): in Git Bash, `TZ=America/Los_Angeles node ...` reached Node with `TZ` unset (values containing `/` were dropped), so the "other timezone" run silently used IST. `TZ=PST8PDT` and `TZ=UTC` did work.
+- Rule: set `$env:TZ='America/Los_Angeles'` in PowerShell. Always print `new Date(0).getTimezoneOffset()` first to prove the zone took effect.
+- Impact: medium (a false "passes in every timezone"). Date: 2026-10-06.
+
+**A source-text guard also reads comments**
+- Finding (Phase 3): the engine's static guard scans raw source, so a comment saying "Callers import from '@/lib/ledger'" counted as an outside import.
+- Rule: in engine files, keep comments free of import-like text and of the forbidden tokens (C2). Don't weaken the guard to strip comments.
+- Impact: low. Date: 2026-10-06.
+
+**Prove a guard test can fail**
+- Practice (Phase 3): after the static guard and fixtures passed, temporarily inject a violation, see the tests fail, then revert. Examples: `Date.now()` in `money.ts`, or rounding `+ 60` → `+ 59`.
+- Impact: medium. Date: 2026-10-06.
 
 **shadcn components trip `react-refresh/only-export-components`**
 - Finding: `button.tsx` exports `buttonVariants` next to the component, so lint fails with `--max-warnings=0`.

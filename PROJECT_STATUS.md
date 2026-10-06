@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
-> **Last Updated: 2026-10-05**
-> **Current phase:** 2B done (app foundation, pending owner review); Phase 3 next
+> **Last Updated: 2026-10-06**
+> **Current phase:** 3 done (ledger engine, pending owner review); Phase 4 next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -23,8 +23,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 1 | Documentation foundation | ✅ Done (2026-10-05, including the closure with decisions D1–D8 and the first branch push) |
 | 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), pending owner review |
 | 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), pending owner review |
-| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ⬜ Not started (next) |
-| 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started |
+| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ✅ Done (2026-10-06), pending owner review |
+| 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started (next) |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
 | 7 | Dashboard + months view | ⬜ Not started |
@@ -34,8 +34,9 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 ## Next Action
 
-1. Owner reviews Phase 2B. Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
-2. **Phase 3: ledger engine with tests** (fixtures E1–E24), before any UI. The prompt will be written by the owner's assistant.
+1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
+2. Owner reviews Phase 3: decisions D18/D19 and the Phase 3 notes in the 2026-10-06 session entry.
+3. **Phase 4: Farmers + Pani Entry**, including the data layer `src/lib/data/` that feeds the engine. Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -54,6 +55,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 None blocking. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
 
 Phase 2A and 2B raised notes for the owner's review, listed in their 2026-10-05 session entries. None of them blocks Phase 3.
+
+Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry, D19). None blocks Phase 4.
 
 ## Known Risks
 
@@ -166,6 +169,25 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
 - **D15 — v1 app code removed from the rebuild branch.** It stays on `main` and in git history, for reference only via `git show main:<path>`. No v1 code is copied into new files.
 - **D16 — Test runner:** Vitest + jsdom + React Testing Library + jest-dom.
 
+### 2026-10-06 — Decisions D18–D19 (Phase 3 ledger engine)
+Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Ledger engine.
+- **D18 — Engine conventions C1–C10**, given in the Phase 3 prompt:
+  - instants with a zone only;
+  - IST only in `time.ts`;
+  - inclusive `cutoffMs`;
+  - deterministic ordering;
+  - safe-integer paise;
+  - row rules and the active-farmer definition;
+  - month statuses;
+  - total paid;
+  - the cross-farmer months list;
+  - two rupee text helpers.
+- **D19 — Engine details where the spec and the prompt were silent** (proposed by the assistant, for owner review):
+  - sub-millisecond truncation; seconds optional; instants limited to 1970–9999;
+  - integrity throws (two farmers in one ledger, duplicate live ids, `null` `total_minutes`);
+  - preview tie order; dashboard list sorted by farmer id;
+  - validation code names.
+
 ---
 
 ## Session Log
@@ -225,6 +247,35 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Database schema.
   2. `pnpm peers check` reports a false "unmet peer" for `tailwindcss-animate` (3.4.1 satisfies `>=3.0.0`).
   3. The JS bundle is ~463 kB (137 kB gzip), almost all supabase-js plus react-router. Fine for now.
 - **Failed attempt:** none. The first `pnpm install` said "Already up to date" on a broken `node_modules` (known lesson); fixed by deleting `node_modules` and reinstalling.
+
+### 2026-10-06 — Phase 3: ledger engine
+- **Preconditions:**
+  - branch `rebuild/fresh-system`, clean tree, HEAD = `origin/rebuild/fresh-system` = `ed0a3e6`; `main` = `origin/main` = `46e3872`;
+  - spec md5 `898327d9a7767775034228ca308e866a` (unchanged in this phase).
+- **Tests first:** all 11 new test files failed with "Cannot find module './index'" before any engine code existed.
+- **Code** (engine commit `5bdd743`):
+  - 13 engine files and 3 test-support files in `src/lib/ledger/`;
+  - no dependency, config or lockfile changes.
+- **Tests:** 14 files / 268 tests green: 16 from Phase 2B plus 252 for the engine.
+  - E1–E24, one named test each.
+  - D7 sweep: 1,484,640 cases, 0 mismatches.
+  - 2,500 seeded scenarios checked against the invariants and the BigInt oracle, current and as-of.
+  - Preview add/replace properties over 2,500 scenarios.
+  - The suite also passes with `TZ=America/Los_Angeles` and `TZ=UTC`.
+- **Mutation checks:**
+  - adding `Date.now()` plus an outside import to `money.ts` failed 3 static-guard tests;
+  - changing the rounding `+ 60` to `+ 59` failed 6 tests.
+  - Both mutations were reverted.
+- **Gates:** typecheck, lint (0 warnings), test and build all green, run twice.
+- **Spec gaps for owner review** (the spec was NOT edited):
+  1. `total_minutes` is typed `number | null` by the generator. The engine throws on `null` (C6, literally). The DB never stores null there.
+  2. E9's table lists only 2026-06..08, but by L11 the payment-only 2026-09 row still exists. The test asserts both.
+  3. E19's "Months" column for 2026-09-10 lists 05–08; the payment-only 09 row also exists. The test checks the charge months.
+  4. L17 lists only Settled / Partial / Unpaid. C7 adds `settled` for a month whose entries all round to 0 paise (charge 0, cash 0).
+  5. Preview with `cutoffMs`: the spec is silent. The prompt's rule (a candidate beyond the cutoff gets no pieces) is implemented.
+- **Failed attempt:** none.
+  - The `// @vitest-environment node` docblocks first added to the tests were removed, because Vitest 5 does not read them; engine tests run under jsdom.
+  - Two first-run test failures were fixed before the commit: the new-candidate id check in `records.ts`, and a comment in `index.ts` that the static guard read as an import.
 
 ---
 

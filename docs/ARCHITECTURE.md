@@ -1,9 +1,10 @@
 # Architecture — Tubewell Manager (rebuild)
 
-> **Status (2026-10-05):**
+> **Status (2026-10-06):**
 > - The **database schema is live** (Phase 2A, migrations 001–003; 004 from Phase 2B locks RLS to the owner).
 > - The **app foundation exists** (Phase 2B): auth, routing, layout shell, Supabase client, generated types, tests.
-> - The ledger, data and hooks layers are still planned (Phase 3 onwards).
+> - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3). Nothing calls it yet.
+> - The data and hooks layers are still planned (Phase 4 onwards).
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -22,7 +23,7 @@
 | Layer | Planned location | Responsibility | May NOT |
 |---|---|---|---|
 | Ledger engine | `src/lib/ledger/` | Pure functions: amount rounding, IST month, buckets, FIFO waterfall, trail, as-of, months list, duplicate checks, totals | Do I/O, read React state, or use floats for money |
-| Time | `src/lib/ledger/time.ts` (or `src/lib/time/`) | The ONE IST month/day function used everywhere | Use browser-local time or UTC for business dates |
+| Time | `src/lib/ledger/time.ts` | The ONE IST month/day function used everywhere | Use browser-local time or UTC for business dates |
 | Data access | `src/lib/data/` | All Supabase queries: active-farmer filter, soft-delete filter, pagination, error checks, mapping DB rows to engine types | Contain business math |
 | Hooks | `src/hooks/` | Load data → call the engine → expose results to pages | Contain their own formulas |
 | Pages/components | `src/pages/`, `src/components/` | Render engine output; forms; Hinglish copy | Calculate due, paid, credit or months |
@@ -43,6 +44,7 @@ Rules that follow from this:
 | `lib/config.ts` | Pure `parseConfig(env)`: validates `VITE_SUPABASE_URL` (https) and `VITE_SUPABASE_PUBLISHABLE_KEY` (D14) |
 | `lib/supabase.ts` | `createClient<Database>` with `persistSession` and `autoRefreshToken` |
 | `lib/utils.ts` | `cn()` class helper |
+| `lib/ledger/` | Ledger engine (Phase 3), see [Ledger engine](#ledger-engine-phase-3) |
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
@@ -174,11 +176,125 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - **Runner (D16):** Vitest + jsdom + React Testing Library + jest-dom.
   - `pnpm run test` runs `src/**/*.test.{ts,tsx}`.
   - Phase 2B tests cover config parsing, the route guards and login error handling (with a mocked Supabase client).
-- **Phase 3:** unit-test the engine before any UI exists. Fixtures are the worked examples E1–E24 in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
+- **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
   - an edge-case matrix (timezone boundaries, rounding, soft-delete/restore, duplicates, disabled farmers, more than 1,000 rows).
 - `pnpm run typecheck`, `lint`, `test` and `build` must all pass before any commit that touches code.
+
+## Ledger engine (Phase 3)
+
+Pure TypeScript in `src/lib/ledger/`: no I/O, no React, no Supabase imports, integer paise only.
+The rules it implements live in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md) and are not restated here; this section covers structure, API and conventions.
+
+### Module map
+
+| File | Owns |
+|---|---|
+| `index.ts` | The ONE barrel. Everything outside the folder imports `@/lib/ledger` only. |
+| `types.ts` | Input views of the DB rows (`LedgerFarmer`, `LedgerUsage`, `LedgerPayment`) and all output types |
+| `errors.ts` | `LedgerInputError` (bad data reached the engine) |
+| `time.ts` | The ONLY place for instants, IST keys and IST period bounds |
+| `money.ts` | Integer helpers and the two display helpers |
+| `entry.ts` | The ONLY implementation of the entry amount (D7) |
+| `records.ts` | Internal: validates raw rows into records (not exported from the barrel) |
+| `ledger.ts` | One farmer's buckets, waterfall, credit, trail and running ledger |
+| `preview.ts` | Payment-form preview (L16), the same ledger on modified inputs |
+| `farmers.ts` | The ONE definition of an active farmer; per-farmer grouping |
+| `dashboard.ts` | Dashboard views (D1) and the all-farmers months list |
+| `duplicates.ts` | Duplicate warnings (L14) |
+| `validation.ts` | Form validation codes (L18, D6) |
+| `test-support/` | Test-only fixtures, seeded random scenarios, BigInt oracle |
+
+### Public API
+
+```ts
+// time.ts
+parseInstantMs(iso: string): number
+istMonthKey(ms): 'YYYY-MM'      istDateKey(ms): 'YYYY-MM-DD'      istYearKey(ms): 'YYYY'
+endOfIstDayMs(dateKey): number   istMonthRangeMs(monthKey) / istYearRangeMs(yearKey): { startMs, endMs } // inclusive
+compareMonthKeys(a, b): number   isMonthKey / isDateKey / isYearKey(key): boolean
+// money.ts
+assertPaise(v, what)  intDiv(a, d)  sumPaise(values)
+parseRupeesToPaise(text): number      paiseToDecimalString(paise): string
+// entry.ts
+entryAmountPaise(totalMinutes, ratePaise): number
+// ledger.ts / preview.ts
+buildFarmerLedger({ usage, payments }, { cutoffMs? }): { months, totals, trail, rows }
+previewPayment({ usage, payments }, candidate, { replacesPaymentId?, cutoffMs? })
+  : { before, after, pieces, unappliedPaise, creditCreatedPaise }
+// farmers.ts / dashboard.ts
+isActiveFarmer(farmer): boolean       filterActiveFarmers(farmers)
+buildDashboard({ farmers, usage, payments }, { kind: 'all' } | { kind: 'month', monthKey } | { kind: 'year', yearKey })
+buildAllFarmersMonths({ farmers, usage, payments }, { cutoffMs? }): MonthRow[]
+// duplicates.ts / validation.ts
+findDuplicatePayments(candidate, existing)   findDuplicateUsage(candidate, existing)
+validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): ValidationCode[]
+```
+
+- `MonthRow`: `monthKey, totalMinutes, chargePaise, paidPaise, remainingPaise, cashPaise, status, entryCount, paymentCount`.
+  - `status` is `settled | partial | unpaid | payment_only` ("Sirf Payment").
+- `FarmerTotals`: `chargesPaise, totalPaidPaise, outstandingPaise, creditPaise, usageCount, paymentCount`.
+- `PaymentTrail`: `paymentId, paidAtMs, amountPaise, pieces[{ monthKey, amountPaise }], unappliedPaise`.
+- `LedgerRow`: `kind, id, atMs, monthKey, amountPaise, totalMinutes | null, balancePaise`.
+- `Dashboard`: `view, periodStartMs, periodEndMs, activeFarmerCount, chargesCreatedPaise, cashReceivedPaise, outstandingPaise, creditPaise, farmers[]`. Outstanding and credit are separate sums; there is no netted field.
+
+### D18 — Engine conventions C1–C10 (given in the Phase 3 prompt, 2026-10-06)
+
+- **C1 Instants.** ISO-8601 text WITH `Z` or `±hh:mm` only. Naive or date-only text throws `LedgerInputError`. Microseconds parse.
+- **C2 IST.** Only via epoch ms + 5h30m read with UTC getters, only in `time.ts`. Forbidden in engine source: `Date.now`, `new Date()` without argument, local getters, `toLocale*`, `Intl`, `Math.random`, `process.env`, `parseFloat`, `toFixed`.
+- **C3 Cutoff.** Optional inclusive `cutoffMs`; omitted = current.
+  - As-of day D = `endOfIstDayMs(D)`; Monthly = end of the month's last IST day; Yearly = end of 31 Dec IST; All Time = no cutoff.
+- **C4 Order.**
+  - Payments and usage each sort by (timestamp, `created_at`, `id` as a plain string).
+  - The running ledger sorts by (timestamp, usage before payment, `created_at`, `id`).
+  - Output never depends on input order.
+- **C5 Money.** Plain-number paise. Every input and every sum is checked with `Number.isSafeInteger`. Division only via `intDiv`; no floats.
+- **C6 Rows.**
+  - `deleted_at` set → ignored (not even validated).
+  - `total_minutes` ≠ `hours*60+minutes` → throws.
+  - Cross-farmer functions ignore rows of unknown farmers.
+  - Active = `deleted_at` null and not `is_disabled`.
+- **C7 Status.**
+  - Charge > 0: `settled` when remaining = 0, `unpaid` when paid = 0, else `partial`.
+  - Charge = 0: `payment_only` when cash > 0, else `settled` (entries that rounded to 0).
+  - A month row exists only with a live entry or payment.
+- **C8** `totalPaidPaise` = Σ non-deleted payments.
+- **C9** Cross-farmer months = per-month sums over active farmers; status by C7 on the sums. Credit is never netted.
+- **C10** No currency symbol or grouping in the engine. Rupee text goes in and out only through `parseRupeesToPaise` and `paiseToDecimalString`.
+
+### D19 — Engine details chosen in Phase 3 (where the spec and the prompt were silent; for owner review)
+
+- **Accepted instants.** Seconds are optional (`T18:40Z`); up to 9 fraction digits. Sub-millisecond digits are truncated, so rows differing only in microseconds tie and fall through to `created_at`, then `id`.
+- **Range.** Instants must lie between 1970-01-01T00:00Z and 9999-12-31 23:59:59.999 IST.
+- **Integrity throws.** One ledger with rows of two farmers, or two live rows with the same id, throws `LedgerInputError`. So does a `null` `total_minutes`: the generated column is typed nullable but is never null in the DB.
+- **Preview candidates.** A new candidate without `created_at` sorts after every existing payment at the same `paid_at`. A candidate beyond `cutoffMs` gets no pieces.
+- **Dashboard order.** The per-farmer list is sorted by farmer id (the engine does not read names). The UI may re-sort for display.
+- **Validation codes.** Defined in `validation.ts` (`farmer_required`, `time_invalid`, `minutes_out_of_range`, `duration_zero`, `amount_too_large`, ...). Hinglish messages come in Phase 4/5.
+
+### Rules for callers (data layer, hooks, pages)
+
+- Never recompute money, months, balances, statuses or IST dates outside the engine. If a screen needs a new figure, add it to the engine with a test.
+- The data layer maps DB rows straight to the engine input types and filters farmers with `isActiveFarmer`. It never re-implements the definition.
+- The payment form (L16) uses `previewPayment`, including `replacesPaymentId` when editing. It never runs its own waterfall.
+- Forms parse rupee text with `parseRupeesToPaise`, and screens show amounts with `paiseToDecimalString` (adding "₹" and grouping in the UI layer).
+- Forms build `used_at`/`paid_at` as ISO text with `+05:30` from the IST wall clock the owner typed. They call `validate*Input` before saving and `findDuplicate*` to warn.
+- A `LedgerInputError` means bad data reached the engine. Show an error state; never swallow it.
+
+### Tests
+
+- 11 test files in `src/lib/ledger/`:
+  - E1–E24, one named test each;
+  - the D7 sweep: 1,484,640 cases against a BigInt reference;
+  - 2,500 seeded random scenarios checked against the invariants and an independent BigInt oracle, current and as-of;
+  - preview add/replace properties;
+  - time, money, duplicates and validation tests.
+- `static-guard.test.ts` reads the engine sources through `import.meta.glob(..., { query: '?raw' })`. It fails on:
+  - any C2 token;
+  - an import from outside the folder;
+  - IST or calendar math outside `time.ts`;
+  - the rounding constant outside `entry.ts`.
+- The suite also passes with `TZ=America/Los_Angeles` and `TZ=UTC` (checked 2026-10-06, run from PowerShell).
 
 ## Backup and restore (Phase 8)
 
