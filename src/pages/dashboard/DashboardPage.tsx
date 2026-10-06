@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Droplets, Wallet } from 'lucide-react';
 import type { DashboardView } from '@/lib/ledger';
@@ -29,7 +29,9 @@ export function DashboardPage() {
   const farmers = useFarmers();
   const usage = useUsage();
   const payments = usePayments();
-  const [now] = useState(currentIstMoment);
+  // The IST moment behind the period defaults and the "current" month / year. It is refreshed when
+  // the page becomes visible again and when a period button is pressed, so it never goes stale.
+  const [now, setNow] = useState(currentIstMoment);
   const [view, setView] = useState<DashboardView>({ kind: 'all' });
   const [query, setQuery] = useState('');
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -44,6 +46,20 @@ export function DashboardPage() {
     () => buildDashboardScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all, view, now }),
     [farmers.all, usage.all, payments.all, view, now],
   );
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setNow(currentIstMoment());
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
+
+  const selectKind = (kind: DashboardView['kind']) => {
+    const fresh = currentIstMoment();
+    setNow(fresh);
+    setView(periodView(kind, fresh));
+  };
 
   const retryLoad = () => {
     if (farmers.status === 'error') void farmers.reload();
@@ -118,7 +134,7 @@ export function DashboardPage() {
           </div>
         ) : (
           <>
-            <PeriodSelector view={view} options={s.periodOptions} onSelectKind={(kind) => setView(periodView(kind, now))} onChange={setView} />
+            <PeriodSelector view={view} options={s.periodOptions} onSelectKind={selectKind} onChange={setView} />
             <Tiles dashboard={s.dashboard} summary={s.summary} periodHasActivity={s.periodHasActivity} />
             <MonthChart
               chart={s.chart}

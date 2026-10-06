@@ -22,6 +22,7 @@ export const DASHBOARD_COPY = {
     options: { all: 'Abhi tak', month: 'Mahina', year: 'Saal' } satisfies Record<DashboardView['kind'], string>,
     monthPicker: 'Mahina chuno',
     yearPicker: 'Saal chuno',
+    monthBreakdown: 'Is mahine ka kisan-wise hisaab',
     monthLabel,
   },
   /** One sentence on what the period means (D1, L11). */

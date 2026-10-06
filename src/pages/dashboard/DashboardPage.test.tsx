@@ -312,3 +312,49 @@ describe('DashboardPage states', () => {
     expect(value('dash-charges')).toBe(`${R}558.33`);
   });
 });
+
+describe('DashboardPage current moment (Part 0) and the Months link', () => {
+  const NOVEMBER = { dateKey: '2026-11-01', timeKey: '00:05', monthKey: '2026-11' };
+
+  function monthOptions() {
+    return within(screen.getByLabelText('Mahina chuno')).getAllByRole('option').map((o) => o.getAttribute('value'));
+  }
+
+  it('the stored moment refreshes when the page becomes visible again', async () => {
+    await renderReady();
+    fireEvent.click(screen.getByRole('button', { name: 'Mahina' }));
+    expect(monthOptions()).not.toContain('2026-11');
+    clock.moment = NOVEMBER;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => expect(monthOptions()).toContain('2026-11'));
+    expect(screen.getByLabelText('Mahina chuno')).toHaveValue('2026-10');
+  });
+
+  it('a hidden page does not refresh the moment', async () => {
+    await renderReady();
+    fireEvent.click(screen.getByRole('button', { name: 'Mahina' }));
+    clock.moment = NOVEMBER;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    fireEvent(document, new Event('visibilitychange'));
+    expect(monthOptions()).not.toContain('2026-11');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+  });
+
+  it('pressing a period button takes a fresh moment: Mahina and Saal open the new month and year', async () => {
+    await renderReady();
+    clock.moment = { dateKey: '2027-01-01', timeKey: '00:05', monthKey: '2027-01' };
+    fireEvent.click(screen.getByRole('button', { name: 'Mahina' }));
+    expect(screen.getByLabelText('Mahina chuno')).toHaveValue('2027-01');
+    fireEvent.click(screen.getByRole('button', { name: 'Saal' }));
+    expect(screen.getByLabelText('Saal chuno')).toHaveValue('2027');
+  });
+
+  it('Mahina shows a link to the kisan-wise month on the Months screen', async () => {
+    await renderReady();
+    expect(screen.queryByRole('link', { name: /Is mahine ka kisan-wise hisaab/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Mahina' }));
+    fireEvent.change(screen.getByLabelText('Mahina chuno'), { target: { value: '2026-09' } });
+    expect(screen.getByRole('link', { name: /Is mahine ka kisan-wise hisaab/ })).toHaveAttribute('href', '/months?month=2026-09');
+  });
+});

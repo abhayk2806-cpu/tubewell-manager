@@ -79,6 +79,10 @@ export function PeriodSelector({
               </option>
             ))}
           </select>
+          <Link to={`/months?month=${view.monthKey}`} className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary">
+            {c.monthBreakdown}
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
         </div>
       )}
       {view.kind === 'year' && (
