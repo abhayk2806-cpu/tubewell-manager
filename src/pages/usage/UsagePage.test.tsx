@@ -33,13 +33,19 @@ vi.mock('@/lib/data/usage', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/data/usage')>()),
   ...usageApi,
 }));
+// Payments only feed the current Baaki / Advance shown on this screen (D32).
+const paymentApi = vi.hoisted(() => ({ listPayments: vi.fn() }));
+vi.mock('@/lib/data/payments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/data/payments')>()),
+  listPayments: paymentApi.listPayments,
+}));
 
 import { DataError } from '@/lib/data';
-import { farmerRow, usageRow } from '@/lib/data/test-support/fakeSupabase';
+import { farmerRow, paymentRow, usageRow } from '@/lib/data/test-support/fakeSupabase';
 import { UsagePage } from './UsagePage';
 
 // Fictional farmers only.
-const ramu = farmerRow({ id: 'r', name: 'Ramu Test' });
+const ramu = farmerRow({ id: 'r', name: 'Ramu Test', mobile: '98765 43210' });
 const shyam = farmerRow({ id: 's', name: 'Shyam Test' });
 const band = farmerRow({ id: 'b', name: 'Band Test', is_disabled: true });
 const gone = farmerRow({ id: 'g', name: 'Gone Test', deleted_at: '2026-10-01T00:00:00+00:00' });
@@ -52,6 +58,11 @@ const u4 = usageRow({ id: 'u4', farmer_id: 'b', used_at: '2026-10-03T04:00:00+00
 const u5 = usageRow({ id: 'u5', farmer_id: 's', used_at: '2026-10-04T04:00:00+00:00', hours: 1, minutes: 0, deleted_at: '2026-10-05T20:00:00+00:00' });
 
 const R = String.fromCharCode(0x20b9);
+
+// Ramu: 3 h 35 + 2 h 00 = 558.33, paid 300.00 -> Abhi baaki 258.33. Shyam: 1 h (100.00), paid 500.00
+// -> Advance 400.00 (the deleted u5 does not count).
+const payRamu = paymentRow({ id: 'p1', farmer_id: 'r', paid_at: '2026-10-05T04:00:00+00:00', amount_paise: 30000 });
+const payShyam = paymentRow({ id: 'p2', farmer_id: 's', paid_at: '2026-10-05T04:00:00+00:00', amount_paise: 50000 });
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {};
@@ -91,6 +102,8 @@ beforeEach(() => {
   Object.values(usageApi).forEach((fn) => fn.mockReset());
   farmerApi.listFarmers.mockResolvedValue([ramu, shyam, band, gone]);
   usageApi.listUsage.mockResolvedValue([u1, u2, u3, u4, u5]);
+  paymentApi.listPayments.mockReset();
+  paymentApi.listPayments.mockResolvedValue([payRamu, payShyam]);
 });
 
 describe('UsagePage', () => {
@@ -345,5 +358,64 @@ describe('UsagePage', () => {
     await openAdd();
     expect(screen.getByLabelText('Tarikh')).toHaveValue('2026-10-07');
     expect(screen.getByLabelText('Samay')).toHaveValue('00:10');
+  });
+});
+
+describe('UsagePage current position and farmer search (D32)', () => {
+  it('a list filtered to one farmer shows its Abhi baaki / Advance strip; Sabhi kisan shows none', async () => {
+    await renderReady();
+    expect(screen.queryByTestId('usage-farmer-strip')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Kisan'), { target: { value: 'r' } });
+    const strip = await screen.findByTestId('usage-farmer-strip');
+    expect(strip).toHaveTextContent('Ramu Test ka hisaab');
+    await waitFor(() => expect(within(strip).getByTestId('balance-outstanding')).toHaveTextContent(`Abhi baaki ${R}258.33`));
+    fireEvent.change(screen.getByLabelText('Kisan'), { target: { value: 's' } });
+    expect(within(screen.getByTestId('usage-farmer-strip')).getByTestId('balance-none')).toHaveTextContent('Baaki nahi');
+    expect(within(screen.getByTestId('usage-farmer-strip')).getByTestId('balance-credit')).toHaveTextContent(`Advance / Credit ${R}400.00`);
+  });
+
+  it('adding an entry for that farmer updates the strip (the lists reload)', async () => {
+    await renderReady();
+    fireEvent.change(screen.getByLabelText('Kisan'), { target: { value: 'r' } });
+    await waitFor(() => expect(screen.getByTestId('balance-outstanding')).toHaveTextContent(`${R}258.33`));
+    const created = usageRow({ id: 'u9', farmer_id: 'r', used_at: '2026-10-06T08:35:00+00:00', hours: 1, minutes: 0 });
+    usageApi.createUsage.mockResolvedValue(created);
+    usageApi.listUsage.mockResolvedValue([u1, u2, u3, u4, u5, created]);
+    const dialog = await openAdd();
+    fireEvent.change(within(dialog).getByLabelText('Kisan'), { target: { value: 'r' } });
+    change('Ghante', '1');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(within(screen.getByTestId('usage-farmer-strip')).getByTestId('balance-outstanding')).toHaveTextContent(`${R}358.33`));
+  });
+
+  it('the form shows the chosen farmer\'s position; the search narrows the picker by name or mobile', async () => {
+    await renderReady();
+    const dialog = await openAdd();
+    const picker = within(dialog).getByLabelText('Kisan');
+    expect(within(dialog).queryByTestId('usage-farmer-balance')).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: '43210' } });
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kisan chuno', 'Ramu Test']);
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: 'shy' } });
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kisan chuno', 'Shyam Test']);
+    fireEvent.change(picker, { target: { value: 's' } });
+    expect(within(dialog).getByTestId('usage-farmer-balance')).toHaveTextContent(`Baaki nahiAdvance / Credit ${R}400.00`);
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: 'zzz' } });
+    expect(within(dialog).getByText('Is naam ya mobile ka koi Chalu kisan nahi.')).toBeInTheDocument();
+    // The chosen farmer stays selectable while the search shows no other match.
+    expect(within(picker).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kisan chuno', 'Shyam Test']);
+  });
+
+  it('entries of a Band farmer are still listed exactly as before (D24 h)', async () => {
+    await renderReady();
+    expect(items().some((li) => li.textContent?.includes('Band Test'))).toBe(true);
+  });
+
+  it('a farmer whose rows cannot be read shows the plain message for the figures only', async () => {
+    // A payment amount that is not whole paise: the engine refuses Shyam's ledger, nothing is guessed.
+    paymentApi.listPayments.mockResolvedValue([payRamu, { ...payShyam, amount_paise: 1.5 }]);
+    await renderReady();
+    fireEvent.change(screen.getByLabelText('Kisan'), { target: { value: 's' } });
+    await waitFor(() => expect(screen.getByTestId('usage-farmer-strip')).toHaveTextContent('Is kisan ka hisaab nahi ban paya'));
   });
 });

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { currentIstMoment, filterUsage, listUsageMonths, sortFarmersByName, usageAmountPaise } from '@/lib/data';
+import { buildFarmerBalances, currentIstMoment, filterUsage, listUsageMonths, sortFarmersByName, usageAmountPaise } from '@/lib/data';
 import type { FarmerRow, IstMoment, UsageRow } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
+import { usePayments } from '@/hooks/usePayments';
 import { useUsage, type UsageMutationResult } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
 import { NOTICE_TONE, TONE } from '@/components/tone';
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { USAGE_COPY, USAGE_DATA_ERROR_TEXT, type UsageSegment } from './copy';
 import { UsageFormDialog } from './UsageFormDialog';
 import { UsageListItem } from './UsageListItem';
+import { BalanceLine } from '../farmers/BalanceLine';
 
 const SEGMENTS: readonly UsageSegment[] = ['live', 'deleted'];
 const ALL = 'all';
@@ -35,6 +37,8 @@ const selectClass =
 export function UsagePage() {
   const usage = useUsage();
   const farmers = useFarmers();
+  // Payments only feed the current Baaki / Advance shown for a farmer (D32); the list never waits for them.
+  const payments = usePayments();
   const [now] = useState(currentIstMoment);
   const [segment, setSegment] = useState<UsageSegment>('live');
   const [farmerFilter, setFarmerFilter] = useState<string>(ALL);
@@ -53,6 +57,14 @@ export function UsagePage() {
       return null;
     }
   }, [usage.all]);
+
+  const balances = useMemo(
+    () =>
+      payments.status === 'ready' && usage.status === 'ready'
+        ? buildFarmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
+        : undefined,
+    [farmers.all, usage.status, usage.all, payments.status, payments.all],
+  );
 
   const farmersById = useMemo(() => new Map(farmers.all.map((f) => [f.id, f])), [farmers.all]);
   const filterFarmers = useMemo(
@@ -207,6 +219,17 @@ export function UsagePage() {
             ))}
           </div>
 
+          {farmerFilter !== ALL && (
+            <section aria-label={USAGE_COPY.farmerStrip(farmerName(farmerFilter))} className="space-y-1 rounded-lg border bg-card p-3" data-testid="usage-farmer-strip">
+              <p className="text-sm font-medium">{USAGE_COPY.farmerStrip(farmerName(farmerFilter))}</p>
+              {payments.status === 'error' ? (
+                <p className="text-sm text-muted-foreground">{USAGE_COPY.balanceLoadError}</p>
+              ) : (
+                <BalanceLine balance={balances?.get(farmerFilter)} />
+              )}
+            </section>
+          )}
+
           {visible.length === 0 ? (
             <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
               {usage[segment].length === 0 ? USAGE_COPY.empty[segment] : USAGE_COPY.noFilterResults}
@@ -242,6 +265,7 @@ export function UsagePage() {
           allFarmers={farmers.all}
           allUsage={usage.all}
           now={form.now}
+          balances={balances}
           saving={usage.pending?.kind === 'create' || usage.pending?.kind === 'update'}
           onSave={(input) => (form.entry === null ? usage.create(input) : usage.update(form.entry, input))}
           onSaved={() => {

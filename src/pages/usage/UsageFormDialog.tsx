@@ -3,11 +3,12 @@ import { formatRupees, istTimeKey, parseInstantMs } from '@/lib/ledger';
 import {
   buildUsageInput,
   describeUsageWarnings,
+  matchesFarmerSearch,
   newUsageForm,
   usageFormFromRow,
   usageInputAmountPaise,
 } from '@/lib/data';
-import type { FarmerRow, IstMoment, UsageForm, UsageFormCode, UsageInput, UsageRow, UsageWarning } from '@/lib/data';
+import type { FarmerBalance, FarmerRow, IstMoment, UsageForm, UsageFormCode, UsageInput, UsageRow, UsageWarning } from '@/lib/data';
 import type { UsageMutationResult } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
 import { MONEY_TONE, NOTICE_TONE, TONE } from '@/components/tone';
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BalanceLine } from '../farmers/BalanceLine';
 import { USAGE_CODE_TEXT, USAGE_COPY, USAGE_DATA_ERROR_TEXT } from './copy';
 
 const COPY = USAGE_COPY.form;
@@ -53,6 +55,8 @@ export interface UsageFormDialogProps {
   readonly now: IstMoment;
   /** New entry only: the farmer pre-selected in the picker (still changeable). Ignored when editing. */
   readonly initialFarmerId?: string;
+  /** Current position per farmer (buildFarmerBalances); when given, the chosen farmer's Baaki / Advance is shown (D32). */
+  readonly balances?: ReadonlyMap<string, FarmerBalance>;
   readonly saving: boolean;
   onSave(input: UsageInput): Promise<UsageMutationResult>;
   onSaved(entry: UsageRow): void;
@@ -60,18 +64,23 @@ export interface UsageFormDialogProps {
 }
 
 /** Add / edit a Pani Entry. Errors sit next to their fields; warnings never block (L14). */
-export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, now, initialFarmerId, saving, onSave, onSaved, onClose }: UsageFormDialogProps) {
+export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, now, initialFarmerId, balances, saving, onSave, onSaved, onClose }: UsageFormDialogProps) {
   const [form, setForm] = useState<UsageForm>(() => (entry === null ? newUsageForm(now, initialFarmerId) : usageFormFromRow(entry)));
   const [showErrors, setShowErrors] = useState(false);
   const [warnings, setWarnings] = useState<UsageWarning<UsageRow>[]>([]);
   const [saveError, setSaveError] = useState('');
+  const [farmerQuery, setFarmerQuery] = useState('');
 
   const built = buildUsageInput(form);
   const codes = built.ok ? [] : built.codes;
   const amountText = built.ok ? formatRupees(usageInputAmountPaise(built.input)) : null;
 
-  // Chalu farmers, plus (when editing) the entry's own farmer even if it is now Band or Deleted.
-  const options = activeFarmers.map((f) => ({ id: f.id, label: f.name }));
+  // Chalu farmers matching the search (the chosen one always stays), plus (when editing) the entry's
+  // own farmer even if it is now Band or Deleted.
+  const options = activeFarmers
+    .filter((f) => f.id === form.farmerId || matchesFarmerSearch(f, farmerQuery))
+    .map((f) => ({ id: f.id, label: f.name }));
+  const noMatch = farmerQuery.trim() !== '' && !activeFarmers.some((f) => matchesFarmerSearch(f, farmerQuery));
   if (entry !== null && !options.some((o) => o.id === entry.farmer_id)) {
     const own = allFarmers.find((f) => f.id === entry.farmer_id);
     const suffix = own?.deleted_at ? USAGE_COPY.deletedSuffix : own?.is_disabled ? USAGE_COPY.bandSuffix : '';
@@ -134,6 +143,19 @@ export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, no
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           <div className="space-y-1.5">
+            <Label htmlFor="usage-farmer-search">{COPY.search}</Label>
+            <Input
+              id="usage-farmer-search"
+              type="search"
+              autoComplete="off"
+              value={farmerQuery}
+              onChange={(e) => setFarmerQuery(e.target.value)}
+              className={fieldClass}
+            />
+            {noMatch && <p className="text-sm text-muted-foreground">{COPY.noSearchResults}</p>}
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="usage-farmer">{COPY.farmer}</Label>
             <select
               id="usage-farmer"
@@ -151,6 +173,7 @@ export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, no
               ))}
             </select>
             {errorsFor('farmer')}
+            {form.farmerId !== '' && balances !== undefined && <BalanceLine balance={balances.get(form.farmerId)} testId="usage-farmer-balance" />}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

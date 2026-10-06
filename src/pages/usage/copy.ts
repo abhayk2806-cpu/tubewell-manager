@@ -29,6 +29,9 @@ export const USAGE_COPY = {
   } satisfies Record<UsageSegment, string>,
   noFilterResults: 'In filters ke liye koi entry nahi mili.',
   unknownFarmer: 'Kisan nahi mila',
+  /** The strip above a list filtered to one farmer (D32). */
+  farmerStrip: (name: string) => `${name} ka hisaab`,
+  balanceLoadError: 'Baaki load nahi ho paya.',
   when: (dateKey: string, timeKey: string) => `${dateKey}, ${timeKey}`,
   duration: (hours: number, minutes: number) => `${hours} ghante ${minutes} minute`,
   ratePerHour: (rateText: string) => `${rateText}/ghanta`,
@@ -41,6 +44,9 @@ export const USAGE_COPY = {
     description: 'Kisan, tarikh, samay aur kitni der pani chala, bharo.',
     farmer: 'Kisan',
     chooseFarmer: 'Kisan chuno',
+    /** Narrows the farmer picker by name or mobile (D32). */
+    search: 'Kisan dhundo (naam ya mobile)',
+    noSearchResults: 'Is naam ya mobile ka koi Chalu kisan nahi.',
     date: 'Tarikh',
     time: 'Samay',
     hours: 'Ghante',
