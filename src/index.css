@@ -11,6 +11,17 @@
     border      #e5e2dc  warm grey border
     primary     #2563eb  blue
     radius      12px
+
+  Semantic tones (D28, Phase 6C). One fixed meaning per tone, same on every screen; see
+  .claude/rules/ui-color-semantics.md. strong = text and icons, soft = tinted badge / notice
+  background, border = decorative edge. Contrast of strong text >= 4.5:1 on card, page and soft
+  is proved by src/components/tone.test.ts.
+    tone        strong   soft     border   meaning
+    water       #0c6e68  #e9f9f7  #8cd9cf  Pani usage and its charges
+    cash        #137236  #e9f9ee  #90d5a9  money received, success
+    due         #aa1838  #fdecef  #f1b1bc  money still owed (not errors: those stay destructive)
+    credit      #652fbc  #f3eefe  #cfbaf3  Advance / Credit
+    caution     #89420b  #fef6dc  #f3c568  warnings, in-between states
 */
 @layer base {
   :root {
@@ -34,6 +45,22 @@
     --input: 40 14.8% 88%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.75rem;
+
+    --tone-water: 176 80% 24%;
+    --tone-water-soft: 170 60% 94.5%;
+    --tone-water-border: 172 50% 70%;
+    --tone-cash: 142 72% 26%;
+    --tone-cash-soft: 138 60% 94.5%;
+    --tone-cash-border: 142 45% 70%;
+    --tone-due: 347 75% 38%;
+    --tone-due-soft: 350 85% 96%;
+    --tone-due-border: 350 70% 82%;
+    --tone-credit: 263 60% 46%;
+    --tone-credit-soft: 260 90% 96.5%;
+    --tone-credit-border: 262 70% 84%;
+    --tone-caution: 26 85% 29%;
+    --tone-caution-soft: 45 95% 93%;
+    --tone-caution-border: 40 85% 68%;
   }
 }
 

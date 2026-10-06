@@ -42,6 +42,34 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Semantic tones (D28): tone-water, tone-water-soft, tone-water-border, ...
+        tone: {
+          water: {
+            DEFAULT: "hsl(var(--tone-water))",
+            soft: "hsl(var(--tone-water-soft))",
+            border: "hsl(var(--tone-water-border))",
+          },
+          cash: {
+            DEFAULT: "hsl(var(--tone-cash))",
+            soft: "hsl(var(--tone-cash-soft))",
+            border: "hsl(var(--tone-cash-border))",
+          },
+          due: {
+            DEFAULT: "hsl(var(--tone-due))",
+            soft: "hsl(var(--tone-due-soft))",
+            border: "hsl(var(--tone-due-border))",
+          },
+          credit: {
+            DEFAULT: "hsl(var(--tone-credit))",
+            soft: "hsl(var(--tone-credit-soft))",
+            border: "hsl(var(--tone-credit-border))",
+          },
+          caution: {
+            DEFAULT: "hsl(var(--tone-caution))",
+            soft: "hsl(var(--tone-caution-soft))",
+            border: "hsl(var(--tone-caution-border))",
+          },
+        },
       },
       borderRadius: {
         xl: "var(--radius)",
