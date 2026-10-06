@@ -164,8 +164,9 @@ export type UsageWarning<T> =
   | { readonly kind: 'long_duration' }
   | { readonly kind: 'future_date' };
 
-/** More than this many hours in one entry gives a (non-blocking) warning. */
+/** An entry whose TOTAL time (hours and minutes) is over this many hours gives a (non-blocking) warning (D25). */
 export const LONG_DURATION_HOURS = 24;
+const LONG_DURATION_MINUTES = LONG_DURATION_HOURS * 60;
 
 function dayOf(usedAt: string): string | null {
   try {
@@ -202,8 +203,10 @@ export function describeUsageWarnings<T extends UsageRowLike>(
     if (matches.length > 0) warnings.push({ kind: 'duplicate', matches });
   }
 
-  const hoursUnchanged = original !== undefined && original.hours === input.hours;
-  if (input.hours > LONG_DURATION_HOURS && !hoursUnchanged) warnings.push({ kind: 'long_duration' });
+  // Total time over 24 h 00 min warns (24 h 01 min does, exactly 24 h does not).
+  const totalMinutes = input.hours * 60 + input.minutes;
+  const durationUnchanged = original !== undefined && original.hours * 60 + original.minutes === totalMinutes;
+  if (totalMinutes > LONG_DURATION_MINUTES && !durationUnchanged) warnings.push({ kind: 'long_duration' });
 
   if (day !== null && day > now.dateKey && !sameDay) warnings.push({ kind: 'future_date' });
   return warnings;

@@ -215,7 +215,7 @@ describe('UsagePage', () => {
     change('Tarikh', '2026-10-07');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
     const warning = within(dialog).getByRole('alert');
-    expect(warning).toHaveTextContent('Is entry mein 24 ghante se zyada hai.');
+    expect(warning).toHaveTextContent('Is entry ka kul samay 24 ghante se zyada hai.');
     expect(warning).toHaveTextContent('Yeh tarikh aaj ke baad ki hai.');
     fireEvent.click(within(warning).getByRole('button', { name: 'Phir bhi save karo' }));
     await waitFor(() =>

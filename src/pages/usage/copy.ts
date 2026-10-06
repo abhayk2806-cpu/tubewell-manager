@@ -70,7 +70,7 @@ export const USAGE_COPY = {
   warnings: {
     heading: 'Dhyan dein:',
     duplicate: 'Is kisan ki isi din, itne hi ghante-minute ki entry pehle se hai:',
-    long_duration: 'Is entry mein 24 ghante se zyada hai.',
+    long_duration: 'Is entry ka kul samay 24 ghante se zyada hai.',
     future_date: 'Yeh tarikh aaj ke baad ki hai.',
     saveAnyway: 'Phir bhi save karo',
     goBack: 'Wapas jao, badlo',

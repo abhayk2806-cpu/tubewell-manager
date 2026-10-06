@@ -101,9 +101,23 @@ describe('describeUsageWarnings', () => {
     expect(describeUsageWarnings(input, [sameDay], NOW, { excludeId: 'u-1' })).toEqual([]);
   });
 
-  it('long_duration only above 24 hours', () => {
-    expect(describeUsageWarnings({ ...input, hours: 24 }, [], NOW)).toEqual([]);
-    expect(describeUsageWarnings({ ...input, hours: 25 }, [], NOW)).toEqual([{ kind: 'long_duration' }]);
+  it.each([
+    [23, 59, false],
+    [24, 0, false],
+    [24, 1, true],
+    [24, 30, true],
+    [25, 0, true],
+  ])('long_duration on TOTAL time over 24 h (D25): %ih %im -> %s', (hours, minutes, warns) => {
+    expect(describeUsageWarnings({ ...input, hours, minutes }, [], NOW)).toEqual(warns ? [{ kind: 'long_duration' }] : []);
+  });
+
+  it('an unchanged 24 h 30 min edit does not warn again; changing the minutes does', () => {
+    const original = usageRow({ id: 'u-9', farmer_id: 'f-1', used_at: '2026-10-06T02:00:00+00:00', hours: 24, minutes: 30 });
+    const edited = { ...input, used_at: '2026-10-06T07:30:00+05:30', hours: 24, minutes: 30, rate_paise: 12000 };
+    expect(describeUsageWarnings(edited, [original], NOW, { excludeId: 'u-9', original })).toEqual([]);
+    expect(describeUsageWarnings({ ...edited, minutes: 45 }, [original], NOW, { excludeId: 'u-9', original })).toEqual([
+      { kind: 'long_duration' },
+    ]);
   });
 
   it('future_date when the IST date is after today (IST)', () => {
