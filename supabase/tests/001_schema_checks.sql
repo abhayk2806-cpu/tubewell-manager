@@ -1,5 +1,5 @@
 -- supabase/tests/001_schema_checks.sql
--- Schema, trigger and RLS checks for migrations 001-006 (project tubewell-hisab).
+-- Schema, trigger, RLS and restore-function checks for migrations 001-007 (project tubewell-hisab).
 --
 -- HOW TO RUN (re-runnable, leaves no data behind):
 --   Run SECTION A as one call (Supabase MCP execute_sql or the SQL editor). It is a single
@@ -11,7 +11,8 @@
 -- checks still record correctly while the session role is switched to anon or authenticated.
 -- A logged-in user is simulated with request.jwt.claims plus SET LOCAL ROLE authenticated.
 -- SQLSTATEs: 23514 check, 23502 not null, 23503 foreign key, 428C9 generated column,
--- 42501 insufficient privilege or RLS violation, 00000 success.
+-- 42501 insufficient privilege or RLS violation, 22023 invalid parameter, 21000 cardinality
+-- violation (a row affected twice), 00000 success.
 
 -- ===================================================================== SECTION A
 begin;
@@ -370,6 +371,198 @@ begin
     where conrelid = 'public.payments'::regclass and conname = 'payments_note_max_length' and contype = 'c';
   perform set_config('tw.r', current_setting('tw.r') || format('T8.10|%s|constraint payments_note_max_length exists|found %s', case when n = 1 then 'PASS' else 'FAIL' end, n) || chr(10), true);
 end $$;
+
+-- T9 restore_backup from migration 007 (owner simulated as in T5; all rows fictional; rolled back).
+-- The Replace checks wipe the tables INSIDE this transaction only; the ROLLBACK at the end of
+-- SECTION A brings every existing row back (T6.01 proves it).
+do $
+declare
+  owner_claims text;
+  other_claims constant text := '{"sub":"00000000-0000-0000-0000-0000000000b2","role":"authenticated"}';
+  c1 constant uuid := '00000000-0000-0000-0000-0000000000c1';
+  fa constant uuid := '00000000-0000-0000-0000-00000000f901';
+  fg constant uuid := '00000000-0000-0000-0000-00000000f902';
+  p jsonb;
+  bad jsonb;
+  rep jsonb;
+  got text;
+  n bigint;
+  bf bigint;
+  bu bigint;
+  bp bigint;
+  r record;
+  ok boolean;
+begin
+  select format('{"sub":"%s","role":"authenticated"}', u.id) into owner_claims from auth.users u limit 1;
+  p := jsonb_build_object(
+    'format', 'tubewell-hisab-backup', 'version', 1, 'exported_at', '2026-10-06T14:05:00+05:30',
+    'counts', jsonb_build_object('farmers', 2, 'usage_entries', 2, 'payments', 1),
+    'summary', jsonb_build_object('charges_paise', 35833, 'cash_paise', 10000, 'outstanding_paise', 25833, 'credit_paise', 0),
+    'farmers', jsonb_build_array(
+      jsonb_build_object('id', fa, 'name', 'T9 Asha', 'mobile', null, 'notes', 'fictional', 'is_disabled', false,
+        'created_at', '2026-01-01T10:00:00+05:30', 'created_by', c1, 'updated_at', '2026-01-02T10:00:00+05:30', 'updated_by', c1,
+        'deleted_at', null, 'deleted_by', null),
+      jsonb_build_object('id', fg, 'name', 'T9 Gone', 'mobile', '9000000000', 'notes', null, 'is_disabled', false,
+        'created_at', '2026-01-03T10:00:00+05:30', 'created_by', c1, 'updated_at', '2026-03-01T10:00:00+05:30', 'updated_by', c1,
+        'deleted_at', '2026-03-01T10:00:00+05:30', 'deleted_by', c1)),
+    'usage_entries', jsonb_build_array(
+      jsonb_build_object('id', '00000000-0000-0000-0000-00000000e901', 'farmer_id', fa, 'used_at', '2026-09-10T10:00:00+05:30',
+        'hours', 3, 'minutes', 35, 'rate_paise', 10000, 'created_at', '2026-09-10T10:05:00+05:30', 'created_by', c1,
+        'updated_at', '2026-09-10T10:05:00+05:30', 'updated_by', c1, 'deleted_at', null, 'deleted_by', null),
+      jsonb_build_object('id', '00000000-0000-0000-0000-00000000e902', 'farmer_id', fa, 'used_at', '2026-10-06T09:00:00+05:30',
+        'hours', 5, 'minutes', 0, 'rate_paise', 10000, 'created_at', '2026-10-06T09:05:00+05:30', 'created_by', c1,
+        'updated_at', '2026-10-06T09:30:00+05:30', 'updated_by', c1, 'deleted_at', '2026-10-06T09:30:00+05:30', 'deleted_by', c1)),
+    'payments', jsonb_build_array(
+      jsonb_build_object('id', '00000000-0000-0000-0000-00000000a901', 'farmer_id', fa, 'paid_at', '2026-10-02T10:00:00+05:30',
+        'amount_paise', 10000, 'note', 'T9 fictional', 'created_at', '2026-10-02T10:05:00+05:30', 'created_by', c1,
+        'updated_at', '2026-10-02T10:05:00+05:30', 'updated_by', c1, 'deleted_at', null, 'deleted_by', null)));
+
+  -- Function definition and privileges
+  select count(*) into n from pg_catalog.pg_proc
+    where oid = 'public.restore_backup(jsonb,text)'::regprocedure and prosecdef and proconfig = array['search_path=""'];
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.01|%s|restore_backup is SECURITY DEFINER with an empty search_path|found %s', case when n = 1 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  ok := not has_function_privilege('anon', 'public.restore_backup(jsonb,text)', 'execute')
+    and not has_function_privilege('public', 'public.restore_backup(jsonb,text)', 'execute')
+    and has_function_privilege('authenticated', 'public.restore_backup(jsonb,text)', 'execute');
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.02|%s|EXECUTE for authenticated only (not anon, not public)|%s', case when ok then 'PASS' else 'FAIL' end, ok) || chr(10), true);
+
+  select count(*) into bf from public.farmers;
+  select count(*) into bu from public.usage_entries;
+  select count(*) into bp from public.payments;
+
+  -- Denied callers and invalid input: an error, and nothing changes
+  for r in
+    select * from (values
+      ('T9.03', 'authenticated without auth.uid() is denied', '{"role":"authenticated"}', 'merge', 'p', '42501'),
+      ('T9.04', 'another authenticated uid is denied', other_claims, 'replace', 'p', '42501'),
+      ('T9.05', 'an invalid mode raises', 'owner', 'wipe', 'p', '22023'),
+      ('T9.06', 'a payload without farmers raises', 'owner', 'replace', 'no_farmers', '22023'),
+      ('T9.07', 'a wrong format raises', 'owner', 'replace', 'wrong_format', '22023'),
+      ('T9.08', 'counts that do not match the rows raise', 'owner', 'replace', 'bad_counts', '22023'),
+      ('T9.09', 'a row without a required key raises', 'owner', 'merge', 'missing_key', '22023'),
+      ('T9.10', 'a duplicate id in the file raises (21000)', 'owner', 'replace', 'duplicate', '21000')
+    ) as v(id, label, claims, mode, payload, want)
+    order by id
+  loop
+    bad := case r.payload
+      when 'p' then p
+      when 'no_farmers' then p - 'farmers'
+      when 'wrong_format' then jsonb_set(p, '{format}', '"tubewell-backup"')
+      when 'bad_counts' then jsonb_set(p, '{counts,payments}', '5')
+      when 'missing_key' then jsonb_set(p, '{payments,0}', (p #> '{payments,0}') - 'paid_at')
+      else jsonb_set(p, '{farmers,1,id}', to_jsonb(fa))
+    end;
+    perform set_config('request.jwt.claims', case when r.claims = 'owner' then owner_claims else r.claims end, true);
+    set local role authenticated;
+    begin
+      perform public.restore_backup(bad, r.mode);
+      got := '00000';
+    exception when others then
+      got := sqlstate;
+    end;
+    reset role;
+    select (select count(*) from public.farmers) = bf and (select count(*) from public.usage_entries) = bu
+       and (select count(*) from public.payments) = bp into ok;
+    perform set_config('tw.r', current_setting('tw.r') || format('%s|%s|%s; nothing changed|expected %s, got %s, counts unchanged %s',
+      r.id, case when got = r.want and ok then 'PASS' else 'FAIL' end, r.label, r.want, got, ok) || chr(10), true);
+  end loop;
+
+  -- MERGE into the current data
+  perform set_config('request.jwt.claims', owner_claims, true);
+  set local role authenticated;
+  rep := public.restore_backup(p, 'merge');
+  reset role;
+  ok := rep = '{"mode":"merge","deleted":{"farmers":0,"payments":0,"usage_entries":0},"inserted":{"farmers":2,"payments":1,"usage_entries":2},"updated":{"farmers":0,"payments":0,"usage_entries":0}}'::jsonb;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.11|%s|merge reports exact counts (inserted 2/2/1, updated 0, deleted 0)|got %s', case when ok then 'PASS' else 'FAIL' end, rep) || chr(10), true);
+  ok := (select count(*) from public.farmers) = bf + 2 and (select count(*) from public.usage_entries) = bu + 2 and (select count(*) from public.payments) = bp + 1;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.12|%s|merge never deletes: database-only rows stay|%s', case when ok then 'PASS' else 'FAIL' end, ok) || chr(10), true);
+  select count(*) into n from public.farmers f
+    where f.id = fg and f.deleted_at = '2026-03-01T10:00:00+05:30' and f.deleted_by = c1;
+  select n + count(*) into n from public.usage_entries u
+    where u.id = '00000000-0000-0000-0000-00000000e902' and u.deleted_at = '2026-10-06T09:30:00+05:30' and u.deleted_by = c1;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.13|%s|soft-deleted rows stay deleted (deleted_at and deleted_by kept)|%s of 2', case when n = 2 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  select count(*) into n from public.farmers f
+    where f.id = fa and f.created_at = '2026-01-01T10:00:00+05:30' and f.created_by = c1
+      and f.updated_at = '2026-01-02T10:00:00+05:30' and f.updated_by = c1;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.14|%s|audit columns are kept from the file|found %s', case when n = 1 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+
+  update public.farmers set name = 'T9 Asha edited' where id = fa;
+  perform set_config('request.jwt.claims', owner_claims, true);
+  set local role authenticated;
+  rep := public.restore_backup(p, 'merge');
+  reset role;
+  ok := rep -> 'inserted' = '{"farmers":0,"payments":0,"usage_entries":0}'::jsonb and rep -> 'updated' = '{"farmers":1,"payments":0,"usage_entries":0}'::jsonb
+    and (select name = 'T9 Asha' and updated_at = '2026-01-02T10:00:00+05:30' from public.farmers where id = fa);
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.15|%s|merge updates a changed row back to the file (updated 1)|got %s', case when ok then 'PASS' else 'FAIL' end, rep) || chr(10), true);
+  perform set_config('request.jwt.claims', owner_claims, true);
+  set local role authenticated;
+  rep := public.restore_backup(p, 'merge');
+  reset role;
+  ok := rep -> 'inserted' = '{"farmers":0,"payments":0,"usage_entries":0}'::jsonb and rep -> 'updated' = '{"farmers":0,"payments":0,"usage_entries":0}'::jsonb;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.16|%s|merge of the same file again changes nothing|got %s', case when ok then 'PASS' else 'FAIL' end, rep) || chr(10), true);
+
+  -- REPLACE: the tables become exactly the file
+  select count(*) into bf from public.farmers;
+  select count(*) into bu from public.usage_entries;
+  select count(*) into bp from public.payments;
+  perform set_config('request.jwt.claims', owner_claims, true);
+  set local role authenticated;
+  rep := public.restore_backup(p, 'replace');
+  reset role;
+  ok := rep = jsonb_build_object('mode', 'replace',
+    'deleted', jsonb_build_object('payments', bp, 'usage_entries', bu, 'farmers', bf),
+    'inserted', jsonb_build_object('farmers', 2, 'usage_entries', 2, 'payments', 1),
+    'updated', jsonb_build_object('farmers', 0, 'usage_entries', 0, 'payments', 0));
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.17|%s|replace reports exact counts (deleted = rows before, inserted 2/2/1)|got %s', case when ok then 'PASS' else 'FAIL' end, rep) || chr(10), true);
+  ok := (select count(*) from public.farmers) = 2 and (select count(*) from public.usage_entries) = 2 and (select count(*) from public.payments) = 1;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.18|%s|after replace the tables hold exactly the file rows (2/2/1)|%s', case when ok then 'PASS' else 'FAIL' end, ok) || chr(10), true);
+  select count(*) into n from (
+    select * from jsonb_populate_recordset(null::public.farmers, p -> 'farmers')
+    except select * from public.farmers
+  ) d;
+  select n + count(*) into n from (
+    select id, farmer_id, used_at, hours, minutes, rate_paise, created_at, created_by, updated_at, updated_by, deleted_at, deleted_by
+      from jsonb_populate_recordset(null::public.usage_entries, p -> 'usage_entries')
+    except select id, farmer_id, used_at, hours, minutes, rate_paise, created_at, created_by, updated_at, updated_by, deleted_at, deleted_by
+      from public.usage_entries
+  ) d;
+  select n + count(*) into n from (
+    select * from jsonb_populate_recordset(null::public.payments, p -> 'payments')
+    except select * from public.payments
+  ) d;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.19|%s|after replace every column equals the file (incl. deleted_at and audit columns)|%s rows differ', case when n = 0 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+
+  -- A Replace that fails half-way (usage for a farmer missing from the file) rolls back completely
+  bad := jsonb_set(p, '{usage_entries,0,farmer_id}', '"00000000-0000-0000-0000-00000000dead"');
+  perform set_config('request.jwt.claims', owner_claims, true);
+  set local role authenticated;
+  begin
+    perform public.restore_backup(bad, 'replace');
+    got := '00000';
+  exception when others then
+    got := sqlstate;
+  end;
+  reset role;
+  ok := got = '23503' and (select count(*) from public.farmers) = 2 and (select count(*) from public.usage_entries) = 2
+    and (select count(*) from public.payments) = 1
+    and exists (select 1 from public.usage_entries where id = '00000000-0000-0000-0000-00000000e901' and farmer_id = fa);
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.20|%s|a replace with a missing farmer raises 23503 and the previous rows are all still there|got %s, rows kept %s', case when ok then 'PASS' else 'FAIL' end, got, ok) || chr(10), true);
+
+  -- Triggers, privileges and the audit trigger working again after the calls
+  select count(*) into n from pg_catalog.pg_trigger t
+    where t.tgname in ('farmers_set_audit', 'usage_entries_set_audit', 'payments_set_audit') and t.tgenabled = 'O';
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.21|%s|the three audit triggers are enabled after every call|%s of 3', case when n = 3 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+  perform set_config('request.jwt.claims', owner_claims, true);
+  insert into public.farmers (name, created_at, deleted_at) values ('T9 After', '2000-01-01', now()) returning * into r;
+  ok := r.created_at = now() and r.deleted_at is null;
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.22|%s|after a restore a normal insert is audited again (created_at now(), deleted_at NULL)|%s', case when ok then 'PASS' else 'FAIL' end, ok) || chr(10), true);
+  ok := not has_table_privilege('authenticated', 'public.farmers', 'delete') and not has_table_privilege('authenticated', 'public.usage_entries', 'delete')
+    and not has_table_privilege('authenticated', 'public.payments', 'delete') and not has_table_privilege('authenticated', 'public.farmers', 'truncate')
+    and not has_table_privilege('authenticated', 'public.usage_entries', 'truncate') and not has_table_privilege('authenticated', 'public.payments', 'truncate')
+    and not exists (select 1 from pg_catalog.pg_policies where schemaname = 'public' and cmd in ('DELETE', 'ALL'));
+  perform set_config('tw.r', current_setting('tw.r') || format('T9.23|%s|authenticated still has no DELETE or TRUNCATE and no DELETE policy exists|%s', case when ok then 'PASS' else 'FAIL' end, ok) || chr(10), true);
+  perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+end $;
 
 with r as (
   select split_part(l, '|', 1) as test, split_part(l, '|', 2) as result,
