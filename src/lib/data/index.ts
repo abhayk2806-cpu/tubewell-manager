@@ -133,3 +133,14 @@ export {
   sortMonthFarmers,
 } from './monthsRules';
 export type { MonthsFarmerRow, MonthsMonth, MonthsScreen, MonthsScreenResult, MonthsStrip } from './monthsRules';
+export { exportBackup, restoreBackup, verifyRestore } from './backupData';
+export type {
+  BackupReadErrorKind,
+  ExportResult,
+  RestoreErrorKind,
+  RestoreMode,
+  RestoreReport,
+  RestoreResult,
+  Verification,
+  VerifyResult,
+} from './backupData';
