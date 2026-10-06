@@ -24,8 +24,8 @@ export function App() {
           </ProtectedRoute>
         }
       >
-        {FEATURE_ROUTES.map(({ path, title, phase }) => (
-          <Route key={path} path={path} element={<PlaceholderPage title={title} phase={phase} />} />
+        {FEATURE_ROUTES.map(({ path, title, phase, page: Page }) => (
+          <Route key={path} path={path} element={Page ? <Page /> : <PlaceholderPage title={title} phase={phase} />} />
         ))}
         <Route path="*" element={<NotFoundPage />} />
       </Route>

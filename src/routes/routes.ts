@@ -1,4 +1,6 @@
+import type { ComponentType } from 'react';
 import { CalendarDays, Database, Droplets, LayoutDashboard, Users, Wallet, type LucideIcon } from 'lucide-react';
+import { FarmersPage } from '@/pages/farmers/FarmersPage';
 
 export interface FeatureRoute {
   path: string;
@@ -6,6 +8,8 @@ export interface FeatureRoute {
   title: string;
   /** Rebuild phase that builds this screen (shown on the temporary placeholder). */
   phase: number;
+  /** The built screen; routes without one render the shared placeholder. */
+  page?: ComponentType;
 }
 
 export interface NavTab {
@@ -14,10 +18,10 @@ export interface NavTab {
   icon: LucideIcon;
 }
 
-// Feature routes. Every one renders the shared placeholder until its phase is built.
+// Feature routes. Each renders the shared placeholder until its phase gives it a `page`.
 export const FEATURE_ROUTES: FeatureRoute[] = [
   { path: '/', title: 'Dashboard', phase: 7 },
-  { path: '/farmers', title: 'Kisan', phase: 4 },
+  { path: '/farmers', title: 'Kisan', phase: 4, page: FarmersPage },
   { path: '/farmers/:id', title: 'Kisan ka Hisaab', phase: 6 },
   { path: '/usage', title: 'Pani Entry', phase: 4 },
   { path: '/payments', title: 'Paisa', phase: 5 },
