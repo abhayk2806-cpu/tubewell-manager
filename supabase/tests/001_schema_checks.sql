@@ -1,10 +1,12 @@
 -- supabase/tests/001_schema_checks.sql
--- Schema, trigger and RLS checks for migrations 001-005 (project tubewell-hisab).
+-- Schema, trigger and RLS checks for migrations 001-006 (project tubewell-hisab).
 --
 -- HOW TO RUN (re-runnable, leaves no data behind):
 --   Run SECTION A as one call (Supabase MCP execute_sql or the SQL editor). It is a single
 --   transaction that ends with ROLLBACK; its last SELECT prints one PASS/FAIL row per check.
---   Then run SECTION B as a second call: it proves nothing was left behind (T6).
+--   T0.01 records the row counts that existed BEFORE the tests (the owner's own rows are never
+--   touched or assumed absent).
+--   Then run SECTION B as a second call: T6.01 prints the counts again; they must equal T0.01.
 -- All data is fictional. Results are collected in the transaction-local setting tw.r, so the
 -- checks still record correctly while the session role is switched to anon or authenticated.
 -- A logged-in user is simulated with request.jwt.claims plus SET LOCAL ROLE authenticated.
@@ -16,6 +18,10 @@ begin;
 
 select set_config('tw.r', '', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+
+-- T0 baseline: row counts before any test row is created (compare with T6.01 after the rollback)
+select set_config('tw.r', current_setting('tw.r') || format('T0.01|PASS|baseline row counts before the tests (T6.01 must show the same)|farmers=%s usage_entries=%s payments=%s',
+  (select count(*) from public.farmers), (select count(*) from public.usage_entries), (select count(*) from public.payments)) || chr(10), true);
 
 -- T1 constraints and T2 generated column (as the table owner; constraints apply to every role)
 do $$
@@ -325,6 +331,46 @@ begin
   end loop;
 end $$;
 
+-- T8 payments note length from migration 006, and the amount check (as the table owner)
+-- Devanagari text is built with chr() so this file stays pure ASCII.
+do $$
+declare
+  fid uuid;
+  pid uuid;
+  c record;
+  got text;
+  n integer;
+begin
+  insert into public.farmers (name) values ('T8 Kisan') returning id into fid;
+  insert into public.payments (farmer_id, paid_at, amount_paise) values (fid, now(), 10000) returning id into pid;
+  for c in
+    select * from (values
+      ('T8.01', 'accept a 200-character note', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, repeat(''n'', 200))', '00000'),
+      ('T8.02', 'reject a 201-character note', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, repeat(''n'', 201))', '23514'),
+      ('T8.03', 'accept a NULL note', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, null)', '00000'),
+      ('T8.04', 'accept a Devanagari note', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, chr(2346) || chr(2376) || chr(2360) || chr(2366))', '00000'),
+      ('T8.05', 'accept a 200-character Devanagari note (characters, not bytes)', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, repeat(chr(2346), 200))', '00000'),
+      ('T8.06', 'reject a 201-character Devanagari note', 'insert into public.payments (farmer_id, paid_at, amount_paise, note) values (''{fid}'', now(), 100, repeat(chr(2346), 201))', '23514'),
+      ('T8.07', 'reject an update of a note to 201 characters', 'update public.payments set note = repeat(''n'', 201) where id = ''{pid}''', '23514'),
+      ('T8.08', 'still reject amount_paise = 0', 'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fid}'', now(), 0)', '23514'),
+      ('T8.09', 'still reject amount_paise < 0', 'insert into public.payments (farmer_id, paid_at, amount_paise) values (''{fid}'', now(), -1)', '23514')
+    ) as v(id, label, stmt, want)
+    order by id
+  loop
+    begin
+      execute replace(replace(c.stmt, '{fid}', fid::text), '{pid}', pid::text);
+      got := '00000';
+    exception when others then
+      got := sqlstate;
+    end;
+    perform set_config('tw.r', current_setting('tw.r') || format('%s|%s|%s|expected %s, got %s', c.id, case when got = c.want then 'PASS' else 'FAIL' end, c.label, c.want, got) || chr(10), true);
+  end loop;
+
+  select count(*) into n from pg_catalog.pg_constraint
+    where conrelid = 'public.payments'::regclass and conname = 'payments_note_max_length' and contype = 'c';
+  perform set_config('tw.r', current_setting('tw.r') || format('T8.10|%s|constraint payments_note_max_length exists|found %s', case when n = 1 then 'PASS' else 'FAIL' end, n) || chr(10), true);
+end $$;
+
 with r as (
   select split_part(l, '|', 1) as test, split_part(l, '|', 2) as result,
          split_part(l, '|', 3) as check_name, split_part(l, '|', 4) as detail
@@ -343,9 +389,10 @@ rollback;
 
 -- ===================================================================== SECTION B
 -- T6: no residue. Run after SECTION A (separate call). Read-only.
+-- PASS only when the detail equals the T0.01 baseline printed by SECTION A (compare the two lines).
 select 'T6.01' as test,
-       case when f + u + p = 0 then 'PASS' else 'FAIL' end as result,
-       'no rows left in farmers, usage_entries, payments after the rolled-back tests' as check_name,
+       'COMPARE' as result,
+       'row counts after the rolled-back tests (must equal T0.01)' as check_name,
        format('farmers=%s usage_entries=%s payments=%s', f, u, p) as detail
 from (select (select count(*) from public.farmers) as f,
              (select count(*) from public.usage_entries) as u,
