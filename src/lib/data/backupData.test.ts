@@ -133,6 +133,21 @@ describe('restoreBackup', () => {
 });
 
 describe('verifyRestore', () => {
+  it('more than 1,000 rows: verification reads all 2,500 payments page by page (audit gap)', async () => {
+    const rows = dbRows();
+    const chhotu = rows.payments[2]!;
+    const many = Array.from({ length: 2500 }, (_, i) => ({ ...chhotu, id: `d4000000-0000-4000-8000-${String(i).padStart(12, '0')}`, amount_paise: 100 }));
+    const file = buildBackupFile({ farmers: rows.farmers, usage_entries: workedRows().usage_entries, payments: many }, EXPORTED_AT);
+    serve({
+      farmers: [ok(rows.farmers), EMPTY],
+      usage_entries: [ok(rows.usage_entries), EMPTY],
+      payments: [ok(many.slice(0, 1000)), ok(many.slice(1000, 2000)), ok(many.slice(2000)), EMPTY],
+    });
+    const result = await verifyRestore(file, 'replace');
+    expect(result.ok && result.verification.counts.payments).toBe(2500);
+    expect(result.ok && result.verification.verified).toBe(true);
+  });
+
   it('replace: the database equals the file -> verified', async () => {
     serveWorked();
     const result = await verifyRestore(workedFile(), 'replace');

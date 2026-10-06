@@ -1,12 +1,13 @@
 // Pure Kisan ka Hisaab (farmer profile) rules: no I/O and no second algorithm. Every figure is a
 // field of ONE buildFarmerLedger call on the farmer's own rows (L17); this module only selects,
 // joins, orders and splits a signed balance into a kind plus an absolute amount for display.
-import { LedgerInputError, buildFarmerLedger, intDiv, isActiveFarmer } from '@/lib/ledger';
+import { LedgerInputError, buildFarmerLedger, isActiveFarmer, sumPaise } from '@/lib/ledger';
 import type { FarmerTotals, MonthRow, TrailPiece } from '@/lib/ledger';
 import type { PaymentRowLike } from './paymentRules';
 import { classifyPayments } from './paymentRules';
 import { classifyUsage, usageAmountPaise } from './usageRules';
 import type { UsageRowLike } from './usageRules';
+import { splitMinutes } from './timeline';
 
 /** Long histories show this many rows at first, then this many more per "Aur dikhao". */
 export const PROFILE_PAGE_SIZE = 30;
@@ -48,9 +49,18 @@ export interface ProfileLedgerLine {
   readonly balance: ProfileBalance;
 }
 
+/** Pani time: the sum of the engine's month minutes, split for display. */
+export interface ProfileTime {
+  readonly totalMinutes: number;
+  readonly hours: number;
+  readonly minutes: number;
+}
+
 export interface FarmerProfile<U, P> {
   /** The engine totals; outstanding and credit stay two separate figures (E18). */
   readonly totals: FarmerTotals;
+  /** Total Pani time of all months (Phase PR1, D32). */
+  readonly time: ProfileTime;
   /** Every month with usage or payments, newest first (L11). */
   readonly months: readonly ProfileMonth[];
   /** Live payments, newest first, each with its allocation trail. */
@@ -91,10 +101,8 @@ export function buildFarmerProfile<U extends UsageRowLike, P extends PaymentRowL
       return { row, pieces: trail.pieces, unappliedPaise: trail.unappliedPaise };
     });
     const usage = classifyUsage(usageRows).live.map((row) => ({ row, amountPaise: usageAmountPaise(row) }));
-    const months = [...ledger.months].reverse().map((m) => {
-      const hours = intDiv(m.totalMinutes, 60);
-      return { ...m, hours, minutes: m.totalMinutes - hours * 60 };
-    });
+    const months = [...ledger.months].reverse().map((m) => ({ ...m, ...splitMinutes(m.totalMinutes) }));
+    const totalMinutes = sumPaise(ledger.months.map((m) => m.totalMinutes));
     const lines = [...ledger.rows].reverse().map((r) => ({
       kind: r.kind,
       id: r.id,
@@ -104,7 +112,7 @@ export function buildFarmerProfile<U extends UsageRowLike, P extends PaymentRowL
       totalMinutes: r.totalMinutes,
       balance: toProfileBalance(r.balancePaise),
     }));
-    return { ok: true, profile: { totals: ledger.totals, months, payments, usage, ledger: lines } };
+    return { ok: true, profile: { totals: ledger.totals, time: { totalMinutes, ...splitMinutes(totalMinutes) }, months, payments, usage, ledger: lines } };
   } catch (error) {
     if (error instanceof LedgerInputError) return { ok: false };
     throw error;

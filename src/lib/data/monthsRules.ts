@@ -3,12 +3,13 @@
 // are each ACTIVE farmer's buildFarmerProfile months (one engine call per farmer). This module only
 // joins names, orders, filters by year and, for the year strip, adds engine month figures with
 // sumPaise. Months have no credit column, so nothing is ever netted (L8, L10, L11).
-import { LedgerInputError, buildAllFarmersMonths, intDiv, isActiveFarmer, isMonthKey, sumPaise } from '@/lib/ledger';
+import { LedgerInputError, buildAllFarmersMonths, isActiveFarmer, isMonthKey, sumPaise } from '@/lib/ledger';
 import type { MonthRow } from '@/lib/ledger';
 import type { DashboardFarmerLike } from './dashboardRules';
 import type { PaymentRowLike } from './paymentRules';
 import { buildFarmerProfile } from './profileRules';
 import type { ProfileMonth } from './profileRules';
+import { splitMinutes } from './timeline';
 import type { UsageRowLike } from './usageRules';
 
 /** One farmer's month (the profile month card) plus who it is. */
@@ -52,11 +53,6 @@ function compareText(a: string, b: string): number {
 
 function yearOf(monthKey: string): string {
   return monthKey.slice(0, 4);
-}
-
-function splitMinutes(totalMinutes: number): { hours: number; minutes: number } {
-  const hours = intDiv(totalMinutes, 60);
-  return { hours, minutes: totalMinutes - hours * 60 };
 }
 
 /** Highest Baaki first; ties by name ignoring case, then farmer id. */

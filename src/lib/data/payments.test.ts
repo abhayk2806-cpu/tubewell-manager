@@ -47,6 +47,26 @@ describe('listPayments', () => {
     expect(methods(q2)).toEqual([['select', '*'], ['order', 'id'], ['range', 1, 1000]]);
   });
 
+  it('more than 1,000 rows: 2,500 rows come back over 3 full pages and an empty one (audit gap)', async () => {
+    const rows = Array.from({ length: 2500 }, (_, i) => ({ ...stored, id: `p-${String(i).padStart(5, '0')}` }));
+    const queries = queue(
+      { data: rows.slice(0, 1000), error: null },
+      { data: rows.slice(1000, 2000), error: null },
+      { data: rows.slice(2000), error: null },
+      { data: [], error: null },
+    );
+    const all = await listPayments();
+    expect(all).toHaveLength(2500);
+    expect(all[2499]).toEqual(rows[2499]);
+    expect(queries.map((q) => methods(q).find((m) => m[0] === 'range'))).toEqual([
+      ['range', 0, 999],
+      ['range', 1000, 1999],
+      ['range', 2000, 2999],
+      ['range', 2500, 3499],
+    ]);
+    expect(supabaseMock.from).toHaveBeenCalledWith('payments');
+  });
+
   it('maps an error', async () => {
     queue({ data: null, error: { code: '42501', message: 'denied' }, status: 403 });
     await expect(listPayments()).rejects.toMatchObject({ kind: 'permission' });

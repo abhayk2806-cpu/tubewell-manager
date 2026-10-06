@@ -1,6 +1,6 @@
 // Private helpers shared by usageRules and paymentRules (not exported from the barrel):
 // newest-first ordering, IST month filter and month lists. IST math comes from the engine.
-import { istDateKey, istMonthKey, parseInstantMs } from '@/lib/ledger';
+import { intDiv, istDateKey, istMonthKey, parseInstantMs } from '@/lib/ledger';
 
 function compareText(a: string, b: string): number {
   if (a < b) return -1;
@@ -24,6 +24,12 @@ export function dayOrNull(iso: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Whole hours and the remaining minutes of a minute count (integer division), for display. */
+export function splitMinutes(totalMinutes: number): { hours: number; minutes: number } {
+  const hours = intDiv(totalMinutes, 60);
+  return { hours, minutes: totalMinutes - hours * 60 };
 }
 
 /** Distinct months plus the current month, newest first. */

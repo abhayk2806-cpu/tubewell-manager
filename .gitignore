@@ -36,6 +36,7 @@ dist-ssr/
 # Personal Claude overrides — never commit
 CLAUDE.local.md
 *.backup
+.claude/launch.json
 
 # Push-to-main approval marker (main-push-guard hook) — short-lived, never commit
 .claude/.main-push-unlocked

@@ -8,11 +8,12 @@ import {
   intDiv,
   isActiveFarmer,
   parseInstantMs,
+  sumPaise,
 } from '@/lib/ledger';
 import type { Dashboard, DashboardFarmerRow, DashboardView, MonthRow } from '@/lib/ledger';
 import { classifyPayments } from './paymentRules';
 import type { PaymentRowLike } from './paymentRules';
-import { monthOf } from './timeline';
+import { monthOf, splitMinutes } from './timeline';
 import { classifyUsage, usageAmountPaise } from './usageRules';
 import type { IstMoment, UsageRowLike } from './usageRules';
 
@@ -80,9 +81,20 @@ export interface PeriodOptions {
   readonly years: readonly string[];
 }
 
+/** Pani time of the period: the sum of the engine's month minutes of active farmers (D32). */
+export interface DashboardTime {
+  readonly totalMinutes: number;
+  readonly hours: number;
+  readonly minutes: number;
+}
+
 export interface DashboardScreen {
   /** The engine dashboard for the view; outstanding and credit are separate sums. */
   readonly dashboard: Dashboard;
+  /** Pani time of the selected period (All Time, one IST month or one IST year). */
+  readonly time: DashboardTime;
+  /** Chalu farmers counted in the figures (the engine's activeFarmerCount). */
+  readonly activeFarmerCount: number;
   /** True when the view has at least one live entry or payment of an active farmer. */
   readonly periodHasActivity: boolean;
   readonly summary: DashboardSummary;
@@ -197,6 +209,19 @@ export function buildRecentActivity(request: {
   return items.slice(0, request.limit ?? RECENT_LIMIT);
 }
 
+/** The engine month rows inside the view (All Time = every month). */
+function monthsInView(months: readonly MonthRow[], view: DashboardView): MonthRow[] {
+  if (view.kind === 'all') return [...months];
+  if (view.kind === 'month') return months.filter((m) => m.monthKey === view.monthKey);
+  return months.filter((m) => m.monthKey.slice(0, 4) === view.yearKey);
+}
+
+/** Pani time of the view: the engine's month minutes added with sumPaise. */
+export function periodTime(months: readonly MonthRow[], view: DashboardView): DashboardTime {
+  const totalMinutes = sumPaise(monthsInView(months, view).map((m) => m.totalMinutes));
+  return { totalMinutes, ...splitMinutes(totalMinutes) };
+}
+
 /** Whether the view has at least one live entry or payment of an active farmer (IST month / year). */
 function hasActivity(
   view: DashboardView,
@@ -243,6 +268,8 @@ export function buildDashboardScreen(request: {
       ok: true,
       screen: {
         dashboard,
+        time: periodTime(months, view),
+        activeFarmerCount: dashboard.activeFarmerCount,
         periodHasActivity: hasActivity(view, activeIds, usageRows, paymentRows),
         summary: summarizeDashboard(rows),
         rows,
