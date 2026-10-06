@@ -30,13 +30,17 @@
   - [x] Engine helpers `istWallClockToIso`, `istTimeKey`, `formatRupees` (additive)
   - [x] Usage rules + data layer, `useUsage`, Pani Entry screen (filters, live amount, warnings, delete/restore)
   - [ ] Owner: smoke-test the Pani tab; review the 4B notes (`PROJECT_STATUS.md`, 2026-10-06 Phase 4B entry)
-- [ ] **5** — Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore ← **next**
-  - [ ] Payment data functions in `src/lib/data/` (paged list, create, edit, soft delete, restore) with the same `DataError`, 0-row and changed-columns rules.
-  - [ ] Form: date + time via `istWallClockToIso` (prefill from `currentIstMoment`); amount text via `parseRupeesToPaise`; `validatePaymentInput`; show money with `formatRupees` and times with `istTimeKey`.
-  - [ ] Live FIFO preview with `previewPayment` (use `replacesPaymentId` when editing; show before/after, pieces and "Advance / Credit").
-  - [ ] Duplicate warning with `findDuplicatePayments`, never a block (L14).
-  - [ ] Farmer picker shows ACTIVE farmers only; hook on `useRowStore`; one copy module.
-- [ ] **6** — Farmer profile
+- [x] **5** — Payments (done 2026-10-06; pending owner review)
+  - [x] Part 0 (D25): long-duration warning on total entry time
+  - [x] Migration 006 (payment note ≤200) + SQL tests 111/111 with a row-count baseline
+  - [x] Payment rules (live FIFO preview via the engine), payments data layer, `usePayments`, Paisa screen
+  - [ ] Owner: smoke-test the Paisa tab with the worked numbers; review the Phase 5 notes (`PROJECT_STATUS.md`)
+- [ ] **6** — Farmer profile ← **next**
+  - [ ] Wire `/farmers/:id` (still the placeholder) and link farmer rows to it.
+  - [ ] Profile data from ONE `buildFarmerLedger({ usage, payments })` call on that farmer's rows: totals, month rows, allocation trail and chronological rows with the running balance.
+  - [ ] Totals: charges, total paid, outstanding ("Baki") and credit ("Advance / Credit") as separate figures (E18); month table with status words incl. "Sirf Payment" (D3).
+  - [ ] Allocation trail per payment: plain month pieces (possibly later months) and the unapplied part as "Advance / Credit" (D5).
+  - [ ] Show money with `formatRupees`, dates with `istDateKey` / `istTimeKey`, month labels with `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
 - [ ] **7** — Dashboard + months
 - [ ] **8** — Backup / restore
   - [ ] Restore needs a controlled DB function: the audit trigger forces `created_*` and clears `deleted_*` on insert.

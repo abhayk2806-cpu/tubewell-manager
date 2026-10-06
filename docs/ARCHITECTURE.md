@@ -5,7 +5,8 @@
 > - The **app foundation exists** (Phase 2B): auth, routing, layout shell, Supabase client, generated types, tests.
 > - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3).
 > - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a).
-> - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b). Payments and all totals screens are still planned.
+> - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
+> - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5). The farmer profile, months and dashboard screens are still planned.
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -50,11 +51,12 @@ Rules that follow from this:
 | `hooks/useRowStore.ts` | Shared hook core (Phase 4B): load once, one mutation at a time, quiet reload, `refreshFailed` |
 | `hooks/useFarmers.ts` | Loads farmers, exposes the three lists and the mutations (Phase 4A, on `useRowStore` since 4B) |
 | `hooks/useUsage.ts` | Loads usage entries, exposes live / deleted lists and the mutations (Phase 4B) |
+| `hooks/usePayments.ts` | Loads payments, exposes live / deleted lists and the mutations (Phase 5) |
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
-| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan screen) |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry and Paisa) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
 | `index.css` + `tailwind.config.js` | Design tokens as CSS variables (no hex colours or inline styles in components) |
 
@@ -73,11 +75,13 @@ Rules that follow from this:
 - Then run `pnpm run typecheck`.
 - CLI alternative: `npx supabase gen types typescript --project-id ciszgagzhfubuqhpmyeh > src/types/database.ts`, then re-add the header.
 
-## Database schema (live, migrations 001–005, updated 2026-10-06)
+## Database schema (live, migrations 001–006, updated 2026-10-06)
 
 Sources:
-- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`, `005_farmers_input_checks.sql`.
-- Checks: `supabase/tests/001_schema_checks.sql` (100 checks since 005, all rolled back) plus a residue check.
+- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`, `005_farmers_input_checks.sql`, `006_payments_note_check.sql`.
+- Checks: `supabase/tests/001_schema_checks.sql` (111 checks since 006, all rolled back).
+  - T0.01 records the row counts that already exist; the owner's rows are never touched or assumed absent.
+  - The residue check T6.01 (second call) must print the same counts.
 
 All tables are in `public`. IDs are `uuid` with default `gen_random_uuid()`. Timestamps are `timestamptz`. Money is integer paise in `bigint`.
 
@@ -124,7 +128,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 | `farmer_id` | uuid NOT NULL | FK → `farmers(id)` ON DELETE RESTRICT |
 | `paid_at` | timestamptz NOT NULL | no default; the app always sends it |
 | `amount_paise` | bigint NOT NULL | `amount_paise > 0` |
-| `note` | text NULL | — |
+| `note` | text NULL | `payments_note_max_length`: NULL or at most 200 characters (006) |
 
 **Indexes** (partial, for reads of live rows), in addition to the 3 primary keys:
 - `usage_entries (farmer_id, used_at) WHERE deleted_at IS NULL`
@@ -184,6 +188,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - Phase 2B tests cover config parsing, the route guards and login error handling (with a mocked Supabase client).
   - Phase 4A tests cover the farmer rules, `DataError` mapping, paging, every farmer data function (mocked Supabase client, never the live DB), the `useFarmers` hook and the Farmers screen. `src/lib/data/layer-guard.test.ts` statically checks the UI layers (see Data layer).
   - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
+  - Phase 5 tests cover the payment rules (including the live preview with the worked numbers), the payments data functions, `usePayments`, the Paisa screen with its preview panel, the shared month label, and the D25 long-duration boundaries.
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
@@ -324,6 +329,9 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `farmers.ts` | Farmer queries, the one classification function, and the mutations |
 | `usageRules.ts` | Pure Pani Entry rules (no I/O), Phase 4B |
 | `usage.ts` | Usage queries and mutations, Phase 4B |
+| `paymentRules.ts` | Pure Paisa rules (no I/O), including the live preview through the engine, Phase 5 |
+| `payments.ts` | Payment queries and mutations, Phase 5 |
+| `timeline.ts` | Private helpers shared by the usage and payment rules: newest-first sort, IST month/day, month list (Phase 5) |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
 
 ### API
@@ -416,7 +424,7 @@ currentIstMoment(): { dateKey, timeKey, monthKey }
 - **`usageAmountPaise`** throws `LedgerInputError` when `total_minutes` is null or differs from hours×60+minutes (K-03). It never guesses.
 - **Warnings** (never block):
   - `duplicate`: same farmer, IST day, hours and minutes (`findDuplicateUsage`, L14);
-  - `long_duration`: hours > 24;
+  - `long_duration`: TOTAL entry time over 24 h 00 min (D25, Phase 5: 24 h 01 min warns, exactly 24 h does not);
   - `future_date`: IST date after today.
   - When editing (`original`), a warning whose fields did not change is not raised again.
 - **Soft-delete split.** `classifyUsage` is the only usage soft-delete split; both lists are newest first by `used_at`, then id.
@@ -437,6 +445,70 @@ currentIstMoment(): { dateKey, timeKey, monthKey }
   - **Rows.** Farmer, IST date and time, "H ghante M minute", rate per hour, amount. Edit, and Delete with a confirmation. The Deleted segment shows the delete date and "Wapas lao".
   - **Bad rows.** If any row's amount cannot be computed, the page shows an error state (no list, no add).
   - **No totals.** No month totals, balances or per-farmer sums.
+
+## Payment data (Phase 5)
+
+```ts
+// paymentRules.ts (pure; money, FIFO and IST math come from the engine)
+newPaymentForm(now, farmerId?) / paymentFormFromRow(row): PaymentForm     // strings; amount starts EMPTY
+buildPaymentInput(form): { ok: true, input: PaymentInput } | { ok: false, codes: PaymentFormCode[] }
+paymentInputCodes(input): PaymentFormCode[]                               // used by the data layer before writes
+describePaymentWarnings(input, rows, now, { excludeId?, original? }): PaymentWarning[]   // duplicate | future_date
+buildPaymentPreview({ farmerId, input?, usageRows, paymentRows, replacesPaymentId? }): PaymentPreviewResult
+classifyPayments(rows): { live, deleted }    filterPayments(rows, { farmerId?, monthKey? })
+listPaymentMonths(rows, currentMonthKey): string[]
+// payments.ts
+listPayments()  createPayment(input)  updatePayment(current, input)  softDeletePayment(id)  restorePayment(id)
+```
+
+- **`buildPaymentInput`** trims every field, then:
+  - the amount goes through `parseRupeesToPaise`: empty gives `amount_required`, unreadable text gives the local `amount_invalid`;
+  - date and time go through `istWallClockToIso`;
+  - the engine's `validatePaymentInput` decides the rest;
+  - the note is trimmed of all whitespace, empty becomes `null`, and more than 200 code points gives `note_too_long`.
+  - `PaymentFormCode` = the engine payment codes plus `amount_invalid` and `note_too_long`. The engine's `amount_too_large` exists only for usage.
+- **`buildPaymentPreview`** keeps only that farmer's usage and payment rows, then calls the engine:
+  - without `input`: `buildFarmerLedger(...).totals` (kind `current`);
+  - with `input`: the full `previewPayment` result (kind `preview`), passing `replacesPaymentId` when editing.
+  - A `LedgerInputError` (bad data, such as a null `total_minutes` or a deleted replaced payment) gives `{ ok: false }`. It computes nothing itself.
+- **Warnings** (never block):
+  - `duplicate`: same farmer, amount and IST day (`findDuplicatePayments`, L14);
+  - `future_date`: IST date after today.
+  - With `original`, a warning whose fields did not change is not raised again.
+- **Data functions.**
+  - Same rules as for usage: validate first (`client_validation`), check every `error`, 0 rows → `not_found`, live-only edit/delete and deleted-only restore.
+  - `updatePayment` sends only the changed columns among `amount_paise`, `paid_at` (compared as an instant) and `note`.
+  - The farmer of a payment cannot change: a different `farmer_id` is refused with `DataError('constraint', 'farmer_locked')` before any request.
+
+## Paisa screen (Phase 5)
+
+- **Route.** `/payments` → `src/pages/payments/PaymentsPage.tsx` (with `PaymentFormDialog.tsx`, `PaymentListItem.tsx`, `PaymentPreviewPanel.tsx`).
+- **Data.** Hooks `usePayments()`, `useUsage()` (rows for the preview only; their loading or failure never blocks the list) and `useFarmers()` (picker and names).
+- **Copy.** All Hinglish strings, including the code, warning and `DataError` maps, live in `src/pages/payments/copy.ts`. The month label is the shared `src/pages/shared/monthLabel.ts`.
+- **List.**
+  - Segments Payments / Deleted.
+  - Farmer filter (Sabhi kisan plus non-deleted farmers, Band marked) and month filter (current IST month by default, "Sabhi mahine"). Both apply to the segments and the counts.
+  - Rows show farmer, IST date and time, amount and note. Edit, and Delete with a confirmation that says the farmer's baaki / advance can change. Deleted rows show the delete date and "Wapas lao".
+- **Form.**
+  - Farmer: active farmers only; read-only when editing.
+  - Date and time: prefilled with the current IST moment.
+  - Amount: empty at the start. Note: optional, up to 200 characters.
+  - There is no month field anywhere (L5).
+- **Preview panel.** Every figure is an engine field shown with `formatRupees`. The UI does no arithmetic, and outstanding and credit are always two separate lines (E18).
+
+  | Shown | Engine field |
+  |---|---|
+  | Abhi ka hisaab (farmer chosen, form not yet valid) | `buildFarmerLedger(...).totals.outstandingPaise` / `.creditPaise` |
+  | Abhi ka hisaab / Pehle (form valid) | `preview.before.totals.outstandingPaise` / `.creditPaise` |
+  | Is payment se: month lines | `preview.pieces[]` (`monthKey` → month label, `amountPaise`), oldest first |
+  | Is payment se: "Advance / Credit" | `preview.unappliedPaise` (shown only when > 0; D5) |
+  | Payment ke baad / Baad mein | `preview.after.totals.outstandingPaise` / `.creditPaise` (the current value is shown next to it when adding) |
+  | Naya Advance / Credit | `preview.creditCreatedPaise` (shown only when > 0) |
+
+  - If the usage rows are still loading or failed, a short message replaces the numbers. Save stays allowed.
+  - A bad-data result shows a message and disables Save.
+- **Warnings** sit in one box with "Phir bhi save karo" / "Wapas jao, badlo".
+- **States** match the other screens: loading, error with retry, empty messages, `aria-live` messages, the `refreshFailed` line, buttons disabled while saving.
 
 ## Backup and restore (Phase 8)
 

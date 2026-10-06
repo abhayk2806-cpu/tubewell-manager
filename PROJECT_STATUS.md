@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 4B done (Pani Entry screen, pending owner review); Phase 5 (Payments) next
+> **Current phase:** 5 done (Paisa screen with live FIFO preview + migration 006, pending owner review); Phase 6 (farmer profile) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -27,8 +27,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 3B | Repo sync check + docs fixes (spec E9/E19 rows, D19→D20 relabel) | ✅ Done (2026-10-06) |
 | 4A | Data layer `src/lib/data/` + Farmers screen (Kisan) + migration 005 (farmer input checks) | ✅ Done (2026-10-06), pending owner review |
 | 4B | Usage entry (Pani Entry) + Phase 4A carry-forwards (D23) + 3 additive engine helpers | ✅ Done (2026-10-06), pending owner review |
-| 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started (next) |
-| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
+| 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), pending owner review |
+| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started (next) |
 | 7 | Dashboard + months view | ⬜ Not started |
 | 8 | Backup / restore | ⬜ Not started |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
@@ -38,8 +38,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
 2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
-3. Owner smoke-tests Phase 4B: the Pani tab (`pnpm run dev`). See the 2026-10-06 Phase 4B session entry.
-4. **Phase 5: Payments.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+3. Owner smoke-tests Phase 5: the Paisa tab with the worked numbers (`pnpm run dev`). See the 2026-10-06 Phase 5 session entry.
+4. **Phase 6: Farmer profile.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -198,6 +198,10 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - When a change is saved but the reload after it fails, the list stays on screen with a short "saved, list not refreshed" line and a retry. It is never replaced by the error screen.
 - `.claude/rules/database-and-migrations.md` brought up to date (migrations 001–005, 100 SQL checks).
 
+### 2026-10-06 — D25 (Phase 4B review carry-forward, owner approved)
+- The long-duration usage warning uses the TOTAL entry time: over 24 h 00 min warns (24 h 01 min and 24 h 30 min warn; exactly 24 h does not). An unchanged edit still does not warn again.
+- `.claude/rules/database-and-migrations.md` updated for migration 006 and 111 SQL checks.
+
 ---
 
 ## Session Log
@@ -348,6 +352,31 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
   2. `describeUsageWarnings` takes an extra `original` option, so an unchanged edit does not warn again.
   3. Month names in the filter come from a label table in the copy module ("Oct 2026").
 - **Failed attempt:** none.
+
+### 2026-10-06 — Phase 5: Paisa (payments) screen
+- **Preconditions:**
+  - HEAD = origin = `44a4596`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–005; `payments` 0 rows; `payments` policies SELECT/INSERT/UPDATE for `authenticated`; trigger `payments_set_audit`.
+  - **Deviation:** `usage_entries` had 2 rows (not 0) from the owner's 4B smoke test. Claude stopped and reported it. The owner then deleted everything in the app, which is a soft delete: 2 usage rows and 3 farmer rows remain with `deleted_at` set.
+  - On the owner's "please complete your task" the work continued, with the end check "row counts unchanged": farmers 3, usage_entries 2, payments 0.
+- **Part 0 (D25):** long-duration warning on total time (boundaries 23h59 no, 24h00 no, 24h01 yes, 25h00 yes); rules file updated.
+- **Migration 006** (`006_payments_note_check.sql`): `payments_note_max_length` (note NULL or ≤200 characters). Stored md5 = file md5 `5e63e96c…`.
+- **SQL tests:** 111/111 PASS (100 before, plus the T0.01 row-count baseline and T8.01–T8.10).
+  - T6.01 (residue) now prints counts that must equal T0.01; both printed farmers=3 usage_entries=2 payments=0. The old T6 assumed empty tables.
+  - Advisors: no new findings. Generated types unchanged (a CHECK constraint does not appear in them).
+- **Code:**
+  - `src/lib/data/`: `paymentRules.ts`, `payments.ts`, `timeline.ts`;
+  - `src/hooks/usePayments.ts`;
+  - `src/pages/payments/` (page, form dialog, preview panel, list item, copy);
+  - `src/pages/shared/monthLabel.ts`;
+  - `/payments` wired.
+  - No engine change; no dependency added.
+- **Tests:** 33 files / 571 tests (before: 28 / 489). Worked numbers (a), (b), (c) are covered in `paymentRules.test.ts` and `PaymentsPage.test.tsx`.
+- **Gates:** typecheck, lint, test and build green. The JS chunk is 576 kB (the 500 kB warning, as before).
+- **Notes for owner review:**
+  1. Payment code `amount_too_large` (listed in the prompt) cannot happen for payments: the engine produces it only for usage, and an amount too large for a safe integer is already refused by `parseRupeesToPaise` (`amount_invalid`).
+  2. If the usage rows fail to load, the preview shows a message and Save stays allowed. Only a bad-data preview (`ok: false`) disables Save.
+  3. Test rows from the smoke tests stay in the live database (soft-deleted) until the Phase 10 wipe (D8).
+- **Failed attempt:** one lint error (`prefer-const` in a test) fixed before commit.
 
 ---
 

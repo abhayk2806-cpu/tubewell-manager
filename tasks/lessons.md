@@ -121,6 +121,16 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: keep "load failed" (no data yet: error state) and "refresh failed" (data on screen: keep it, show one line with a retry) as separate states. Both hooks share this through `useRowStore`.
 - Impact: medium. Date: 2026-10-06.
 
+**SQL residue checks must not assume empty tables**
+- Finding (Phase 5): T6 checked `farmers + usage + payments = 0`, but the owner's own (soft-deleted) smoke-test rows now exist, so it would fail without any residue.
+- Rule: record the row counts before the tests (T0.01) and compare after the rollback (T6.01). Tests create their own rows inside the rolled-back transaction and never touch or count the owner's rows.
+- Impact: medium. Date: 2026-10-06.
+
+**"Delete" in the app is a soft delete**
+- Finding (Phase 5): the owner "deleted all entries" in the app before a precondition check that expected 0 rows; the rows stayed (with `deleted_at` set), by design.
+- Rule: preconditions about live data should be written as "unchanged from the start count" or "0 live rows", not "0 rows". Only the Phase 10 SQL wipe removes rows.
+- Impact: low. Date: 2026-10-06.
+
 **pnpm 11 skips packages published less than a day ago**
 - Finding (Phase 4A): `pnpm add @radix-ui/react-dialog` installed 1.1.23 while 1.2.0 was the newest; 1.2.0 was under a day old (pnpm's default minimum release age).
 - Rule: report the version actually installed (`pnpm add` output or `package.json`), not the registry's "latest".
