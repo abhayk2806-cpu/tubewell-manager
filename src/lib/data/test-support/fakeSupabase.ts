@@ -1,6 +1,7 @@
 // Test-only fake of a supabase-js query builder. Every chained call is recorded and the chain
 // resolves to the given result, like a real PostgREST builder. It never touches the network.
 import type { FarmerRow } from '../farmers';
+import type { UsageRow } from '../usage';
 
 export interface RecordedCall {
   readonly method: string;
@@ -36,6 +37,23 @@ export function fakeQuery(result: FakeResult): FakeQuery {
     },
   );
   return { query, calls };
+}
+
+/** A fictional usage row with every column; total_minutes follows hours and minutes unless overridden. */
+export function usageRow(
+  overrides: Partial<UsageRow> & Pick<UsageRow, 'id' | 'farmer_id' | 'used_at' | 'hours' | 'minutes'>,
+): UsageRow {
+  return {
+    total_minutes: overrides.hours * 60 + overrides.minutes,
+    rate_paise: 10000,
+    created_at: '2026-10-01T04:30:00+00:00',
+    created_by: null,
+    updated_at: '2026-10-01T04:30:00+00:00',
+    updated_by: null,
+    deleted_at: null,
+    deleted_by: null,
+    ...overrides,
+  };
 }
 
 /** A fictional farmer row with every column, for data-layer and UI tests. */

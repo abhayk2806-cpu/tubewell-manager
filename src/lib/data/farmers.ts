@@ -4,10 +4,11 @@ import { isActiveFarmer } from '@/lib/ledger';
 import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { nowIso } from './clock';
-import { DataError, toDataError } from './errors';
+import { DataError } from './errors';
 import { normalizeFarmerInput, sortFarmersByName, validateFarmerInput } from './farmerRules';
 import type { FarmerFormValues, FarmerInput } from './farmerRules';
 import { fetchAllRows } from './paging';
+import { oneRow } from './rows';
 
 export type FarmerRow = Database['public']['Tables']['farmers']['Row'];
 type FarmerUpdate = Database['public']['Tables']['farmers']['Update'];
@@ -47,19 +48,6 @@ function checkedInput(values: FarmerFormValues): FarmerInput {
   const codes = validateFarmerInput(input);
   if (codes.length > 0) throw new DataError('constraint', 'client_validation', codes.join(','));
   return input;
-}
-
-interface SingleResult {
-  readonly data: FarmerRow | null;
-  readonly error: unknown;
-  readonly status?: number;
-}
-
-/** An update that matches 0 rows is not an error in supabase-js; here it becomes `not_found`. */
-function oneRow({ data, error, status }: SingleResult): FarmerRow {
-  if (error) throw toDataError(error, status);
-  if (data === null) throw new DataError('not_found', 'no_rows', 'no farmer row matched');
-  return data;
 }
 
 export async function createFarmer(values: FarmerFormValues): Promise<FarmerRow> {
