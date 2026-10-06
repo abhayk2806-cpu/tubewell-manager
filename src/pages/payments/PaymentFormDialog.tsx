@@ -1,9 +1,11 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { formatRupees, istTimeKey, parseInstantMs } from '@/lib/ledger';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { formatRupees, istTimeKey, paiseToDecimalString, parseInstantMs } from '@/lib/ledger';
 import {
+  buildFarmerBalances,
   buildPaymentInput,
   buildPaymentPreview,
   describePaymentWarnings,
+  matchesFarmerSearch,
   newPaymentForm,
   paymentFormFromRow,
 } from '@/lib/data';
@@ -72,8 +74,26 @@ export function PaymentFormDialog(props: PaymentFormDialogProps) {
   const [showErrors, setShowErrors] = useState(false);
   const [warnings, setWarnings] = useState<PaymentWarning<PaymentRow>[]>([]);
   const [saveError, setSaveError] = useState('');
+  const [farmerQuery, setFarmerQuery] = useState('');
 
   const built = buildPaymentInput(form);
+
+  // Current position of every farmer, from the engine (D32): picker labels and "Pura X bharo".
+  const balances = useMemo(
+    () => (usageStatus === 'ready' ? buildFarmerBalances({ farmers: allFarmers, usageRows, paymentRows: allPayments }) : undefined),
+    [usageStatus, allFarmers, usageRows, allPayments],
+  );
+  const optionLabel = (f: FarmerRow): string => {
+    const b = balances?.get(f.id);
+    if (b === undefined || !b.ok) return f.name;
+    if (b.outstandingPaise > 0) return COPY.optionBaaki(f.name, formatRupees(b.outstandingPaise));
+    if (b.creditPaise > 0) return COPY.optionAdvance(f.name, formatRupees(b.creditPaise));
+    return COPY.optionClear(f.name);
+  };
+  const shownFarmers = activeFarmers.filter((f) => f.id === form.farmerId || matchesFarmerSearch(f, farmerQuery));
+  const noMatch = farmerQuery.trim() !== '' && !activeFarmers.some((f) => matchesFarmerSearch(f, farmerQuery));
+  const chosen = payment === null && form.farmerId !== '' ? balances?.get(form.farmerId) : undefined;
+  const fullOutstanding = chosen !== undefined && chosen.ok && chosen.outstandingPaise > 0 ? chosen.outstandingPaise : null;
   const codes = built.ok ? [] : built.codes;
 
   // The preview state, straight from the data layer (which calls the engine); nothing computed here.
@@ -157,6 +177,21 @@ export function PaymentFormDialog(props: PaymentFormDialogProps) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
+          {payment === null && (
+            <div className="space-y-1.5">
+              <Label htmlFor="payment-farmer-search">{COPY.search}</Label>
+              <Input
+                id="payment-farmer-search"
+                type="search"
+                autoComplete="off"
+                value={farmerQuery}
+                onChange={(e) => setFarmerQuery(e.target.value)}
+                className={fieldClass}
+              />
+              {noMatch && <p className="text-sm text-muted-foreground">{COPY.noSearchResults}</p>}
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label htmlFor="payment-farmer">{COPY.farmer}</Label>
             {payment === null ? (
@@ -169,9 +204,9 @@ export function PaymentFormDialog(props: PaymentFormDialogProps) {
                 className="flex h-11 w-full rounded-md border border-input bg-transparent px-3 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">{COPY.chooseFarmer}</option>
-                {activeFarmers.map((f) => (
+                {shownFarmers.map((f) => (
                   <option key={f.id} value={f.id}>
-                    {f.name}
+                    {optionLabel(f)}
                   </option>
                 ))}
               </select>
@@ -226,6 +261,11 @@ export function PaymentFormDialog(props: PaymentFormDialogProps) {
               aria-describedby={describedBy('amount')}
               className={fieldClass}
             />
+            {fullOutstanding !== null && (
+              <Button type="button" variant="outline" className="h-11" onClick={() => change('amount', paiseToDecimalString(fullOutstanding))}>
+                {COPY.fillOutstanding(formatRupees(fullOutstanding))}
+              </Button>
+            )}
             {errorsFor('amount')}
           </div>
 

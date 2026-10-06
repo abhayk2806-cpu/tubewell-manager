@@ -37,6 +37,15 @@ export const PAYMENTS_COPY = {
     description: 'Kisan, tarikh, samay aur kitna paisa mila, bharo.',
     farmer: 'Kisan',
     chooseFarmer: 'Kisan chuno',
+    /** Narrows the farmer picker by name or mobile (D32). */
+    search: 'Kisan dhundo (naam ya mobile)',
+    noSearchResults: 'Is naam ya mobile ka koi Chalu kisan nahi.',
+    /** Picker option with the farmer's current position, text only (D32). */
+    optionBaaki: (name: string, amountText: string) => `${name} — Baaki ${amountText}`,
+    optionAdvance: (name: string, amountText: string) => `${name} — Advance ${amountText}`,
+    optionClear: (name: string) => `${name} — Baaki nahi`,
+    /** Fills the amount with the chosen farmer's full current Baaki (new payment only). */
+    fillOutstanding: (amountText: string) => `Pura ${amountText} bharo`,
     farmerLocked: 'Payment ka kisan badla nahi ja sakta.',
     date: 'Tarikh',
     time: 'Samay',
@@ -69,6 +78,12 @@ export const PAYMENTS_COPY = {
     future_date: 'Yeh tarikh aaj ke baad ki hai.',
     saveAnyway: 'Phir bhi save karo',
     goBack: 'Wapas jao, badlo',
+  },
+  /** The allocation trail on each payment in the list (same words as the profile, D32). */
+  trail: {
+    heading: 'Kahan laga',
+    advance: 'Advance / Credit',
+    badData: 'Is kisan ka hisaab nahi ban paya, isliye yeh nahi dikha sakte.',
   },
   deleteDialog: {
     title: 'Yeh payment delete karein?',

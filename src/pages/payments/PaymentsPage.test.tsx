@@ -121,7 +121,9 @@ describe('PaymentsPage list', () => {
     expect(items().map((li) => li.querySelector('p')?.textContent)).toEqual(['Ramu Test', 'Band Test', 'Shyam Test']);
     const first = row('Ramu Test');
     expect(first.getByText('2026-10-05, 11:00')).toBeInTheDocument();
-    expect(first.getByText(`${R}100.00`)).toBeInTheDocument();
+    // The amount also appears in the payment's trail (D32), so both places are checked.
+    expect(first.getAllByText(`${R}100.00`)).toHaveLength(2);
+    expect(first.getByTestId('trail-pa-2026-10')).toHaveTextContent(`Oct 2026${R}100.00`);
     expect(first.getByText('pehla')).toBeInTheDocument();
   });
 
@@ -211,7 +213,8 @@ describe('PaymentsPage form and live preview', () => {
     await renderReady();
     const dialog = await openAdd();
     const select = within(dialog).getByLabelText('Kisan');
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kisan chuno', 'Ramu Test', 'Shyam Test']);
+    // Since D32 each option carries the farmer's current position (text only).
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Kisan chuno', `Ramu Test — Baaki ${R}238.33`, `Shyam Test — Advance ${R}50.00`]);
     expect(screen.getByLabelText('Tarikh')).toHaveValue('2026-10-06');
     expect(screen.getByLabelText('Samay')).toHaveValue('14:05');
     expect(screen.getByLabelText('Rakam (rupaye)')).toHaveValue('');
@@ -397,5 +400,78 @@ describe('PaymentsPage form and live preview', () => {
     await openAdd();
     expect(screen.getByLabelText('Tarikh')).toHaveValue('2026-10-07');
     expect(screen.getByLabelText('Samay')).toHaveValue('00:10');
+  });
+});
+
+describe('PaymentsPage trails, picker and Pura X bharo (D32)', () => {
+  it('each live payment row shows its engine trail; an over-payment shows its Advance / Credit remainder', async () => {
+    const big = paymentRow({ id: 'pz', farmer_id: 'r', paid_at: '2026-10-06T05:30:00+00:00', amount_paise: 40000 });
+    paymentApi.listPayments.mockResolvedValue([pa, pb, pc, pd, pe, big]);
+    await renderReady();
+    // Ramu: charge 358.33 (Oct). pc 20.00 and pa 100.00 go to Oct first; pz 400.00 settles the last 238.33.
+    expect(await screen.findByTestId('trail-pz-2026-10')).toHaveTextContent(`Oct 2026${R}238.33`);
+    expect(screen.getByTestId('trail-pz-advance')).toHaveTextContent(`Advance / Credit${R}161.67`);
+    expect(screen.getByTestId('trail-pz-advance').querySelector('dd')).toHaveClass('text-tone-credit');
+    expect(screen.getByTestId('trail-pz-2026-10').querySelector('dd')).toHaveClass('text-tone-cash');
+    // Shyam has no usage: the whole payment is Advance / Credit; a Band farmer's payment keeps its row and trail.
+    expect(screen.getByTestId('trail-pb-advance')).toHaveTextContent(`${R}50.00`);
+    expect(row('Band Test').getByTestId('trail-pd')).toBeInTheDocument();
+  });
+
+  it('deleted payments show no trail', async () => {
+    await renderReady();
+    fireEvent.click(screen.getByRole('button', { name: /^Deleted \(/ }));
+    expect(screen.queryByTestId('trail-pe')).not.toBeInTheDocument();
+  });
+
+  it('the picker search narrows by name or mobile; the chosen farmer stays', async () => {
+    farmerApi.listFarmers.mockResolvedValue([{ ...ramu, mobile: '98765 43210' }, shyam, band, gone]);
+    await renderReady();
+    const dialog = await openAdd();
+    const select = within(dialog).getByLabelText('Kisan');
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: '43210' } });
+    expect(within(select).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['', 'r']);
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: 'SHYAM' } });
+    expect(within(select).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['', 's']);
+    fireEvent.change(select, { target: { value: 's' } });
+    fireEvent.change(within(dialog).getByLabelText('Kisan dhundo (naam ya mobile)'), { target: { value: 'nobody' } });
+    expect(within(dialog).getByText('Is naam ya mobile ka koi Chalu kisan nahi.')).toBeInTheDocument();
+    expect(within(select).getAllByRole('option').map((o) => o.getAttribute('value'))).toEqual(['', 's']);
+  });
+
+  it('"Pura X bharo" fills the full current Baaki from the engine; the preview then ends at 0.00', async () => {
+    await renderReady();
+    const dialog = await openAdd();
+    fireEvent.change(within(dialog).getByLabelText('Kisan'), { target: { value: 'r' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: `Pura ${R}238.33 bharo` }));
+    expect(screen.getByLabelText('Rakam (rupaye)')).toHaveValue('238.33');
+    expect(figure('preview-after-outstanding')).toContain(`${R}0.00`);
+    // Shyam owes nothing: no button, and a payment can still be saved (it becomes Advance / Credit).
+    fireEvent.change(within(dialog).getByLabelText('Kisan'), { target: { value: 's' } });
+    expect(within(dialog).queryByRole('button', { name: /^Pura / })).not.toBeInTheDocument();
+    paymentApi.createPayment.mockResolvedValue(paymentRow({ id: 'pn', farmer_id: 's', paid_at: '2026-10-06T08:35:00+00:00', amount_paise: 1000 }));
+    change('Rakam (rupaye)', '10');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(paymentApi.createPayment).toHaveBeenCalledWith(expect.objectContaining({ farmer_id: 's', amount_paise: 1000 })));
+  });
+
+  it('editing a payment shows no "Pura X bharo" button', async () => {
+    await renderReady();
+    fireEvent.click(row('Ramu Test').getByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: /^Pura / })).not.toBeInTheDocument();
+  });
+
+  it('after saving a payment the list reloads and the new payment shows its trail', async () => {
+    await renderReady();
+    const created = paymentRow({ id: 'pn', farmer_id: 'r', paid_at: '2026-10-06T08:35:00+00:00', amount_paise: 5000 });
+    paymentApi.createPayment.mockResolvedValue(created);
+    paymentApi.listPayments.mockResolvedValue([pa, pb, pc, pd, pe, created]);
+    const dialog = await openAdd();
+    fireEvent.change(within(dialog).getByLabelText('Kisan'), { target: { value: 'r' } });
+    change('Rakam (rupaye)', '50');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByTestId('trail-pn-2026-10')).toHaveTextContent(`Oct 2026${R}50.00`);
   });
 });

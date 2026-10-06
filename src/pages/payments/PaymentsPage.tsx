@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { currentIstMoment, filterPayments, listPaymentMonths, sortFarmersByName } from '@/lib/data';
+import { buildPaymentTrails, currentIstMoment, filterPayments, listPaymentMonths, sortFarmersByName } from '@/lib/data';
 import type { FarmerRow, IstMoment, PaymentRow } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments, type PaymentMutationResult } from '@/hooks/usePayments';
@@ -46,6 +46,12 @@ export function PaymentsPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const busy = payments.pending !== null;
+
+  // The engine trail of every live payment (D32); shown once the usage rows are in.
+  const trails = useMemo(
+    () => (usage.status === 'ready' ? buildPaymentTrails({ usageRows: usage.all, paymentRows: payments.all }) : undefined),
+    [usage.status, usage.all, payments.all],
+  );
 
   const farmersById = useMemo(() => new Map(farmers.all.map((f) => [f.id, f])), [farmers.all]);
   const filterFarmers = useMemo(
@@ -204,6 +210,7 @@ export function PaymentsPage() {
                   payment={p}
                   farmerName={farmerName(p.farmer_id)}
                   segment={segment}
+                  trail={trails?.get(p.id)}
                   busy={busy}
                   onEdit={(row) => {
                     setNotice(null);
