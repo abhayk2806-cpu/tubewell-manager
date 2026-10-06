@@ -185,6 +185,22 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 
 ## Tooling-only (environment-specific; kept for reference)
 
+**The Write tool decodes `\uXXXX` escapes into real characters**
+- Finding (Phase 8): writing `'\ufeff'` or a regex with `\u00a0` through the Write tool put the real BOM / NBSP into the source (ESLint `no-irregular-whitespace` caught the NBSP).
+- Rule: after writing a file with `\u` escapes, check it for non-ASCII bytes and re-escape with a script, or build such characters with `String.fromCharCode`.
+- Date: 2026-10-06.
+
+**A piped `tail` hides a failing command's exit code**
+- Finding (Phase 8): `pnpm run typecheck 2>&1 | tail` returned 0, so a chained `git commit` ran despite a type error.
+- Rule: run each gate without a pipe (or check `$?` / `set -o pipefail`) before committing.
+- Date: 2026-10-06.
+
+**`git stash pop` on Windows writes CRLF**
+- Finding (Phase 7B / 8): with `core.autocrlf=true`, files restored by `git stash pop` came back with CRLF, so later text replacements that expected LF failed.
+- Rule: normalise with `sed -i 's/\r$//'` before scripted edits; the repo content does not change.
+- Date: 2026-10-06.
+
+
 **Stale file view in the old Cowork sandbox mount**
 - After an Edit/Write, the bash mount sometimes showed a truncated old copy of the file, so builds failed on errors that didn't exist.
 - Rule: if build errors don't match the Read-tool view of the file, suspect the mount and re-sync.

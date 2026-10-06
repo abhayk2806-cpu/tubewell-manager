@@ -8,6 +8,7 @@
 > - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
 > - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
 > - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The **Months screen exists** (Phase 7B): see [Months screen](#months-screen-phase-7b-d30).
+> - **Backup and restore exist** (Phase 8): migration 007 adds `restore_backup`; see [Backup and restore](#backup-and-restore-phase-8-d31).
 > - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >
@@ -78,11 +79,11 @@ Rules that follow from this:
 - Then run `pnpm run typecheck`.
 - CLI alternative: `npx supabase gen types typescript --project-id ciszgagzhfubuqhpmyeh > src/types/database.ts`, then re-add the header.
 
-## Database schema (live, migrations 001–006, updated 2026-10-06)
+## Database schema (live, migrations 001–007, updated 2026-10-06)
 
 Sources:
-- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`, `005_farmers_input_checks.sql`, `006_payments_note_check.sql`.
-- Checks: `supabase/tests/001_schema_checks.sql` (111 checks since 006, all rolled back).
+- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`, `005_farmers_input_checks.sql`, `006_payments_note_check.sql`, `007_restore_backup_function.sql` (the restore function, D31).
+- Checks: `supabase/tests/001_schema_checks.sql` (134 checks since 007, all rolled back).
   - T0.01 records the row counts that already exist; the owner's rows are never touched or assumed absent.
   - The residue check T6.01 (second call) must print the same counts.
 
@@ -699,6 +700,50 @@ NOTICE_TONE       { success: cash, warning: caution, refreshFailed: caution }
 - **(e) Future screens.** The Dashboard, the Months screen and every chart or stat tile use the same tones (charges water, cash received cash, outstanding due, credit credit), in every series and legend.
 - **(f) No dark mode** in this step.
 
-## Backup and restore (Phase 8)
+## Backup and restore (Phase 8, D31)
 
-Rules: [.claude/rules/backup-restore.md](../.claude/rules/backup-restore.md). The format is new and versioned; v1 backup files are not imported (no data migration).
+Rules: [.claude/rules/backup-restore.md](../.claude/rules/backup-restore.md). The format is new and versioned; old app backup files are not imported (no data migration).
+
+**Modules.**
+
+```ts
+// src/lib/backup (pure: no I/O, no Supabase)
+buildBackupFile(rows, exportedAt): BackupFile      backupSummary(rows)      pickBackupRows(rows)      sameSummary(a, b)
+validateBackup(value) / parseBackupText(text, bytes): { ok: true, file } | { ok: false, problems }   MAX_RESTORE_BYTES = 10 MB
+diffBackup(file, current): per table { new, changed, same, onlyCurrent }      rowsOnlyInCurrent(diff)
+farmersCsv / usageCsv / paymentsCsv / monthsCsv(input, labels[, now]): { ok: true, text } | { ok: false }   csvCell, toCsv
+backupReminder(lastIso, now): { kind: 'never' | 'ok' | 'old', days }   BACKUP_REMINDER_DAYS = 7   backupFileName, csvFileName
+// src/lib/data/backupData.ts (I/O)
+exportBackup(): { ok: true, file } | { ok: false, kind }          // paged reads of the three tables, every error checked
+restoreBackup(file, mode): { ok: true, report } | { ok: false, kind: 'not_owner' | 'invalid_payload' | 'network' | 'constraint' | 'unknown' }
+verifyRestore(file, mode): { ok: true, verification: { verified, counts, summary, diff } } | { ok: false, kind }
+```
+
+**Format.** `{ format: "tubewell-hisab-backup", version: 1, exported_at, counts, summary, farmers, usage_entries, payments }`: every row (soft-deleted included), every stored column except `total_minutes`; `summary` = the engine's All Time charges, cash, outstanding and credit (`buildDashboard`, view all).
+
+**Database function** (migration 007): `public.restore_backup(p_payload jsonb, p_mode text) returns jsonb`. One call = one transaction. Merge upserts by id (parents first) and never deletes; Replace deletes payments, usage_entries, farmers, then inserts. The three audit triggers are disabled only inside the call, so every column of the file is kept (`deleted_at`, `deleted_by`, `created_*`, `updated_*`). Returns `{ mode, deleted, inserted, updated }` per table. Owner-only (42501), payload guard (22023). SQL checks T9.01–T9.23.
+
+**Screen** (`src/pages/backup/`: `BackupPage.tsx`, `BackupSections.tsx`, `browser.ts`, `copy.ts`; route `/backup`):
+
+| Element | Source | Leads to |
+|---|---|---|
+| Reminder | `backupReminder` of the stored last-backup time (this browser) | the JSON backup button; the Dashboard note links to `/backup` |
+| JSON backup | `exportBackup` → `buildBackupFile`: counts per table | a downloaded `tubewell-backup-YYYY-MM-DD-HHMM.json`; the stored time |
+| CSV buttons | Dashboard rows (All Time), live Pani entries, live payments, Months rows | four downloaded `.csv` files (not restorable) |
+| Preview | the file's counts and `summary`; `diffBackup` against the hooks' rows | the Merge / Replace choice |
+| Replace | `rowsOnlyInCurrent` (rows that will be lost) | safety backup (`exportBackup`) → typed `REPLACE` → `restoreBackup` |
+| Report and check | the function report; `verifyRestore` (paged re-read, counts, engine totals) | "Verified" or the red numbers; the three lists reload |
+
+**Decision D31** (manager design choices, 2026-10-06; the owner may revisit):
+- **(a) Format** as above; later versions may add optional fields; `format` and `version` are checked first; old app files are rejected plainly.
+- **(b) Validation** before any database call: first 10 problems with table and row; engine totals recomputed and compared with `summary`; 10 MB limit.
+- **(c) Export** reads with the existing paging, checks every error, never shows "done" for a partial read, shows the counts and stores the time (try/catch).
+- **(d) CSV**: four files, engine / data-layer figures, plain decimals, BOM, RFC 4180, formula neutralisation.
+- **(e) Restore function** in one transaction; Merge never deletes; Replace deletes children before parents; exact counts returned.
+- **(f) Preview**: file date, counts, the four separate totals, and new / changed / same / only-current per table.
+- **(g) Replace safety**: red warning, safety backup first (abort if it fails), typed `REPLACE`; Merge needs one confirmation; no double submit.
+- **(h) After restore**: report, paged re-read and verification, lists reload.
+- **(i) Reminder**: never / ok / old (7 IST days); `caution` for old and never; one Dashboard note only for old or never.
+- **(j) Screen order**: reminder and the not-encrypted warning, JSON backup, CSV, restore.
+
+**Known limits.** One request per restore (10 MB); the reminder remembers only this browser / phone; files are not encrypted; Google Drive and automatic backups are parked. Verification of a Merge checks that every file row is present and equal (rows only in the database stay, so counts and totals may differ from the file).

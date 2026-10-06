@@ -53,9 +53,14 @@
   - [x] Months screen from `buildAllFarmersMonths` (current figures): status per month incl. "Sirf Payment"; "Cash Mila" and "Charge Clear" never mixed (L10).
   - [x] Months rows over ACTIVE farmers only; per-farmer links to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
   - [x] Colours only from `src/components/tone.ts` (D28): charges `water`, cash received `cash`, outstanding `due`, credit `credit`, in every tile, chart series and legend; month status via `MONTH_STATUS_TONE`.
-- [ ] **8** — Backup / restore ← **next**
-  - [ ] Restore needs a controlled DB function: the audit trigger forces `created_*` and clears `deleted_*` on insert.
-- [ ] **9** — Verification: independent script + edge-case matrix
+- [x] **8** — Backup / restore (done 2026-10-06; pending owner review)
+  - [x] Migration 007 `restore_backup` (keeps every column incl. `deleted_at` and audit columns) + SQL T9 (134/134)
+  - [x] `src/lib/backup/` pure modules, `backupData.ts` I/O, Backup screen at `/backup`, Dashboard note (D31)
+  - [ ] Owner: smoke-test export, Merge, Replace (test data only) and the CSV files in Excel; confirm or revisit D31
+- [ ] **9** — Verification: independent script + edge-case matrix ← **next**
+  - [ ] An independent script (not the app's engine) recomputes every figure from raw rows and compares with the app (Dashboard, profile, Months, backup summary).
+  - [ ] Edge-case matrix: IST midnight / month / year boundaries, rounding (D7), soft delete and restore, duplicates, Band / deleted farmers, credit carry-forward, more than 1,000 rows per table (paging in every read and in the backup).
+  - [ ] Cross-section consistency: Dashboard All Time = sum of profiles = backup summary; Months sums = Dashboard year views; CSV figures = screen figures.
 - [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs
 
 ## Parked — not in scope unless the owner asks

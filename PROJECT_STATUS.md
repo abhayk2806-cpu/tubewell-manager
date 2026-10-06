@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 7B done (Months screen, D30, pending owner review); Phase 8 (Backup / restore) next
+> **Current phase:** 8 done (Backup / restore, migration 007, D31, pending owner review); Phase 9 (Verification) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -32,8 +32,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), pending owner review |
 | 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), pending owner review |
 | 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), pending owner review |
-| 8 | Backup / restore | ⬜ Not started (next) |
-| 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
+| 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), pending owner review |
+| 9 | Verification: independent script + edge-case matrix | ⬜ Not started (next) |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -44,7 +44,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 4. Owner checks the Phase 6C colours by eye (Kisan, Pani, Paisa with preview, Kisan ka Hisaab) and confirms or revisits D28.
 5. Owner smoke-tests the Dashboard (Phase 7A) with the worked numbers and confirms or revisits D29. See the 2026-10-06 Phase 7A session entry.
 6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
-7. **Phase 8: Backup / restore.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
+8. **Phase 9: Verification.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -219,6 +220,10 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 ### 2026-10-06 — D30 Months screen (Phase 7B; manager design choices (a)–(j), owner may revisit)
 - Explanation block; "Saal" filter (default all years); strip with time, Charge and Cash Mila only; month cards newest first with the profile's words and tones; farmer-wise breakdown per month (Baaki first, profile links); `?month=` deep link, linked from the Dashboard's Mahina view.
 - Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Months screen.
+
+### 2026-10-06 — D31 Backup and restore (Phase 8; manager design choices (a)–(j), owner may revisit)
+- Versioned JSON backup of every row (soft-deleted included) with counts and the engine All Time summary; validation before any database call; Excel CSV exports (not restorable); Merge / Replace through the migration-007 function in one transaction; preview; Replace safety (safety backup first, typed REPLACE); verification; a per-browser reminder with one Dashboard note.
+- Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Backup and restore.
 
 ---
 
@@ -441,6 +446,17 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Tests:** 42 files / 766 tests (before: 40 / 724). Gates green. JS chunk 627 kB (the 500 kB warning, as before).
 - **Not verified:** a real-browser look at 360 px (behind the owner's login).
 - **Failed attempt:** none.
+
+### 2026-10-06 — Phase 8: Backup / restore
+- **Preconditions:** HEAD = origin = `da8a58d`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–006; policies SELECT / INSERT / UPDATE for the owner only, no DELETE policy, no DELETE / TRUNCATE for `authenticated`; the three audit triggers enabled; 1 Auth user. Row counts at the start: farmers 7, usage_entries 6, payments 9; unchanged at the end.
+- **Migration 007** (`007_restore_backup_function.sql`): `public.restore_backup(jsonb, text)`. Every column of the file is kept (audit triggers off only inside the call, on again after; a failed call rolls everything back). Stored md5 = file md5 `afef0a30…`.
+- **SQL tests:** 134/134 PASS (111 before, plus T9.01–T9.23). Section B equals the T0.01 baseline.
+- **Advisors:** one NEW finding, expected: "authenticated can execute a SECURITY DEFINER function" for `restore_backup` (justified: owner check inside, no table grants changed). Existing: leaked-password protection off, three unused indexes.
+- **Code:** pure `src/lib/backup/` (format, validation, diff, CSV, reminder), `src/lib/data/backupData.ts` (export, restore, verify), the Backup screen at `/backup`, one Dashboard note. Generated types regenerated (the function). No engine change, no dependency.
+- **Decision D31:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Backup and restore.
+- **Tests:** 45 files / 839 tests (before: 42 / 766). Gates green. JS chunk 657 kB (the 500 kB warning, as before).
+- **Not verified:** a real-browser look at 360 px (behind the owner's login) and a live round trip through the app (the function itself is proven by the rolled-back SQL tests).
+- **Failed attempts:** (1) the Write tool turned `\u00a0` / `\ufeff` escapes into real characters (lint caught the NBSP; files re-escaped). (2) One commit (`7c01354`) went in with a test type error because a piped `tail` hid the exit code; fixed in `f866141`.
 
 ---
 

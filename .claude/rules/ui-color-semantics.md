@@ -56,3 +56,9 @@ Every kind of information has ONE fixed colour chosen by its meaning, the same o
 - Month cards and farmer-wise rows use the profile's month colours: Charge `water`, Charge Clear and Cash Mila (is mahine) `cash`, Baaki `due` (`muted` at zero), status badge by `MONTH_STATUS_TONE` with its word ("Sirf Payment" `credit`).
 - Year strip: Charge `water`, Cash Mila `cash` (each with a thin left bar); time neutral. No Baaki or credit figure on this screen.
 - Farmer names in the breakdown: `info` links. Bad data and load errors: existing `destructive`.
+
+**Backup mapping (Phase 8, D31).**
+- Reminder: `caution` notice when the last backup is old or missing (with the words), plain card otherwise; the same `caution` note on the Dashboard.
+- Success lines (backup downloaded, CSV downloaded, safety backup, "Verified"): `cash` notice.
+- Restore preview: `info` soft panel; its four totals use `MONEY_TONE` (Charge `water`, Cash Mila `cash`, Baaki `due`, Advance / Credit `credit`), never netted.
+- Replace warning, file problems, failed export / restore and a verification mismatch: the existing `destructive` style with words.

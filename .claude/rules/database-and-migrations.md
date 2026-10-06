@@ -11,14 +11,14 @@ paths:
 - **Never** touch the OLD project `vsgptyuvnistwjjmrfby` (paused fallback) or StreakForge `xiyayueijkgyxrqrykqx`.
 
 **Migrations.**
-- Live: `001_core_tables`, `002_audit_triggers`, `003_rls_policies`, `004_lock_rls_to_owner`, `005_farmers_input_checks`, `006_payments_note_check`. Next is `007_…`. v1 files in `archive/` are never reused.
+- Live: `001_core_tables`, `002_audit_triggers`, `003_rls_policies`, `004_lock_rls_to_owner`, `005_farmers_input_checks`, `006_payments_note_check`, `007_restore_backup_function`. Next is `008_…`. v1 files in `archive/` are never reused.
 - Never put the owner's uid (or any real id) in a migration file. Read it from `auth.users` at apply time, as 004 does.
 - After every migration, regenerate `src/types/database.ts` (`generate_typescript_types`; see `docs/ARCHITECTURE.md`).
 - Write the SQL file first, apply that exact text (MCP `apply_migration`), then verify identity: `md5(array_to_string(statements, ''))` in `supabase_migrations.schema_migrations` must equal the file's md5. Commit immediately.
 - Schema change: state the plan and confirm with the owner first. Bulk update or delete: show the affected row count first.
 
 **Tests.** `supabase/tests/001_schema_checks.sql`:
-- Section A is one transaction ending in ROLLBACK, printing PASS/FAIL per check (111 checks after 006, including the T0.01 baseline of existing row counts). Section B (T6.01) prints the counts again; they must equal T0.01, because the owner's own rows may exist and are never touched or assumed absent.
+- Section A is one transaction ending in ROLLBACK, printing PASS/FAIL per check (134 checks after 007, including the T0.01 baseline of existing row counts and T9 for the restore function; T9 wipes the tables only inside the rolled-back transaction). Section B (T6.01) prints the counts again; they must equal T0.01, because the owner's own rows may exist and are never touched or assumed absent.
 - T5 simulates the owner by reading the uid from `auth.users` at run time (never written into the file or the output). Another fixed uid checks that non-owners are blocked.
 - Re-run both after any schema change. Use fictional data only; never commit real farmer data (the repo is public).
 
@@ -57,6 +57,11 @@ paths:
   - `updated_*` is always set to `now()` / `auth.uid()`.
   - `deleted_by` is trigger-only.
   - `deleted_at` is forced NULL on insert.
+- **D31 (007):** `public.restore_backup(p_payload jsonb, p_mode text)` is the ONLY code path that deletes rows.
+  - SECURITY DEFINER, `search_path = ''`, schema-qualified names; EXECUTE for `authenticated` only (revoked from public and anon).
+  - Owner check inside: raises 42501 unless `auth.uid()` is the single auth user. Invalid mode or payload: 22023.
+  - It disables the three audit triggers inside its own transaction (so every column of the file is kept) and enables them again before it returns; a failed call rolls the switch back too.
+  - The security advisor's "authenticated can execute a SECURITY DEFINER function" warning for it is expected (justified by the owner check).
 
 **Security.**
 - Never use or print the service-role key. Never put it in code or in `VITE_*` vars.
