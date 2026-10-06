@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 5 done (Paisa screen with live FIFO preview + migration 006, pending owner review); Phase 6 (farmer profile) next
+> **Current phase:** 6 done (Kisan ka Hisaab profile, pending owner review); Phase 7 (Dashboard + Months) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -28,8 +28,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 4A | Data layer `src/lib/data/` + Farmers screen (Kisan) + migration 005 (farmer input checks) | ✅ Done (2026-10-06), pending owner review |
 | 4B | Usage entry (Pani Entry) + Phase 4A carry-forwards (D23) + 3 additive engine helpers | ✅ Done (2026-10-06), pending owner review |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), pending owner review |
-| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started (next) |
-| 7 | Dashboard + months view | ⬜ Not started |
+| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), pending owner review |
+| 7 | Dashboard + months view | ⬜ Not started (next) |
 | 8 | Backup / restore | ⬜ Not started |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
@@ -38,8 +38,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
 2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
-3. Owner smoke-tests Phase 5: the Paisa tab with the worked numbers (`pnpm run dev`). See the 2026-10-06 Phase 5 session entry.
-4. **Phase 6: Farmer profile.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+3. Owner smoke-tests Phase 6: open a farmer from the Kisan list (`pnpm run dev`). See the 2026-10-06 Phase 6 session entry.
+4. **Phase 7: Dashboard + Months.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -377,6 +377,21 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
   2. If the usage rows fail to load, the preview shows a message and Save stays allowed. Only a bad-data preview (`ok: false`) disables Save.
   3. Test rows from the smoke tests stay in the live database (soft-deleted) until the Phase 10 wipe (D8).
 - **Failed attempt:** one lint error (`prefer-const` in a test) fixed before commit.
+
+### 2026-10-06 — Phase 6: Kisan ka Hisaab (farmer profile)
+- **Preconditions:** HEAD = origin = `d40c703`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–006. Baseline row counts: farmers 3, usage_entries 3, payments 3 (owner's smoke-test rows); unchanged at the end.
+- **Part 0 (C-1):** removed the unused copy key `PAYMENTS_COPY.preview.noPieces`.
+- **Code:**
+  - `src/lib/data/profileRules.ts`: `buildFarmerProfile`, `findProfileFarmer`, `toProfileBalance`, `visiblePart`, `nextShownCount`, `PROFILE_PAGE_SIZE` = 30.
+  - The profile screen (`FarmerProfilePage.tsx`, `ProfileSections.tsx`, `profileCopy.ts`) wired at `/farmers/:id`; Kisan list rows link to it.
+  - An optional `initialFarmerId` prop on `UsageFormDialog` and `PaymentFormDialog`.
+  - No engine change, migration or dependency.
+- **Decision D27** (manager design choices (a)–(g), owner may revisit): see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Farmer profile.
+- **Tests:** 37 files / 610 tests (before: 33 / 571). Gates green. The JS chunk is 590 kB (the 500 kB warning, as before).
+- **Notes for owner review:**
+  1. Month cards label FIFO-settled charge "Charge Clear" and payments dated in the month "Cash Mila (is mahine)" (L10 wording from the UI-copy rules).
+  2. Ledger lines show "Pani entry: ₹x" / "Paisa mila: ₹x" with the running balance; the duration is shown in the Pani entries section, not on ledger lines.
+- **Failed attempt:** none. Adding the list link required wrapping the Kisan list tests in a router (expected).
 
 ---
 

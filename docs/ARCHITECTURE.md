@@ -6,7 +6,8 @@
 > - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3).
 > - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a).
 > - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
-> - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5). The farmer profile, months and dashboard screens are still planned.
+> - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
+> - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The Months and Dashboard screens are still planned.
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -56,7 +57,7 @@ Rules that follow from this:
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
-| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry and Paisa) |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
 | `index.css` + `tailwind.config.js` | Design tokens as CSS variables (no hex colours or inline styles in components) |
 
@@ -189,6 +190,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - Phase 4A tests cover the farmer rules, `DataError` mapping, paging, every farmer data function (mocked Supabase client, never the live DB), the `useFarmers` hook and the Farmers screen. `src/lib/data/layer-guard.test.ts` statically checks the UI layers (see Data layer).
   - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
   - Phase 5 tests cover the payment rules (including the live preview with the worked numbers), the payments data functions, `usePayments`, the Paisa screen with its preview panel, the shared month label, and the D25 long-duration boundaries.
+  - Phase 6 tests cover the profile rules (worked numbers, balances, paging, bad data, one-engine consistency with the Paisa preview), the profile screen, the Kisan list link, and the `initialFarmerId` dialog prop.
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
@@ -332,6 +334,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `paymentRules.ts` | Pure Paisa rules (no I/O), including the live preview through the engine, Phase 5 |
 | `payments.ts` | Payment queries and mutations, Phase 5 |
 | `timeline.ts` | Private helpers shared by the usage and payment rules: newest-first sort, IST month/day, month list (Phase 5) |
+| `profileRules.ts` | Pure Kisan ka Hisaab rules: one `buildFarmerLedger` call per profile, joins and display splits only (Phase 6) |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
 
 ### API
@@ -384,7 +387,7 @@ softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the save
 
 ## Farmers screen (Kisan, Phase 4A)
 
-- **Route.** `/farmers` → `src/pages/farmers/FarmersPage.tsx`; `/farmers/:id` is still the placeholder, and rows do not link to it yet.
+- **Route.** `/farmers` → `src/pages/farmers/FarmersPage.tsx`. Since Phase 6, Chalu and Band rows link to `/farmers/:id` (Kisan ka Hisaab); deleted rows do not.
 - **Hook.** `useFarmers()`:
   - loads once, exposes `status` (loading / error / ready), `error`, `all`, `lists` and `reload`;
   - mutations: `create`, `update`, `setDisabled`, `remove`, `restore`, each returning `{ ok, farmer }` or `{ ok: false, error }`;
@@ -509,6 +512,52 @@ listPayments()  createPayment(input)  updatePayment(current, input)  softDeleteP
   - A bad-data result shows a message and disables Save.
 - **Warnings** sit in one box with "Phir bhi save karo" / "Wapas jao, badlo".
 - **States** match the other screens: loading, error with retry, empty messages, `aria-live` messages, the `refreshFailed` line, buttons disabled while saving.
+
+## Farmer profile (Kisan ka Hisaab, Phase 6)
+
+**Data** (`src/lib/data/profileRules.ts`, pure, no second algorithm):
+
+```ts
+buildFarmerProfile({ farmerId, usageRows, paymentRows }): { ok: true, profile } | { ok: false }
+findProfileFarmer(farmers, id): { kind: 'active' | 'disabled', farmer } | { kind: 'not_found' }
+toProfileBalance(balancePaise): { kind: 'baaki' | 'advance' | 'zero', amountPaise }   // absolute amount
+visiblePart(rows, shown): { visible, hidden }      nextShownCount(total, shown)     PROFILE_PAGE_SIZE = 30
+```
+
+- `buildFarmerProfile` keeps only that farmer's rows and makes ONE `buildFarmerLedger` call. It then only selects, joins and orders:
+  - `totals`: the engine totals;
+  - `months`: newest first, with `hours`/`minutes` from `totalMinutes` (integer division);
+  - `payments`: live, newest first, each joined to its engine trail;
+  - `usage`: live, newest first, with `usageAmountPaise`;
+  - `ledger`: engine rows newest first, the signed `balancePaise` split by `toProfileBalance`.
+- `LedgerInputError` gives `{ ok: false }`; any other error is re-thrown.
+
+**Screen** (`src/pages/farmers/FarmerProfilePage.tsx`, `ProfileSections.tsx`, copy in `profileCopy.ts`; route `/farmers/:id`):
+
+| Shown | Source |
+|---|---|
+| Total charge / Total mila | `totals.chargesPaise` / `totals.totalPaidPaise` |
+| Abhi baaki / Advance / Credit (two separate figures, E18) | `totals.outstandingPaise` / `totals.creditPaise` |
+| Advance / Credit badge at the top (only when > 0) | `totals.creditPaise` |
+| Month card: samay, Charge, Charge Clear, Baaki, Cash Mila, status | `hours`/`minutes`, `chargePaise`, `paidPaise`, `remainingPaise`, `cashPaise`, `status` (Settled / Partial / Unpaid / Sirf Payment) |
+| Payment: amount, IST time, note; trail lines; "Advance / Credit" line | the payment row; `pieces[]` (oldest first, plain months, D5); `unappliedPaise` (when > 0) |
+| Pani entry: IST time, ghante-minute, rate, amount | the usage row; `amountPaise` (`usageAmountPaise`) |
+| Hisaab ki line: Pani entry / Paisa mila amount; "Baaki ₹x" / "Advance ₹x" / "Barabar" | engine `amountPaise`; `balance.kind` + `balance.amountPaise` |
+
+**Decision D27** (manager design choices, 2026-10-06; the owner may revisit):
+- **(a) Opening.** The profile opens by tapping a farmer in the Kisan list: Chalu and Band rows get a 44 px link, while Edit, Band/Chalu karo and Delete keep working. Deleted rows have no link.
+- **(b) Band and deleted farmers.** A Band farmer opens with a "Band" badge and no shortcut buttons. A deleted or unknown id shows "Kisan nahi mila" with a link back.
+- **(c) Ledger section.** Newest first. Each line shows the running balance after it, as "Baaki ₹x" (≥ 0) or "Advance ₹x" (absolute amount when < 0), or "Barabar" at 0. It is never mixed into the headline totals.
+- **(d) Credit badge.** The Advance / Credit badge shows only when credit > 0. "Abhi baaki" and "Advance / Credit" are always two separate figures.
+- **(e) Month layout.** Month cards, not a wide table; no horizontal scrolling.
+- **(f) Shortcut dialogs.** "Pani add" / "Paisa add" open the existing `UsageFormDialog` / `PaymentFormDialog` with `initialFarmerId` (pre-selected, still changeable). After saving, the hooks reload and the profile shows the new figures.
+- **(g) Status words.** "Settled", "Partial", "Unpaid", "Sirf Payment" (typed `Record<MonthStatus, string>`).
+
+**Other details:**
+- Payments, Pani entries and the ledger show 30 rows, then "Aur dikhao" for 30 more. Month cards and totals always use all rows.
+- States: loading; error with retry; the `refreshFailed` line; a bad-data message that hides all figures.
+- Saved confirmations reuse `USAGE_COPY.done.created` / `PAYMENTS_COPY.done.created`.
+- **Dialog prop.** `UsageFormDialog` and `PaymentFormDialog` have an optional `initialFarmerId` (new entry only; ignored when editing). It feeds `newUsageForm` / `newPaymentForm`.
 
 ## Backup and restore (Phase 8)
 

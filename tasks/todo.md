@@ -35,13 +35,14 @@
   - [x] Migration 006 (payment note ≤200) + SQL tests 111/111 with a row-count baseline
   - [x] Payment rules (live FIFO preview via the engine), payments data layer, `usePayments`, Paisa screen
   - [ ] Owner: smoke-test the Paisa tab with the worked numbers; review the Phase 5 notes (`PROJECT_STATUS.md`)
-- [ ] **6** — Farmer profile ← **next**
-  - [ ] Wire `/farmers/:id` (still the placeholder) and link farmer rows to it.
-  - [ ] Profile data from ONE `buildFarmerLedger({ usage, payments })` call on that farmer's rows: totals, month rows, allocation trail and chronological rows with the running balance.
-  - [ ] Totals: charges, total paid, outstanding ("Baki") and credit ("Advance / Credit") as separate figures (E18); month table with status words incl. "Sirf Payment" (D3).
-  - [ ] Allocation trail per payment: plain month pieces (possibly later months) and the unapplied part as "Advance / Credit" (D5).
-  - [ ] Show money with `formatRupees`, dates with `istDateKey` / `istTimeKey`, month labels with `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
-- [ ] **7** — Dashboard + months
+- [x] **6** — Farmer profile, Kisan ka Hisaab (done 2026-10-06; pending owner review)
+  - [x] Profile rules (one `buildFarmerLedger` call), screen at `/farmers/:id`, list link, shortcut dialogs (`initialFarmerId`), D27
+  - [ ] Owner: smoke-test a profile with the worked numbers; review D27 (a)–(g)
+- [ ] **7** — Dashboard + months ← **next**
+  - [ ] Dashboard data from the engine's `buildDashboard({ farmers, usage, payments }, view)` with views All Time / month / year (D1, L11): charges created and cash received by IST timestamp in the period; outstanding and credit as of the period end; All Time = now.
+  - [ ] Cross-farmer figures over ACTIVE farmers only (`isActiveFarmer`); Σ outstanding and Σ credit always separate, never netted (E18).
+  - [ ] Months screen from `buildAllFarmersMonths` (current figures): status per month incl. "Sirf Payment"; "Cash Mila" and "Charge Clear" never mixed (L10).
+  - [ ] Per-farmer rows link to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
 - [ ] **8** — Backup / restore
   - [ ] Restore needs a controlled DB function: the audit trigger forces `created_*` and clears `deleted_*` on insert.
 - [ ] **9** — Verification: independent script + edge-case matrix
