@@ -63,6 +63,9 @@ describe('layer guard', () => {
         '/src/pages/payments/PaymentPreviewPanel.tsx',
         '/src/pages/payments/copy.ts',
         '/src/pages/shared/monthLabel.ts',
+        '/src/pages/farmers/FarmerProfilePage.tsx',
+        '/src/pages/farmers/ProfileSections.tsx',
+        '/src/pages/farmers/profileCopy.ts',
         '/src/components/ui/dialog.tsx',
       ]),
     );

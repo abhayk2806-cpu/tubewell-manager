@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { istDateKey, parseInstantMs } from '@/lib/ledger';
 import type { FarmerRow } from '@/lib/data';
 import { Button } from '@/components/ui/button';
@@ -22,12 +24,24 @@ export function FarmerListItem({ farmer, segment, busy, onEdit, onSetDisabled, o
   return (
     <li className="rounded-lg border bg-card p-3 shadow-sm">
       <div className="min-w-0">
-        <p className="break-words font-medium">
-          {farmer.name}
-          {segment === 'disabled' && (
-            <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{FARMERS_COPY.disabledBadge}</span>
-          )}
-        </p>
+        {segment === 'deleted' ? (
+          <p className="break-words font-medium">{farmer.name}</p>
+        ) : (
+          // Opens Kisan ka Hisaab; a deleted farmer has no profile (it would show "Kisan nahi mila").
+          <Link
+            to={`/farmers/${farmer.id}`}
+            className="-mx-1 flex min-h-11 items-center justify-between gap-2 rounded-md px-1 font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={FARMERS_COPY.openProfile(farmer.name)}
+          >
+            <span className="break-words">
+              {farmer.name}
+              {segment === 'disabled' && (
+                <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{FARMERS_COPY.disabledBadge}</span>
+              )}
+            </span>
+            <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-muted-foreground" />
+          </Link>
+        )}
         {farmer.mobile && <p className="text-sm text-muted-foreground">{farmer.mobile}</p>}
         {farmer.notes && <p className="whitespace-pre-line break-words text-sm text-muted-foreground">{farmer.notes}</p>}
         {segment === 'deleted' && farmer.deleted_at !== null && (

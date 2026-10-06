@@ -23,6 +23,7 @@ export const FARMERS_COPY = {
   } satisfies Record<FarmerSegment, string>,
   noSearchResults: 'Is naam ya mobile ka koi kisan nahi mila.',
   disabledBadge: 'Band',
+  openProfile: (name: string) => `${name} ka hisaab kholo`,
   deletedOn: (dateKey: string) => `Delete hua: ${dateKey}`,
   actions: {
     edit: 'Edit',

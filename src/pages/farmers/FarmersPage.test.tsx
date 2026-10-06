@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 const api = vi.hoisted(() => ({
@@ -35,7 +36,7 @@ function deferred<T>() {
 }
 
 async function renderReady() {
-  render(<FarmersPage />);
+  render(<FarmersPage />, { wrapper: MemoryRouter });
   await screen.findByRole('button', { name: /^Chalu \(/ });
 }
 
@@ -66,13 +67,13 @@ beforeEach(() => {
 
 describe('FarmersPage', () => {
   it('shows loading, then the three segments with counts and the active list sorted by name', async () => {
-    render(<FarmersPage />);
+    render(<FarmersPage />, { wrapper: MemoryRouter });
     expect(screen.getByText('Kisan load ho rahe hain...')).toBeInTheDocument();
     await screen.findByRole('button', { name: 'Chalu (2)' });
     expect(screen.getByRole('button', { name: 'Band (1)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Deleted (1)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Chalu (2)' })).toHaveAttribute('aria-pressed', 'true');
-    const names = within(list()).getAllByRole('listitem').map((li) => li.querySelector('p')?.textContent);
+    const names = within(list()).getAllByRole('link').map((a) => a.textContent);
     expect(names).toEqual(['Amar Test', 'Ramu Test']);
     expect(screen.getByText('khet number 4')).toBeInTheDocument();
     expect(screen.queryByText(/₹|paise|Baki/)).not.toBeInTheDocument();
@@ -242,7 +243,7 @@ describe('FarmersPage', () => {
 
   it('load error shows the reason and a retry button that reloads', async () => {
     api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'offline'));
-    render(<FarmersPage />);
+    render(<FarmersPage />, { wrapper: MemoryRouter });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Kisan ki list load nahi ho payi.');
     expect(alert).toHaveTextContent('Internet nahi mil raha.');
@@ -274,6 +275,19 @@ describe('FarmersPage', () => {
     fireEvent.click(within(status).getByRole('button', { name: 'Dobara try karo' }));
     await waitFor(() => expect(status).not.toHaveTextContent('refresh nahi ho payi'));
     expect(screen.getByRole('button', { name: 'Band (2)' })).toBeInTheDocument();
+  });
+
+  it('each Chalu and Band farmer links to its profile; deleted farmers do not; row actions still work', async () => {
+    await renderReady();
+    expect(screen.getByRole('link', { name: 'Amar Test ka hisaab kholo' })).toHaveAttribute('href', '/farmers/a');
+    openSegment('Band');
+    expect(screen.getByRole('link', { name: 'Band Test ka hisaab kholo' })).toHaveAttribute('href', '/farmers/b');
+    openSegment('Deleted');
+    expect(within(list()).queryByRole('link')).not.toBeInTheDocument();
+    openSegment('Chalu');
+    api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
+    fireEvent.click(row('Amar Test').getByRole('button', { name: 'Band karo' }));
+    await waitFor(() => expect(api.setFarmerDisabled).toHaveBeenCalledWith('a', true));
   });
 
   it('a failed change shows a Hinglish error message', async () => {
