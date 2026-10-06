@@ -33,6 +33,8 @@ const UI_FORBIDDEN: readonly (readonly [string, RegExp])[] = [
   ['getFullYear', /\bgetFullYear\b/],
   ['toFixed', /\btoFixed\b/],
   ['parseFloat', /\bparseFloat\b/],
+  ['toLocale*', /\btoLocale\w*/],
+  ['Intl.', /\bIntl\./],
   ['Supabase import', /['"](?:@supabase\/[^'"]*|@\/lib\/supabase)['"]/],
 ];
 
@@ -48,6 +50,12 @@ describe('layer guard', () => {
         '/src/pages/farmers/FarmersPage.tsx',
         '/src/pages/farmers/copy.ts',
         '/src/hooks/useFarmers.ts',
+        '/src/hooks/useUsage.ts',
+        '/src/hooks/useRowStore.ts',
+        '/src/pages/usage/UsagePage.tsx',
+        '/src/pages/usage/UsageFormDialog.tsx',
+        '/src/pages/usage/UsageListItem.tsx',
+        '/src/pages/usage/copy.ts',
         '/src/components/ui/dialog.tsx',
       ]),
     );
