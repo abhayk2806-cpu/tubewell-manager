@@ -1,5 +1,5 @@
 -- supabase/tests/001_schema_checks.sql
--- Schema, trigger and RLS checks for migrations 001-004 (project tubewell-hisab).
+-- Schema, trigger and RLS checks for migrations 001-005 (project tubewell-hisab).
 --
 -- HOW TO RUN (re-runnable, leaves no data behind):
 --   Run SECTION A as one call (Supabase MCP execute_sql or the SQL editor). It is a single
@@ -279,6 +279,50 @@ begin
   select count(*) into n from public.farmers where notes = 'hijack';
   perform set_config('tw.r', current_setting('tw.r') || format('T5.58|%s|no row was changed by the other uid|found %s hijacked rows', case when n = 0 then 'PASS' else 'FAIL' end, n) || chr(10), true);
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
+end $$;
+
+-- T7 farmers input checks from migration 005 (as the table owner; constraints apply to every role)
+-- Whitespace characters are built with chr() so this file stays pure ASCII.
+do $$
+declare
+  fid uuid;
+  c record;
+  got text;
+begin
+  insert into public.farmers (name) values ('T7 Kisan') returning id into fid;
+  for c in
+    select * from (values
+      ('T7.01', 'reject space-only name', 'insert into public.farmers (name) values (''  '')', '23514'),
+      ('T7.02', 'reject tab-only name', 'insert into public.farmers (name) values (chr(9))', '23514'),
+      ('T7.03', 'reject LF-only name', 'insert into public.farmers (name) values (chr(10))', '23514'),
+      ('T7.04', 'reject CR-only name', 'insert into public.farmers (name) values (chr(13))', '23514'),
+      ('T7.05', 'reject NBSP-only name (U+00A0)', 'insert into public.farmers (name) values (chr(160))', '23514'),
+      ('T7.06', 'reject VT-only name', 'insert into public.farmers (name) values (chr(11))', '23514'),
+      ('T7.07', 'reject FF-only name', 'insert into public.farmers (name) values (chr(12))', '23514'),
+      ('T7.08', 'reject mixed whitespace name', 'insert into public.farmers (name) values ('' '' || chr(9) || chr(160) || chr(10) || chr(13) || '' '')', '23514'),
+      ('T7.09', 'reject update of a name to tab-only', 'update public.farmers set name = chr(9) where id = ''{fid}''', '23514'),
+      ('T7.10', 'accept 100-character name', 'insert into public.farmers (name) values (repeat(''a'', 100))', '00000'),
+      ('T7.11', 'reject 101-character name', 'insert into public.farmers (name) values (repeat(''a'', 101))', '23514'),
+      ('T7.12', 'accept 20-character mobile', 'insert into public.farmers (name, mobile) values (''T7 Mobile 20'', repeat(''9'', 20))', '00000'),
+      ('T7.13', 'reject 21-character mobile', 'insert into public.farmers (name, mobile) values (''T7 Mobile 21'', repeat(''9'', 21))', '23514'),
+      ('T7.14', 'accept 500-character notes', 'insert into public.farmers (name, notes) values (''T7 Notes 500'', repeat(''n'', 500))', '00000'),
+      ('T7.15', 'reject 501-character notes', 'insert into public.farmers (name, notes) values (''T7 Notes 501'', repeat(''n'', 501))', '23514'),
+      ('T7.16', 'accept NULL mobile and NULL notes', 'insert into public.farmers (name, mobile, notes) values (''T7 Nulls'', null, null)', '00000'),
+      ('T7.17', 'accept a Devanagari name', 'insert into public.farmers (name) values (chr(2352) || chr(2366) || chr(2350) || '' '' || chr(2354) || chr(2366) || chr(2354))', '00000'),
+      ('T7.18', 'accept a name with inner spaces', 'insert into public.farmers (name) values (''Test  Kisan  Lal'')', '00000'),
+      ('T7.19', 'accept a 100-character Devanagari name (characters, not bytes)', 'insert into public.farmers (name) values (repeat(chr(2352), 100))', '00000'),
+      ('T7.20', 'reject a 101-character Devanagari name', 'insert into public.farmers (name) values (repeat(chr(2352), 101))', '23514')
+    ) as v(id, label, stmt, want)
+    order by id
+  loop
+    begin
+      execute replace(c.stmt, '{fid}', fid::text);
+      got := '00000';
+    exception when others then
+      got := sqlstate;
+    end;
+    perform set_config('tw.r', current_setting('tw.r') || format('%s|%s|%s|expected %s, got %s', c.id, case when got = c.want then 'PASS' else 'FAIL' end, c.label, c.want, got) || chr(10), true);
+  end loop;
 end $$;
 
 with r as (
