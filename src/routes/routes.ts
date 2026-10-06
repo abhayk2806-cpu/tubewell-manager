@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import { CalendarDays, Database, Droplets, LayoutDashboard, Users, Wallet, type LucideIcon } from 'lucide-react';
 import { FarmersPage } from '@/pages/farmers/FarmersPage';
 import { UsagePage } from '@/pages/usage/UsagePage';
+import { PaymentsPage } from '@/pages/payments/PaymentsPage';
 
 export interface FeatureRoute {
   path: string;
@@ -25,7 +26,7 @@ export const FEATURE_ROUTES: FeatureRoute[] = [
   { path: '/farmers', title: 'Kisan', phase: 4, page: FarmersPage },
   { path: '/farmers/:id', title: 'Kisan ka Hisaab', phase: 6 },
   { path: '/usage', title: 'Pani Entry', phase: 4, page: UsagePage },
-  { path: '/payments', title: 'Paisa', phase: 5 },
+  { path: '/payments', title: 'Paisa', phase: 5, page: PaymentsPage },
   { path: '/months', title: 'Mahine', phase: 7 },
   { path: '/backup', title: 'Backup', phase: 8 },
 ];

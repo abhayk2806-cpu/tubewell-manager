@@ -1,23 +1,9 @@
 // Every user-visible Hinglish string of the Pani Entry (usage) screen lives here, so wording can
 // change in one place. Copy never computes figures (.claude/rules/ui-copy-hinglish.md).
 import type { DataErrorKind, UsageFormCode } from '@/lib/data';
+import { monthLabel } from '../shared/monthLabel';
 
 export type UsageSegment = 'live' | 'deleted';
-
-const MONTH_NAMES: Record<string, string> = {
-  '01': 'Jan',
-  '02': 'Feb',
-  '03': 'Mar',
-  '04': 'Apr',
-  '05': 'May',
-  '06': 'Jun',
-  '07': 'Jul',
-  '08': 'Aug',
-  '09': 'Sep',
-  '10': 'Oct',
-  '11': 'Nov',
-  '12': 'Dec',
-};
 
 export const USAGE_COPY = {
   pageTitle: 'Pani Entry',
@@ -30,11 +16,8 @@ export const USAGE_COPY = {
   allMonths: 'Sabhi mahine',
   bandSuffix: ' (Band)',
   deletedSuffix: ' (Deleted)',
-  /** "2026-10" -> "Oct 2026" (a label lookup only; the month key itself comes from the engine). */
-  monthLabel: (monthKey: string) => {
-    const [year, month] = monthKey.split('-');
-    return `${MONTH_NAMES[month ?? ''] ?? monthKey} ${year ?? ''}`.trim();
-  },
+  /** "2026-10" -> "Oct 2026" (shared label lookup; the month key itself comes from the engine). */
+  monthLabel,
   loading: 'Entries load ho rahi hain...',
   loadError: 'Pani entries load nahi ho payi.',
   badData: 'Ek entry ka data theek nahi hai, isliye rakam nahi dikha sakte. Dobara load karke dekho.',

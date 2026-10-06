@@ -56,6 +56,13 @@ describe('layer guard', () => {
         '/src/pages/usage/UsageFormDialog.tsx',
         '/src/pages/usage/UsageListItem.tsx',
         '/src/pages/usage/copy.ts',
+        '/src/hooks/usePayments.ts',
+        '/src/pages/payments/PaymentsPage.tsx',
+        '/src/pages/payments/PaymentFormDialog.tsx',
+        '/src/pages/payments/PaymentListItem.tsx',
+        '/src/pages/payments/PaymentPreviewPanel.tsx',
+        '/src/pages/payments/copy.ts',
+        '/src/pages/shared/monthLabel.ts',
         '/src/components/ui/dialog.tsx',
       ]),
     );
