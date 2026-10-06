@@ -51,3 +51,8 @@ Every kind of information has ONE fixed colour chosen by its meaning, the same o
 - Farmer rows: Baaki `due` (`muted` at zero), Advance / Credit `credit`, period Charge `water` and Cash Mila `cash`; shortcut icons Paisa `cash`, Pani `water`.
 - Recent activity: dot and amount by `ENTRY_KIND_TONE` (Pani `water`, Paisa `cash`).
 - Band note: `muted` notice. Bad data and load errors: existing `destructive`.
+
+**Months mapping (Phase 7B, D30).**
+- Month cards and farmer-wise rows use the profile's month colours: Charge `water`, Charge Clear and Cash Mila (is mahine) `cash`, Baaki `due` (`muted` at zero), status badge by `MONTH_STATUS_TONE` with its word ("Sirf Payment" `credit`).
+- Year strip: Charge `water`, Cash Mila `cash` (each with a thin left bar); time neutral. No Baaki or credit figure on this screen.
+- Farmer names in the breakdown: `info` links. Bad data and load errors: existing `destructive`.

@@ -45,12 +45,15 @@
   - [x] Part 0 (C-2): dialogs take a fresh IST moment when opened (profile, Pani, Paisa, Dashboard)
   - [x] `dashboardRules.ts` (`buildDashboardScreen`, no second algorithm) and the Dashboard at `/` (D29)
   - [ ] Owner: smoke-test the Dashboard with the worked numbers; confirm or revisit D29
-- [ ] **7B** — Months screen ← **next**
-  - [ ] Route `/months` (the Dashboard chart's "Saare mahine" link already points there) and the bottom-nav "Mahine" tab.
-  - [ ] Months screen from `buildAllFarmersMonths` (current figures): status per month incl. "Sirf Payment"; "Cash Mila" and "Charge Clear" never mixed (L10).
-  - [ ] Months rows over ACTIVE farmers only; per-farmer links to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
-  - [ ] Colours only from `src/components/tone.ts` (D28): charges `water`, cash received `cash`, outstanding `due`, credit `credit`, in every tile, chart series and legend; month status via `MONTH_STATUS_TONE`.
-- [ ] **8** — Backup / restore
+- [x] **7B** — Months screen (done 2026-10-06; pending owner review)
+  - [x] Part 0: Dashboard moment refresh; Dashboard Mahina link to `/months?month=`
+  - [x] `monthsRules.ts` and the Months screen at `/months` (D30)
+  - [ ] Owner: smoke-test the Months screen with the worked numbers; confirm or revisit D30
+  - [x] Route `/months` (the Dashboard chart's "Saare mahine" link already points there) and the bottom-nav "Mahine" tab.
+  - [x] Months screen from `buildAllFarmersMonths` (current figures): status per month incl. "Sirf Payment"; "Cash Mila" and "Charge Clear" never mixed (L10).
+  - [x] Months rows over ACTIVE farmers only; per-farmer links to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
+  - [x] Colours only from `src/components/tone.ts` (D28): charges `water`, cash received `cash`, outstanding `due`, credit `credit`, in every tile, chart series and legend; month status via `MONTH_STATUS_TONE`.
+- [ ] **8** — Backup / restore ← **next**
   - [ ] Restore needs a controlled DB function: the audit trigger forces `created_*` and clears `deleted_*` on insert.
 - [ ] **9** — Verification: independent script + edge-case matrix
 - [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs

@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 7A done (Dashboard, D29, pending owner review); Phase 7B (Months screen) next
+> **Current phase:** 7B done (Months screen, D30, pending owner review); Phase 8 (Backup / restore) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -31,8 +31,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), pending owner review |
 | 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), pending owner review |
 | 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), pending owner review |
-| 7B | Months screen at `/months` | ⬜ Not started (next) |
-| 8 | Backup / restore | ⬜ Not started |
+| 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), pending owner review |
+| 8 | Backup / restore | ⬜ Not started (next) |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
@@ -43,7 +43,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 3. Owner smoke-tests Phase 6: open a farmer from the Kisan list (`pnpm run dev`). See the 2026-10-06 Phase 6 session entry.
 4. Owner checks the Phase 6C colours by eye (Kisan, Pani, Paisa with preview, Kisan ka Hisaab) and confirms or revisits D28.
 5. Owner smoke-tests the Dashboard (Phase 7A) with the worked numbers and confirms or revisits D29. See the 2026-10-06 Phase 7A session entry.
-6. **Phase 7B: Months screen.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
+7. **Phase 8: Backup / restore.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -214,6 +215,10 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 ### 2026-10-06 — D29 Dashboard (Phase 7A; manager design choices (a)–(m), owner may revisit)
 - Default "Abhi tak"; Mahina / Saal with pickers; one explanation sentence; four separate tiles; summary line; 6-month charge-vs-cash chart that opens a month; farmers by baaki with search, profile links and shortcuts; recent activity; Band note; quick buttons; one bad-data message; Hinglish empty states; D28 colours; 360 px.
 - Details and the "connected to what" table: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Dashboard.
+
+### 2026-10-06 — D30 Months screen (Phase 7B; manager design choices (a)–(j), owner may revisit)
+- Explanation block; "Saal" filter (default all years); strip with time, Charge and Cash Mila only; month cards newest first with the profile's words and tones; farmer-wise breakdown per month (Baaki first, profile links); `?month=` deep link, linked from the Dashboard's Mahina view.
+- Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Months screen.
 
 ---
 
@@ -425,6 +430,15 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
   1. The Band note follows the selected period (balances at its end), like the totals; bad data in a Band farmer's rows also stops the whole dashboard.
   2. Search matches the name only (the Kisan screen also matches mobile).
   3. Chart bars use an inline height style (a size, not a colour).
+- **Not verified:** a real-browser look at 360 px (behind the owner's login).
+- **Failed attempt:** none.
+
+### 2026-10-06 — Phase 7B: Months screen
+- **Preconditions:** HEAD = origin = `ac49345`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–006. Row counts at the start: farmers 7, usage_entries 6, payments 9 (the owner's own test rows); unchanged at the end.
+- **Part 0:** the Dashboard refreshes its IST moment on `visibilitychange` (visible) and when a period button is pressed. In the Mahina view it links to `/months?month=<month>`.
+- **Code:** `src/lib/data/monthsRules.ts` (wraps `buildAllFarmersMonths` and per-farmer `buildFarmerProfile`; strip via `sumPaise`), the Months screen in `src/pages/months/` wired at `/months`. No engine change, migration or dependency.
+- **Decision D30:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Months screen.
+- **Tests:** 42 files / 766 tests (before: 40 / 724). Gates green. JS chunk 627 kB (the 500 kB warning, as before).
 - **Not verified:** a real-browser look at 360 px (behind the owner's login).
 - **Failed attempt:** none.
 

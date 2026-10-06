@@ -7,7 +7,7 @@
 > - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a).
 > - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
 > - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
-> - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The Months screen is still planned (Phase 7B).
+> - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The **Months screen exists** (Phase 7B): see [Months screen](#months-screen-phase-7b-d30).
 > - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >
@@ -59,7 +59,7 @@ Rules that follow from this:
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
 | `components/tone.ts` | Semantic colour tones and meaning lookups (Phase 6C, D28) |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
-| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6); `dashboard/` (Dashboard at `/`, Phase 7A) |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6); `dashboard/` (Dashboard at `/`, Phase 7A); `months/` (Mahine at `/months`, Phase 7B) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
 | `index.css` + `tailwind.config.js` | Design tokens as CSS variables, including the semantic `tone-*` tokens (D28); no hex colours or inline styles in components |
 
@@ -193,6 +193,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
   - Phase 5 tests cover the payment rules (including the live preview with the worked numbers), the payments data functions, `usePayments`, the Paisa screen with its preview panel, the shared month label, and the D25 long-duration boundaries.
   - Phase 6 tests cover the profile rules (worked numbers, balances, paging, bad data, one-engine consistency with the Paisa preview), the profile screen, the Kisan list link, and the `initialFarmerId` dialog prop.
+  - Phase 7B tests cover the months rules (worked numbers incl. "Unpaid with Cash Mila" and "Sirf Payment", IST month and year boundaries, inactive farmers, order, deep link, bad data, consistency with the engine, the Dashboard and the profile), the Months screen, the Dashboard moment refresh and the Dashboard link to a month.
   - Phase 7A tests cover the dashboard rules (worked numbers for All Time / Mahina / Saal, IST month and year boundaries, never netted, inactive farmers, Band note, sorting, search, chart, recent activity, bad data, consistency with the profile and the months list), the Dashboard screen, and the fresh dialog moment (C-2).
   - Phase 6C tests cover the tone classes and lookups, the WCAG contrast of the tone tokens, and a colour static guard over pages and components.
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
@@ -339,6 +340,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `payments.ts` | Payment queries and mutations, Phase 5 |
 | `timeline.ts` | Private helpers shared by the usage and payment rules: newest-first sort, IST month/day, month list (Phase 5) |
 | `profileRules.ts` | Pure Kisan ka Hisaab rules: one `buildFarmerLedger` call per profile, joins and display splits only (Phase 6) |
+| `monthsRules.ts` | Pure Months rules: wraps `buildAllFarmersMonths` and per-farmer `buildFarmerProfile` months; order, year filter, strip (`sumPaise`), deep link (Phase 7B) |
 | `dashboardRules.ts` | Pure Dashboard rules: wraps `buildDashboard` and `buildAllFarmersMonths`; names, order, search, summary, Band note, chart bars, recent activity (Phase 7A) |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
 
@@ -564,6 +566,43 @@ visiblePart(rows, shown): { visible, hidden }      nextShownCount(total, shown) 
 - Saved confirmations reuse `USAGE_COPY.done.created` / `PAYMENTS_COPY.done.created`.
 - **Dialog prop.** `UsageFormDialog` and `PaymentFormDialog` have an optional `initialFarmerId` (new entry only; ignored when editing). It feeds `newUsageForm` / `newPaymentForm`.
 
+## Months screen (Phase 7B, D30)
+
+**Data** (`src/lib/data/monthsRules.ts`, pure, no second algorithm):
+
+```ts
+buildMonthsScreen({ farmers, usageRows, paymentRows }): { ok: true, screen: { months, years, hasFarmers } } | { ok: false }
+filterMonthsByYear(months, year | null)    monthsStrip(months): { totalMinutes, hours, minutes, chargePaise, cashPaise }
+monthsYearOptions(monthKeys)    sortMonthFarmers(rows)    deepLinkMonth(value, monthKeys): { monthKey, yearKey } | null
+```
+
+- `months` are the engine's `buildAllFarmersMonths` rows (status of the sums included), newest first, with `hours` / `minutes`. Each has `farmers`: every ACTIVE farmer's `buildFarmerProfile(...).profile.months` row for that month (one engine call per farmer), highest Baaki first, then name, then id.
+- `monthsStrip` adds the shown months' minutes, charge and cash with the engine's `sumPaise`; it has no Baaki and no credit.
+- `deepLinkMonth` accepts only a valid month key that is in the list.
+- `LedgerInputError` (or a farmer profile that is not ok) gives `{ ok: false }`; other errors are re-thrown.
+
+**Screen** (`src/pages/months/`: `MonthsPage.tsx`, `MonthsSections.tsx`, `copy.ts`; route `/months`):
+
+| Element | Engine field | Leads to |
+|---|---|---|
+| Month card | `MonthRow` charge, paid (Charge Clear), remaining (Baaki), cash (Cash Mila), minutes, status, counts | "Kisan-wise dekho (n)" opens the breakdown |
+| Breakdown row | that farmer's profile month (`ProfileMonth`) | name → `/farmers/:id` |
+| Year strip | `sumPaise` of the shown months' minutes, `chargePaise`, `cashPaise` (= Dashboard year view charges / cash) | "Dashboard kholo" → `/` for year-end Baaki / credit |
+| Deep link `/months?month=YYYY-MM` | — | opens that month expanded, year filter set; invalid values ignored |
+| Dashboard Mahina view | — | "Is mahine ka kisan-wise hisaab" → `/months?month=<month>` |
+
+**Decision D30** (manager design choices, 2026-10-06; the owner may revisit):
+- **(a) Layout.** Title "Mahine": explanation, year filter, year strip, months list.
+- **(b) Year filter.** "Saal" select: "Sabhi saal" (default) plus each year with months, newest first.
+- **(c) Year strip.** Time, Charge, Cash Mila of the shown months (no Baaki: monthly Baaki is "as of now"; year-end balances live in the Dashboard "Saal" view, linked).
+- **(d) Month cards.** Newest first; the profile's words and tones; a count line "x entry, y payment"; "Sirf Payment" as on the profile.
+- **(e) Breakdown.** A full-width toggle (`aria-expanded`, `aria-controls`) per card; farmers with usage or payments in the month, Baaki first; 30 then "Aur dikhao"; several months may be open; cards start closed.
+- **(f) Deep link.** `?month=YYYY-MM` opens that month and sets its year; the Dashboard's Mahina view links to it.
+- **(g) Explanation.** One block: Charge, Charge Clear, Baaki, Cash Mila in plain words, including why "Unpaid" can show Cash Mila.
+- **(h) States.** Loading, error with retry, one bad-data message, no active farmer (link to Kisan), no month yet, a year without months. No dialogs, so no "saved, list not refreshed" line.
+- **(i) Colours.** D28 only (see the rules file's Months mapping).
+- **(j) 360 px.** No horizontal scroll; 44 px targets; long names wrap.
+
 ## Dashboard (Phase 7A, D29)
 
 **Data** (`src/lib/data/dashboardRules.ts`, pure, no second algorithm):
@@ -615,6 +654,8 @@ CHART_MONTHS = 6   CHART_MIN_PERCENT = 4   RECENT_LIMIT = 8
 - The Band note follows the selected view (balances at the period end), like the totals.
 - Bar heights use an inline `style` height (a size, not a colour); colours come only from tone classes.
 - Each Pani / Paisa dialog takes a fresh IST moment when opened (C-2, also on the profile, Pani Entry and Paisa pages).
+- The Dashboard refreshes its IST moment when the page becomes visible again and when a period button is pressed (Phase 7B Part 0), so the current month and year never go stale.
+- In the Mahina view, "Is mahine ka kisan-wise hisaab" links to `/months?month=<month>`.
 
 ## Semantic colours (Phase 6C, D28)
 
