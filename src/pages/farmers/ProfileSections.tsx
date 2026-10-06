@@ -3,6 +3,8 @@ import { formatRupees, istDateKey, istTimeKey, parseInstantMs } from '@/lib/ledg
 import { PROFILE_PAGE_SIZE, nextShownCount, visiblePart } from '@/lib/data';
 import type { PaymentRow, ProfileLedgerLine, ProfileMonth, ProfilePayment, ProfileUsage, UsageRow } from '@/lib/data';
 import { Button } from '@/components/ui/button';
+import { BALANCE_TONE, ENTRY_KIND_TONE, MONEY_TONE, MONTH_STATUS_TONE, TONE } from '@/components/tone';
+import { cn } from '@/lib/utils';
 import { BALANCE_TEXT, MONTH_STATUS_TEXT, PROFILE_COPY } from './profileCopy';
 
 // Every figure below is an engine field from buildFarmerProfile, shown with formatRupees.
@@ -23,11 +25,11 @@ function Empty({ text }: { text: string }) {
   return <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">{text}</p>;
 }
 
-function Line({ label, value, testId }: { label: string; value: ReactNode; testId?: string }) {
+function Line({ label, value, testId, valueClass }: { label: string; value: ReactNode; testId?: string; valueClass?: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-2" data-testid={testId}>
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dd className={cn('font-medium', valueClass)}>{value}</dd>
     </div>
   );
 }
@@ -65,16 +67,16 @@ export function MonthCards({ months }: { months: readonly ProfileMonth[] }) {
             <li key={m.monthKey} className="rounded-lg border bg-card p-3 shadow-sm" data-testid={`month-${m.monthKey}`}>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="font-medium">{c.label(m.monthKey)}</p>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium" data-testid="month-status">
+                <span className={cn('rounded px-2 py-0.5 text-xs font-medium', TONE[MONTH_STATUS_TONE[m.status]].badge)} data-testid="month-status">
                   {MONTH_STATUS_TEXT[m.status]}
                 </span>
               </div>
               <dl className="space-y-1 text-sm">
                 <Line label={c.time} value={c.duration(m.hours, m.minutes)} />
-                <Line label={c.charge} value={formatRupees(m.chargePaise)} testId="month-charge" />
-                <Line label={c.chargeClear} value={formatRupees(m.paidPaise)} testId="month-paid" />
-                <Line label={c.remaining} value={formatRupees(m.remainingPaise)} testId="month-remaining" />
-                <Line label={c.cash} value={formatRupees(m.cashPaise)} testId="month-cash" />
+                <Line label={c.charge} value={formatRupees(m.chargePaise)} testId="month-charge" valueClass={TONE[MONEY_TONE.charge].text} />
+                <Line label={c.chargeClear} value={formatRupees(m.paidPaise)} testId="month-paid" valueClass={TONE[MONEY_TONE.cash].text} />
+                <Line label={c.remaining} value={formatRupees(m.remainingPaise)} testId="month-remaining" valueClass={TONE[MONEY_TONE.outstanding].text} />
+                <Line label={c.cash} value={formatRupees(m.cashPaise)} testId="month-cash" valueClass={TONE[MONEY_TONE.cash].text} />
               </dl>
             </li>
           ))}
@@ -96,13 +98,13 @@ export function PaymentHistory({ payments }: { payments: readonly ProfilePayment
           render={(visible) => (
             <ul className="space-y-2" aria-label={c.heading(payments.length)}>
               {visible.map((p) => (
-                <li key={p.row.id} className="rounded-lg border bg-card p-3 shadow-sm" data-testid={`payment-${p.row.id}`}>
+                <li key={p.row.id} className={cn('rounded-lg border bg-card p-3 shadow-sm', TONE[ENTRY_KIND_TONE.payment].bar)} data-testid={`payment-${p.row.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm text-muted-foreground">{when(p.row.paid_at)}</p>
                       {p.row.note && <p className="whitespace-pre-line break-words text-sm text-muted-foreground">{p.row.note}</p>}
                     </div>
-                    <p className="shrink-0 font-semibold">{formatRupees(p.row.amount_paise)}</p>
+                    <p className={cn('shrink-0 font-semibold', TONE[ENTRY_KIND_TONE.payment].text)}>{formatRupees(p.row.amount_paise)}</p>
                   </div>
                   <p className="mt-2 text-xs font-medium text-muted-foreground">{c.trail}</p>
                   <dl className="space-y-0.5 text-sm">
@@ -112,9 +114,10 @@ export function PaymentHistory({ payments }: { payments: readonly ProfilePayment
                         label={PROFILE_COPY.months.label(piece.monthKey)}
                         value={formatRupees(piece.amountPaise)}
                         testId={`trail-${piece.monthKey}`}
+                        valueClass={TONE[MONEY_TONE.cash].text}
                       />
                     ))}
-                    {p.unappliedPaise > 0 && <Line label={c.advance} value={formatRupees(p.unappliedPaise)} testId="trail-advance" />}
+                    {p.unappliedPaise > 0 && <Line label={c.advance} value={formatRupees(p.unappliedPaise)} testId="trail-advance" valueClass={TONE[MONEY_TONE.credit].text} />}
                   </dl>
                 </li>
               ))}
@@ -138,14 +141,18 @@ export function UsageHistory({ usage }: { usage: readonly ProfileUsage<UsageRow>
           render={(visible) => (
             <ul className="space-y-2" aria-label={c.heading(usage.length)}>
               {visible.map((u) => (
-                <li key={u.row.id} className="flex items-start justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm" data-testid={`usage-${u.row.id}`}>
+                <li
+                  key={u.row.id}
+                  className={cn('flex items-start justify-between gap-2 rounded-lg border bg-card p-3 shadow-sm', TONE[ENTRY_KIND_TONE.usage].bar)}
+                  data-testid={`usage-${u.row.id}`}
+                >
                   <div className="min-w-0 text-sm">
                     <p className="text-muted-foreground">{when(u.row.used_at)}</p>
                     <p>
                       {c.duration(u.row.hours, u.row.minutes)} · {c.ratePerHour(formatRupees(u.row.rate_paise))}
                     </p>
                   </div>
-                  <p className="shrink-0 font-semibold">{formatRupees(u.amountPaise)}</p>
+                  <p className={cn('shrink-0 font-semibold', TONE[ENTRY_KIND_TONE.usage].text)}>{formatRupees(u.amountPaise)}</p>
                 </li>
               ))}
             </ul>
@@ -169,13 +176,16 @@ export function LedgerLines({ ledger }: { ledger: readonly ProfileLedgerLine[] }
             <ul className="divide-y rounded-lg border bg-card" aria-label={c.heading(ledger.length)}>
               {visible.map((line) => (
                 <li key={`${line.kind}-${line.id}`} className="flex items-start justify-between gap-2 p-3 text-sm" data-testid={`ledger-${line.id}`}>
-                  <div className="min-w-0">
-                    <p className="font-medium">
-                      {line.kind === 'usage' ? c.usage : c.payment}: {formatRupees(line.amountPaise)}
-                    </p>
-                    <p className="text-muted-foreground">{PROFILE_COPY.when(istDateKey(line.atMs), istTimeKey(line.atMs))}</p>
+                  <div className="flex min-w-0 items-start gap-2">
+                    <span aria-hidden="true" className={cn('mt-1.5 size-2 shrink-0 rounded-full', TONE[ENTRY_KIND_TONE[line.kind]].dot)} />
+                    <div className="min-w-0">
+                      <p className={cn('font-medium', TONE[ENTRY_KIND_TONE[line.kind]].text)}>
+                        {line.kind === 'usage' ? c.usage : c.payment}: {formatRupees(line.amountPaise)}
+                      </p>
+                      <p className="text-muted-foreground">{PROFILE_COPY.when(istDateKey(line.atMs), istTimeKey(line.atMs))}</p>
+                    </div>
                   </div>
-                  <p className="shrink-0 font-medium" data-testid="ledger-balance">
+                  <p className={cn('shrink-0 font-medium', TONE[BALANCE_TONE[line.balance.kind]].text)} data-testid="ledger-balance">
                     {BALANCE_TEXT[line.balance.kind](formatRupees(line.balance.amountPaise))}
                   </p>
                 </li>

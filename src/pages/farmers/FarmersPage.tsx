@@ -4,6 +4,7 @@ import { findDuplicateFarmerNames, matchesFarmerSearch } from '@/lib/data';
 import type { FarmerRow } from '@/lib/data';
 import { useFarmers, type MutationResult } from '@/hooks/useFarmers';
 import { Button } from '@/components/ui/button';
+import { NOTICE_TONE, TONE } from '@/components/tone';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -94,14 +95,14 @@ export function FarmersPage() {
           <p
             className={cn(
               'rounded-md border px-3 py-2 text-sm',
-              notice.tone === 'success' ? 'border-primary/30 bg-accent text-accent-foreground' : 'border-destructive/30 bg-destructive/10 text-destructive',
+              notice.tone === 'success' ? TONE[NOTICE_TONE.success].notice : 'border-destructive/30 bg-destructive/10 text-destructive',
             )}
           >
             {notice.text}
           </p>
         )}
         {farmers.refreshFailed && farmers.status === 'ready' && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
             <span>{FARMERS_COPY.refreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={() => void farmers.retryRefresh()}>
               {FARMERS_COPY.retry}

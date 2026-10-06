@@ -3,6 +3,8 @@ import { ChevronRight } from 'lucide-react';
 import { istDateKey, parseInstantMs } from '@/lib/ledger';
 import type { FarmerRow } from '@/lib/data';
 import { Button } from '@/components/ui/button';
+import { TONE } from '@/components/tone';
+import { cn } from '@/lib/utils';
 import { FARMERS_COPY, type FarmerSegment } from './copy';
 
 const ACTIONS = FARMERS_COPY.actions;
@@ -22,10 +24,10 @@ export interface FarmerListItemProps {
 export function FarmerListItem({ farmer, segment, busy, onEdit, onSetDisabled, onDelete, onRestore }: FarmerListItemProps) {
   const buttonClass = 'h-11 min-w-11';
   return (
-    <li className="rounded-lg border bg-card p-3 shadow-sm">
+    <li className={cn('rounded-lg border bg-card p-3 shadow-sm', segment !== 'active' && TONE.muted.bar)}>
       <div className="min-w-0">
         {segment === 'deleted' ? (
-          <p className="break-words font-medium">{farmer.name}</p>
+          <p className={cn('break-words font-medium', TONE.muted.text)}>{farmer.name}</p>
         ) : (
           // Opens Kisan ka Hisaab; a deleted farmer has no profile (it would show "Kisan nahi mila").
           <Link
@@ -36,7 +38,7 @@ export function FarmerListItem({ farmer, segment, busy, onEdit, onSetDisabled, o
             <span className="break-words">
               {farmer.name}
               {segment === 'disabled' && (
-                <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{FARMERS_COPY.disabledBadge}</span>
+                <span className={cn('ml-2 rounded px-1.5 py-0.5 text-xs', TONE.muted.badge)}>{FARMERS_COPY.disabledBadge}</span>
               )}
             </span>
             <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-muted-foreground" />

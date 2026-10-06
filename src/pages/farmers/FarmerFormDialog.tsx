@@ -3,6 +3,8 @@ import { findDuplicateFarmerNames, normalizeFarmerInput, validateFarmerInput } f
 import type { FarmerFormValues, FarmerRow, FarmerValidationCode } from '@/lib/data';
 import type { MutationResult } from '@/hooks/useFarmers';
 import { Button } from '@/components/ui/button';
+import { NOTICE_TONE, TONE } from '@/components/tone';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -143,7 +145,7 @@ export function FarmerFormDialog({ farmer, allFarmers, saving, onSave, onSaved, 
           </div>
 
           {duplicates.length > 0 && (
-            <div role="alert" className="space-y-2 rounded-md border border-primary/30 bg-accent px-3 py-2 text-sm">
+            <div role="alert" className={cn('space-y-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.warning].notice)}>
               <p className="font-medium">{FARMERS_COPY.duplicate.heading}</p>
               <ul className="list-disc pl-5">
                 {duplicates.map((d) => (
@@ -153,7 +155,7 @@ export function FarmerFormDialog({ farmer, allFarmers, saving, onSave, onSaved, 
                   </li>
                 ))}
               </ul>
-              <p className="text-muted-foreground">{FARMERS_COPY.duplicate.hint}</p>
+              <p>{FARMERS_COPY.duplicate.hint}</p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" className="h-11" disabled={saving} onClick={() => void save()}>
                   {FARMERS_COPY.duplicate.saveAnyway}

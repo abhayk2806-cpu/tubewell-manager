@@ -1,6 +1,8 @@
 import { formatRupees, istDateKey, istTimeKey, parseInstantMs } from '@/lib/ledger';
 import type { UsageRow } from '@/lib/data';
 import { Button } from '@/components/ui/button';
+import { ENTRY_KIND_TONE, TONE } from '@/components/tone';
+import { cn } from '@/lib/utils';
 import { USAGE_COPY, type UsageSegment } from './copy';
 
 const ACTIONS = USAGE_COPY.actions;
@@ -22,8 +24,10 @@ export interface UsageListItemProps {
 export function UsageListItem({ entry, farmerName, amountPaise, segment, busy, onEdit, onDelete, onRestore }: UsageListItemProps) {
   const usedMs = parseInstantMs(entry.used_at);
   const buttonClass = 'h-11 min-w-11';
+  // Entry type colour (D28); a deleted row is muted.
+  const tone = segment === 'deleted' ? TONE.muted : TONE[ENTRY_KIND_TONE.usage];
   return (
-    <li className="rounded-lg border bg-card p-3 shadow-sm">
+    <li className={cn('rounded-lg border bg-card p-3 shadow-sm', tone.bar)}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="break-words font-medium">{farmerName}</p>
@@ -35,7 +39,7 @@ export function UsageListItem({ entry, farmerName, amountPaise, segment, busy, o
             <p className="text-sm text-muted-foreground">{USAGE_COPY.deletedOn(istDateKey(parseInstantMs(entry.deleted_at)))}</p>
           )}
         </div>
-        <p className="shrink-0 font-semibold">{formatRupees(amountPaise)}</p>
+        <p className={cn('shrink-0 font-semibold', tone.text)}>{formatRupees(amountPaise)}</p>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {segment === 'deleted' ? (

@@ -7,6 +7,7 @@ import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
+import { MONEY_TONE, NOTICE_TONE, TONE, type Tone } from '@/components/tone';
 import { cn } from '@/lib/utils';
 import { USAGE_COPY } from '../usage/copy';
 import { PAYMENTS_COPY } from '../payments/copy';
@@ -17,11 +18,11 @@ import { LedgerLines, MonthCards, PaymentHistory, UsageHistory } from './Profile
 
 type Dialog = 'usage' | 'payment' | null;
 
-function Figure({ label, paise, testId, highlight = false }: { label: string; paise: number; testId: string; highlight?: boolean }) {
+function Figure({ label, paise, testId, tone, highlight = false }: { label: string; paise: number; testId: string; tone: Tone; highlight?: boolean }) {
   return (
-    <div className={cn('rounded-lg border bg-card p-3', highlight && 'border-primary/40 bg-accent')} data-testid={testId}>
+    <div className={cn('rounded-lg border bg-card p-3', TONE[tone].bar, highlight && TONE[tone].soft)} data-testid={testId}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-lg font-semibold">{formatRupees(paise)}</dd>
+      <dd className={cn('text-lg font-semibold', TONE[tone].text)}>{formatRupees(paise)}</dd>
     </div>
   );
 }
@@ -115,12 +116,12 @@ export function FarmerProfilePage() {
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{PROFILE_COPY.pageTitle}</p>
         <h1 id="profile-title" className="flex flex-wrap items-center gap-2 break-words text-xl font-semibold">
           {farmer.name}
-          {!active && <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">{PROFILE_COPY.bandBadge}</span>}
+          {!active && <span className={cn('rounded px-1.5 py-0.5 text-xs font-medium', TONE.muted.badge)}>{PROFILE_COPY.bandBadge}</span>}
         </h1>
         {farmer.mobile && <p className="text-sm text-muted-foreground">{farmer.mobile}</p>}
         {farmer.notes && <p className="whitespace-pre-line break-words text-sm text-muted-foreground">{farmer.notes}</p>}
         {result.ok && result.profile.totals.creditPaise > 0 && (
-          <p className="inline-block rounded-full bg-accent px-3 py-1 text-sm font-medium text-accent-foreground" data-testid="profile-credit-badge">
+          <p className={cn('inline-block rounded-full px-3 py-1 text-sm font-medium', TONE[MONEY_TONE.credit].badge)} data-testid="profile-credit-badge">
             {PROFILE_COPY.creditBadge(formatRupees(result.profile.totals.creditPaise))}
           </p>
         )}
@@ -140,9 +141,9 @@ export function FarmerProfilePage() {
       )}
 
       <div aria-live="polite" role="status">
-        {notice && <p className="rounded-md border border-primary/30 bg-accent px-3 py-2 text-sm text-accent-foreground">{notice}</p>}
+        {notice && <p className={cn('rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.success].notice)}>{notice}</p>}
         {(usage.refreshFailed || payments.refreshFailed) && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
             <span>{PROFILE_COPY.refreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={retryRefresh}>
               {PROFILE_COPY.retry}
@@ -162,13 +163,14 @@ export function FarmerProfilePage() {
               {PROFILE_COPY.totals.heading}
             </h2>
             <dl className="grid grid-cols-2 gap-2">
-              <Figure testId="total-charges" label={PROFILE_COPY.totals.charges} paise={result.profile.totals.chargesPaise} />
-              <Figure testId="total-paid" label={PROFILE_COPY.totals.paid} paise={result.profile.totals.totalPaidPaise} />
-              <Figure testId="total-outstanding" label={PROFILE_COPY.totals.outstanding} paise={result.profile.totals.outstandingPaise} />
+              <Figure testId="total-charges" label={PROFILE_COPY.totals.charges} paise={result.profile.totals.chargesPaise} tone={MONEY_TONE.charge} />
+              <Figure testId="total-paid" label={PROFILE_COPY.totals.paid} paise={result.profile.totals.totalPaidPaise} tone={MONEY_TONE.cash} />
+              <Figure testId="total-outstanding" label={PROFILE_COPY.totals.outstanding} paise={result.profile.totals.outstandingPaise} tone={MONEY_TONE.outstanding} />
               <Figure
                 testId="total-credit"
                 label={PROFILE_COPY.totals.credit}
                 paise={result.profile.totals.creditPaise}
+                tone={MONEY_TONE.credit}
                 highlight={result.profile.totals.creditPaise > 0}
               />
             </dl>

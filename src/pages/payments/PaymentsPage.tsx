@@ -6,6 +6,7 @@ import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments, type PaymentMutationResult } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
+import { NOTICE_TONE, TONE } from '@/components/tone';
 import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
@@ -116,14 +117,14 @@ export function PaymentsPage() {
           <p
             className={cn(
               'rounded-md border px-3 py-2 text-sm',
-              notice.tone === 'success' ? 'border-primary/30 bg-accent text-accent-foreground' : 'border-destructive/30 bg-destructive/10 text-destructive',
+              notice.tone === 'success' ? TONE[NOTICE_TONE.success].notice : 'border-destructive/30 bg-destructive/10 text-destructive',
             )}
           >
             {notice.text}
           </p>
         )}
         {payments.refreshFailed && status === 'ready' && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
             <span>{PAYMENTS_COPY.refreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={() => void payments.retryRefresh()}>
               {PAYMENTS_COPY.retry}

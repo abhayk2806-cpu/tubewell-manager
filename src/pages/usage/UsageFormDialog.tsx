@@ -10,6 +10,8 @@ import {
 import type { FarmerRow, IstMoment, UsageForm, UsageFormCode, UsageInput, UsageRow, UsageWarning } from '@/lib/data';
 import type { UsageMutationResult } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
+import { MONEY_TONE, NOTICE_TONE, TONE } from '@/components/tone';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -227,13 +229,13 @@ export function UsageFormDialog({ entry, activeFarmers, allFarmers, allUsage, no
           </div>
 
           {amountText !== null && (
-            <p className="rounded-md bg-muted px-3 py-2 text-base font-medium" data-testid="usage-amount">
+            <p className={cn('rounded-md px-3 py-2 text-base font-medium', TONE[MONEY_TONE.charge].badge)} data-testid="usage-amount">
               {USAGE_COPY.amount(amountText)}
             </p>
           )}
 
           {warnings.length > 0 && (
-            <div role="alert" className="space-y-2 rounded-md border border-primary/30 bg-accent px-3 py-2 text-sm">
+            <div role="alert" className={cn('space-y-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.warning].notice)}>
               <p className="font-medium">{USAGE_COPY.warnings.heading}</p>
               <ul className="list-disc space-y-1 pl-5">
                 {warnings.map((w) => (
