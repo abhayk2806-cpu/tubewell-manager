@@ -43,3 +43,11 @@ Every kind of information has ONE fixed colour chosen by its meaning, the same o
 - charges = `water`, cash received = `cash`, outstanding = `due`, credit = `credit`;
 - this applies to every chart series and legend as well;
 - no new ad-hoc colours. If a new meaning is needed, add a named tone (token, contrast test, this file) first.
+
+**Dashboard mapping (Phase 7A, D29).**
+- Tiles: Charge `water`, Cash Mila `cash`, Baaki `due`, Advance / Credit `credit` (through `MONEY_TONE`), each with a thin left bar.
+- Summary line: the baaki sentence `due` (`muted` when nobody owes), the credit sentence `credit`.
+- Chart: charge bars and legend `water`, cash bars and legend `cash`; the selected month uses the existing `info` highlight.
+- Farmer rows: Baaki `due` (`muted` at zero), Advance / Credit `credit`, period Charge `water` and Cash Mila `cash`; shortcut icons Paisa `cash`, Pani `water`.
+- Recent activity: dot and amount by `ENTRY_KIND_TONE` (Pani `water`, Paisa `cash`).
+- Band note: `muted` notice. Bad data and load errors: existing `destructive`.

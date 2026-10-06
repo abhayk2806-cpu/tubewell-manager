@@ -7,7 +7,7 @@
 > - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a).
 > - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b).
 > - The **Paisa (payments) screen exists** (Phase 5): see [Payment data](#payment-data-phase-5) and [Paisa screen](#paisa-screen-phase-5).
-> - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The Months and Dashboard screens are still planned.
+> - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The Months screen is still planned (Phase 7B).
 > - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >
@@ -59,7 +59,7 @@ Rules that follow from this:
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
 | `components/tone.ts` | Semantic colour tones and meaning lookups (Phase 6C, D28) |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
-| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6) |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6); `dashboard/` (Dashboard at `/`, Phase 7A) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
 | `index.css` + `tailwind.config.js` | Design tokens as CSS variables, including the semantic `tone-*` tokens (D28); no hex colours or inline styles in components |
 
@@ -193,6 +193,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
   - Phase 5 tests cover the payment rules (including the live preview with the worked numbers), the payments data functions, `usePayments`, the Paisa screen with its preview panel, the shared month label, and the D25 long-duration boundaries.
   - Phase 6 tests cover the profile rules (worked numbers, balances, paging, bad data, one-engine consistency with the Paisa preview), the profile screen, the Kisan list link, and the `initialFarmerId` dialog prop.
+  - Phase 7A tests cover the dashboard rules (worked numbers for All Time / Mahina / Saal, IST month and year boundaries, never netted, inactive farmers, Band note, sorting, search, chart, recent activity, bad data, consistency with the profile and the months list), the Dashboard screen, and the fresh dialog moment (C-2).
   - Phase 6C tests cover the tone classes and lookups, the WCAG contrast of the tone tokens, and a colour static guard over pages and components.
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
@@ -338,6 +339,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `payments.ts` | Payment queries and mutations, Phase 5 |
 | `timeline.ts` | Private helpers shared by the usage and payment rules: newest-first sort, IST month/day, month list (Phase 5) |
 | `profileRules.ts` | Pure Kisan ka Hisaab rules: one `buildFarmerLedger` call per profile, joins and display splits only (Phase 6) |
+| `dashboardRules.ts` | Pure Dashboard rules: wraps `buildDashboard` and `buildAllFarmersMonths`; names, order, search, summary, Band note, chart bars, recent activity (Phase 7A) |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
 
 ### API
@@ -561,6 +563,58 @@ visiblePart(rows, shown): { visible, hidden }      nextShownCount(total, shown) 
 - States: loading; error with retry; the `refreshFailed` line; a bad-data message that hides all figures.
 - Saved confirmations reuse `USAGE_COPY.done.created` / `PAYMENTS_COPY.done.created`.
 - **Dialog prop.** `UsageFormDialog` and `PaymentFormDialog` have an optional `initialFarmerId` (new entry only; ignored when editing). It feeds `newUsageForm` / `newPaymentForm`.
+
+## Dashboard (Phase 7A, D29)
+
+**Data** (`src/lib/data/dashboardRules.ts`, pure, no second algorithm):
+
+```ts
+buildDashboardScreen({ farmers, usageRows, paymentRows, view, now }): { ok: true, screen } | { ok: false }
+  screen = { dashboard, periodHasActivity, summary, rows, band, chart, recent, periodOptions }
+sortDashboardRows(rows)            filterDashboardRows(rows, query)       summarizeDashboard(sortedRows)
+chartBars(months): ChartMonth[]    buildRecentActivity({ farmers, usageRows, paymentRows, limit? })
+buildPeriodOptions(monthKeys, now, view)    periodView(kind, now)
+CHART_MONTHS = 6   CHART_MIN_PERCENT = 4   RECENT_LIMIT = 8
+```
+
+- `dashboard` is the engine's `buildDashboard(…, view)`. `rows` are its per-farmer rows plus the name, highest baaki first, then name (case-insensitive), then id.
+- `band` runs the same `buildDashboard` over copies of the Band farmers with the flag cleared, so their as-of balances use the same rule. It is never added to the totals; it is null when no Band farmer has a balance.
+- `chart` comes from `buildAllFarmersMonths`: the newest 6 months with usage or payments, oldest to newest. Bar heights are integer percents of the largest bar shown; any amount above zero is at least 4 %.
+- `recent`: the newest 8 live entries and payments of active farmers, mixed (ties: payment before usage, then id), amounts from `usageAmountPaise` / `amount_paise`.
+- `LedgerInputError` anywhere (including a Band farmer's rows or an invalid period key) gives `{ ok: false }`; other errors are re-thrown.
+
+**Screen** (`src/pages/dashboard/`: `DashboardPage.tsx`, `DashboardSections.tsx`, `copy.ts`; route `/`):
+
+| Element | Engine field | Leads to |
+|---|---|---|
+| Tile Charge / Cash Mila | `dashboard.chargesCreatedPaise` / `cashReceivedPaise` (in the period) | — |
+| Tile Baaki / Advance / Credit | `dashboard.outstandingPaise` / `creditPaise` (as of the period end; never netted) | — |
+| Summary line | counts of rows with outstanding > 0 / credit > 0; top row's `outstandingPaise` | — |
+| Chart column | `MonthRow.chargePaise` / `cashPaise` | switches to the Mahina view of that month; "Saare mahine" → `/months` |
+| Farmer row | `DashboardFarmerRow` outstanding, credit (and period charge / cash) | name → `/farmers/:id`; Paisa / Pani → the dialogs with the farmer pre-selected |
+| Recent line | `usageAmountPaise` / `amount_paise`, IST date and time | farmer name → `/farmers/:id` |
+| Band note | Band farmers' `outstandingPaise` and `creditPaise` (separate) | → `/farmers` |
+| Quick buttons Pani add / Paisa add | — | the dialogs without a farmer; the lists reload after a save |
+
+**Decision D29** (manager design choices, 2026-10-06; the owner may revisit):
+- **(a) Period.** Default "Abhi tak" (All Time = now). "Mahina" opens the current IST month with a month picker (months with data plus the current one, newest first); "Saal" the current year with a year picker. Changing the period re-runs the pure function only.
+- **(b) Explanation.** One sentence under the selector: what charge and cash mean for the period, and that Baaki and Advance / Credit are as of its end (D1).
+- **(c) Tiles.** Four separate figures with D28 tones; no netted figure anywhere.
+- **(d) Summary.** "x kisan ka baaki hai. Sabse zyada: naam ₹y." or "Kisi kisan ka baaki nahi."; plus "z kisan ke paas Advance / Credit hai." when z > 0.
+- **(e) Chart.** "Mahine ke hisaab": the last 6 months with data, two bars per month (charge, cash), legend with colours and words, each column a 44 px button with an aria-label; pressing it opens that month; a screen-reader table with the same figures; "Saare mahine" → `/months` (Phase 7B).
+- **(f) Farmer list.** Every active farmer, highest baaki first; Advance / Credit only when > 0; period charge and cash in Mahina / Saal; name search with "x / y kisan"; name → profile; Paisa / Pani shortcuts.
+- **(g) Recent activity.** Newest 8 live entries and payments of active farmers, each linking to the profile.
+- **(h) Band note.** Count and separate Baaki / Advance totals of Band farmers with a balance, "not in the totals above" (L12), link to Kisan. Soft-deleted farmers are never mentioned.
+- **(i) Quick buttons.** Pani add / Paisa add without a farmer; saved confirmations reuse the Pani and Paisa `done` copy.
+- **(j) Data health.** Bad data shows one plain message instead of all figures; loading, error with retry, and the "saved, list not refreshed" line as on the profile.
+- **(k) Empty states.** No active farmers (link to Kisan); no entry or payment in the period; no months; no recent activity.
+- **(l) Colours.** D28 only (see the rules file's Dashboard mapping).
+- **(m) 360 px.** Six chart columns fit; 44 px targets; long names wrap.
+
+**Other details:**
+- The Band note follows the selected view (balances at the period end), like the totals.
+- Bar heights use an inline `style` height (a size, not a colour); colours come only from tone classes.
+- Each Pani / Paisa dialog takes a fresh IST moment when opened (C-2, also on the profile, Pani Entry and Paisa pages).
 
 ## Semantic colours (Phase 6C, D28)
 

@@ -41,11 +41,14 @@
 - [x] **6C** — Semantic colours (done 2026-10-06; pending owner review)
   - [x] Tone tokens + `src/components/tone.ts` (contrast and colour static guard tests), applied to Kisan, Pani, Paisa and Kisan ka Hisaab; rules file `.claude/rules/ui-color-semantics.md` (D28)
   - [ ] Owner: check the colours by eye; confirm or revisit D28
-- [ ] **7** — Dashboard + months ← **next**
-  - [ ] Dashboard data from the engine's `buildDashboard({ farmers, usage, payments }, view)` with views All Time / month / year (D1, L11): charges created and cash received by IST timestamp in the period; outstanding and credit as of the period end; All Time = now.
-  - [ ] Cross-farmer figures over ACTIVE farmers only (`isActiveFarmer`); Σ outstanding and Σ credit always separate, never netted (E18).
+- [x] **7A** — Dashboard (done 2026-10-06; pending owner review)
+  - [x] Part 0 (C-2): dialogs take a fresh IST moment when opened (profile, Pani, Paisa, Dashboard)
+  - [x] `dashboardRules.ts` (`buildDashboardScreen`, no second algorithm) and the Dashboard at `/` (D29)
+  - [ ] Owner: smoke-test the Dashboard with the worked numbers; confirm or revisit D29
+- [ ] **7B** — Months screen ← **next**
+  - [ ] Route `/months` (the Dashboard chart's "Saare mahine" link already points there) and the bottom-nav "Mahine" tab.
   - [ ] Months screen from `buildAllFarmersMonths` (current figures): status per month incl. "Sirf Payment"; "Cash Mila" and "Charge Clear" never mixed (L10).
-  - [ ] Per-farmer rows link to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
+  - [ ] Months rows over ACTIVE farmers only; per-farmer links to Kisan ka Hisaab (`/farmers/:id`); money via `formatRupees`, months via `src/pages/shared/monthLabel.ts`; no arithmetic in the UI.
   - [ ] Colours only from `src/components/tone.ts` (D28): charges `water`, cash received `cash`, outstanding `due`, credit `credit`, in every tile, chart series and legend; month status via `MONTH_STATUS_TONE`.
 - [ ] **8** — Backup / restore
   - [ ] Restore needs a controlled DB function: the audit trigger forces `created_*` and clears `deleted_*` on insert.

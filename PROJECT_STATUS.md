@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 6C done (semantic colours, D28, pending owner review); Phase 7 (Dashboard + Months) next
+> **Current phase:** 7A done (Dashboard, D29, pending owner review); Phase 7B (Months screen) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -30,7 +30,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), pending owner review |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), pending owner review |
 | 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), pending owner review |
-| 7 | Dashboard + months view | ⬜ Not started (next) |
+| 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), pending owner review |
+| 7B | Months screen at `/months` | ⬜ Not started (next) |
 | 8 | Backup / restore | ⬜ Not started |
 | 9 | Verification: independent script + edge-case matrix | ⬜ Not started |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
@@ -41,7 +42,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
 3. Owner smoke-tests Phase 6: open a farmer from the Kisan list (`pnpm run dev`). See the 2026-10-06 Phase 6 session entry.
 4. Owner checks the Phase 6C colours by eye (Kisan, Pani, Paisa with preview, Kisan ka Hisaab) and confirms or revisits D28.
-5. **Phase 7: Dashboard + Months.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+5. Owner smoke-tests the Dashboard (Phase 7A) with the worked numbers and confirms or revisits D29. See the 2026-10-06 Phase 7A session entry.
+6. **Phase 7B: Months screen.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -208,6 +210,10 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - One fixed tone per meaning: `water` (Pani and its charge), `cash` (money received, success), `due` (money owed), `credit` (Advance / Credit), `caution` (warnings, Partial, "saved, list not refreshed"), `info` (actions, links), `muted` (Band, Deleted, zero). Errors keep `destructive`.
 - Restrained use (text, soft badge, thin bar or dot; white cards), labels always kept, contrast >= 4.5:1 tested.
 - The Dashboard, Months screen and every chart or stat tile must use the same tones. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Semantic colours, and `.claude/rules/ui-color-semantics.md`.
+
+### 2026-10-06 — D29 Dashboard (Phase 7A; manager design choices (a)–(m), owner may revisit)
+- Default "Abhi tak"; Mahina / Saal with pickers; one explanation sentence; four separate tiles; summary line; 6-month charge-vs-cash chart that opens a month; farmers by baaki with search, profile links and shortcuts; recent activity; Band note; quick buttons; one bad-data message; Hinglish empty states; D28 colours; 360 px.
+- Details and the "connected to what" table: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Dashboard.
 
 ---
 
@@ -408,6 +414,19 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Not verified:** a real-browser look at 360 px (the screens sit behind the owner's login). The owner checks by eye.
 - **Fix 1 (2026-10-06, review finding):** `--muted-foreground` darkened to `220 8.9% 41%` (was 4.08:1 on the grey badge and 4.44:1 on the page; now 4.91 and 5.35). The contrast test covers the muted and info tones too. 38 files / 660 tests.
 - **Failed attempt:** Vitest returns an empty string for `.css` modules even with `?raw`, so the contrast test reads `src/index.css` from disk (config changes were out of scope).
+
+### 2026-10-06 — Phase 7A: Dashboard
+- **Preconditions:** HEAD = origin = `8312ada`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–006. Row counts at the start: farmers 3, usage_entries 4, payments 6; unchanged at the end.
+- **Part 0 (C-2):** the Pani / Paisa dialogs on the profile, Pani Entry and Paisa pages (and the new Dashboard) take a fresh IST moment when opened, not the page-load moment.
+- **Code:** `src/lib/data/dashboardRules.ts` (`buildDashboardScreen` and helpers; wraps `buildDashboard` and `buildAllFarmersMonths`, no second algorithm), the Dashboard screen in `src/pages/dashboard/` wired at `/`. No engine change, migration or dependency.
+- **Decision D29:** see the Decisions Log and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Dashboard.
+- **Tests:** 40 files / 724 tests (before: 38 / 660). Gates green. JS chunk 615 kB (the 500 kB warning, as before).
+- **Notes for owner review:**
+  1. The Band note follows the selected period (balances at its end), like the totals; bad data in a Band farmer's rows also stops the whole dashboard.
+  2. Search matches the name only (the Kisan screen also matches mobile).
+  3. Chart bars use an inline height style (a size, not a colour).
+- **Not verified:** a real-browser look at 360 px (behind the owner's login).
+- **Failed attempt:** none.
 
 ---
 
