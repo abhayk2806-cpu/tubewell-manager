@@ -4,7 +4,8 @@
 > - The **database schema is live** (Phase 2A, migrations 001–003; 004 from Phase 2B locks RLS to the owner; 005 from Phase 4A adds farmer input checks).
 > - The **app foundation exists** (Phase 2B): auth, routing, layout shell, Supabase client, generated types, tests.
 > - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3).
-> - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a). Usage, payments and all money screens are still planned.
+> - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a).
+> - The **Pani Entry (usage) screen exists** (Phase 4B): see [Usage data](#usage-data-phase-4b) and [Pani Entry screen](#pani-entry-screen-phase-4b). Payments and all totals screens are still planned.
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -46,7 +47,9 @@ Rules that follow from this:
 | `lib/utils.ts` | `cn()` class helper |
 | `lib/ledger/` | Ledger engine (Phase 3), see [Ledger engine](#ledger-engine-phase-3) |
 | `lib/data/` | Data layer (Phase 4A), see [Data layer](#data-layer-phase-4a) |
-| `hooks/useFarmers.ts` | Loads farmers, exposes the three lists and the mutations (Phase 4A) |
+| `hooks/useRowStore.ts` | Shared hook core (Phase 4B): load once, one mutation at a time, quiet reload, `refreshFailed` |
+| `hooks/useFarmers.ts` | Loads farmers, exposes the three lists and the mutations (Phase 4A, on `useRowStore` since 4B) |
+| `hooks/useUsage.ts` | Loads usage entries, exposes live / deleted lists and the mutations (Phase 4B) |
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
@@ -180,6 +183,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
   - `pnpm run test` runs `src/**/*.test.{ts,tsx}`.
   - Phase 2B tests cover config parsing, the route guards and login error handling (with a mocked Supabase client).
   - Phase 4A tests cover the farmer rules, `DataError` mapping, paging, every farmer data function (mocked Supabase client, never the live DB), the `useFarmers` hook and the Farmers screen. `src/lib/data/layer-guard.test.ts` statically checks the UI layers (see Data layer).
+  - Phase 4B tests cover the three engine helpers, the usage rules and data functions, the clock helper, `useUsage`, the Pani Entry screen, and the Part 0 farmer changes (mobile digit rule, refresh failure).
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
@@ -216,11 +220,14 @@ The rules it implements live in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION
 // time.ts
 parseInstantMs(iso: string): number
 istMonthKey(ms): 'YYYY-MM'      istDateKey(ms): 'YYYY-MM-DD'      istYearKey(ms): 'YYYY'
+istTimeKey(ms): 'HH:mm'                                          // Phase 4B, additive
+istWallClockToIso(dateKey, 'HH:mm'): 'YYYY-MM-DDTHH:mm:00+05:30' | null   // Phase 4B; null for bad input, never throws
 endOfIstDayMs(dateKey): number   istMonthRangeMs(monthKey) / istYearRangeMs(yearKey): { startMs, endMs } // inclusive
 compareMonthKeys(a, b): number   isMonthKey / isDateKey / isYearKey(key): boolean
 // money.ts
 assertPaise(v, what)  intDiv(a, d)  sumPaise(values)
 parseRupeesToPaise(text): number      paiseToDecimalString(paise): string
+formatRupees(paise): string   // Phase 4B: rupee sign, Indian grouping, 2 decimals, "-" before the sign
 // entry.ts
 entryAmountPaise(totalMinutes, ratePaise): number
 // ledger.ts / preview.ts
@@ -311,9 +318,12 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 | `index.ts` | The barrel |
 | `errors.ts` | `DataError` and `toDataError` |
 | `paging.ts` | `fetchAllRows`, `PAGE_SIZE` (1,000) |
-| `clock.ts` | `nowIso()`: the ONLY clock read in the app |
+| `clock.ts` | `nowIso()`: the ONLY clock read in the app; `currentIstMoment()` built on it (4B) |
+| `rows.ts` | `oneRow`: an insert/update result row, 0 rows → `not_found` (4B, shared) |
 | `farmerRules.ts` | Pure farmer form rules (no I/O) |
 | `farmers.ts` | Farmer queries, the one classification function, and the mutations |
+| `usageRules.ts` | Pure Pani Entry rules (no I/O), Phase 4B |
+| `usage.ts` | Usage queries and mutations, Phase 4B |
 | `test-support/` | Test-only fake Supabase query builder and fictional rows |
 
 ### API
@@ -327,6 +337,7 @@ fetchAllRows<T>(fetchPage: (from, to) => PromiseLike<{ data, error, status? }>, 
 // farmerRules.ts (limits = migration 005: name 100, mobile 20, notes 500)
 normalizeFarmerInput({ name, mobile?, notes? }): { name, mobile: string | null, notes: string | null }
 validateFarmerInput(input): ('name_required' | 'name_too_long' | 'mobile_invalid' | 'notes_too_long')[]
+// mobile: digits, spaces, + and -, at least one digit (D23, Phase 4B), at most 20
 findDuplicateFarmerNames(name, farmers, { excludeId? }): farmers[]   // warning only
 sortFarmersByName(farmers)     matchesFarmerSearch(farmer, text)
 // farmers.ts
@@ -359,7 +370,7 @@ softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the save
   - Soft delete therefore sends `deleted_at: nowIso()`.
   - Restore sends `deleted_at: null`, and the trigger then clears `deleted_by`.
 - **Layer guard** (`layer-guard.test.ts`, raw source text via `import.meta.glob`):
-  - files under `src/pages`, `src/components` and `src/hooks` may not contain `new Date`, `Date.now`, `getHours`, `getDate`, `getMonth`, `getFullYear`, `toFixed`, `parseFloat`, or a Supabase import;
+  - files under `src/pages`, `src/components` and `src/hooks` may not contain `new Date`, `Date.now`, `getHours`, `getDate`, `getMonth`, `getFullYear`, `toFixed`, `parseFloat`, `toLocale*`, `Intl.` (both added in 4B), or a Supabase import;
   - only `lib/supabase.ts`, `lib/data/*` and `auth/*` (Phase 2B) import Supabase;
   - in `src/lib/data`, `new Date` appears only in `nowIso`.
 
@@ -370,7 +381,7 @@ softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the save
   - loads once, exposes `status` (loading / error / ready), `error`, `all`, `lists` and `reload`;
   - mutations: `create`, `update`, `setDisabled`, `remove`, `restore`, each returning `{ ok, farmer }` or `{ ok: false, error }`;
   - `pending` holds the one mutation in flight; a second call while one runs is refused (no double submit);
-  - after a successful mutation it reloads quietly.
+  - after a successful mutation it reloads quietly. If that reload fails (D23, Phase 4B), the old list stays, the mutation still returns ok, and `refreshFailed` is set. The page shows one line, "Save ho gaya, par list refresh nahi ho payi.", with a retry (`retryRefresh`). Only a failed initial or retried full load shows the error state.
 - **Copy.** All Hinglish strings, plus the mapping from validation codes and `DataError` kinds to messages, live in `src/pages/farmers/copy.ts`.
 - **Screen:**
   - Segments Chalu / Band / Deleted with counts, and search on name and mobile.
@@ -380,6 +391,52 @@ softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the save
   - The deleted date is the engine's `istDateKey(parseInstantMs(deleted_at))`.
   - Messages go to an `aria-live` region. Buttons are 44 px tall and disabled while a change is saved.
   - No money is shown.
+
+## Usage data (Phase 4B)
+
+```ts
+// usageRules.ts (pure; money, rounding and IST math come from the engine)
+newUsageForm(now, farmerId?) / usageFormFromRow(row): UsageForm      // strings as typed; rate in rupees
+buildUsageInput(form): { ok: true, input: UsageInput } | { ok: false, codes: UsageFormCode[] }
+usageInputAmountPaise(input) / usageAmountPaise(row): number           // via entryAmountPaise (D7)
+describeUsageWarnings(input, rows, now, { excludeId?, original? }): UsageWarning[]
+classifyUsage(rows): { live, deleted }     filterUsage(rows, { farmerId?, monthKey? })
+listUsageMonths(rows, currentMonthKey): string[]
+// usage.ts
+listUsage()  createUsage(input)  updateUsage(current, input)  softDeleteUsage(id)  restoreUsage(id)
+// clock.ts
+currentIstMoment(): { dateKey, timeKey, monthKey }
+```
+
+- **`buildUsageInput`** trims every field, then:
+  - hours and minutes must be digits only (an empty field is `*_required`, anything else non-digit is `*_not_integer`);
+  - the rate goes through `parseRupeesToPaise` (failure gives the local code `rate_invalid`);
+  - date and time go through `istWallClockToIso`;
+  - the engine's `validateUsageInput` decides the rest. `UsageFormCode` = the engine usage codes plus `rate_invalid`.
+- **`usageAmountPaise`** throws `LedgerInputError` when `total_minutes` is null or differs from hours×60+minutes (K-03). It never guesses.
+- **Warnings** (never block):
+  - `duplicate`: same farmer, IST day, hours and minutes (`findDuplicateUsage`, L14);
+  - `long_duration`: hours > 24;
+  - `future_date`: IST date after today.
+  - When editing (`original`), a warning whose fields did not change is not raised again.
+- **Soft-delete split.** `classifyUsage` is the only usage soft-delete split; both lists are newest first by `used_at`, then id.
+- **Data functions.**
+  - Same rules as for farmers: validate first with `validateUsageInput` (`client_validation`), check every `error`, 0 rows → `not_found`, live-only edit/delete and deleted-only restore, changed columns only.
+  - `used_at` is compared as an instant.
+  - `total_minutes` is never sent. A foreign-key violation (23503) maps to `constraint`.
+
+## Pani Entry screen (Phase 4B)
+
+- **Route.** `/usage` → `src/pages/usage/UsagePage.tsx` (with `UsageFormDialog.tsx`, `UsageListItem.tsx`); hook `useUsage()`; the farmer picker and names come from `useFarmers()`.
+- **Copy.** All Hinglish strings, including the `UsageFormCode`, warning and `DataError` maps (typed `Record`s, so a missing code fails the typecheck), live in `src/pages/usage/copy.ts`.
+- **Screen:**
+  - **Filters and segments.** Segments Entries / Deleted. The farmer filter has Sabhi kisan plus non-deleted farmers (Band marked). The month filter has `listUsageMonths` plus "Sabhi mahine", defaulting to the current IST month. Filters apply to both segments and to the counts.
+  - **Form.** Farmer (active only; an edited entry keeps its own farmer even if Band/Deleted), date and time prefilled with the current IST moment, hours, minutes and rate (₹/hour, default 100). Errors appear after the first save attempt, next to their fields.
+  - **Live amount.** The line "Rakam: ₹…" (`usageInputAmountPaise` + `formatRupees`) appears as soon as the form is valid.
+  - **Warnings** sit in one box with "Phir bhi save karo" / "Wapas jao, badlo".
+  - **Rows.** Farmer, IST date and time, "H ghante M minute", rate per hour, amount. Edit, and Delete with a confirmation. The Deleted segment shows the delete date and "Wapas lao".
+  - **Bad rows.** If any row's amount cannot be computed, the page shows an error state (no list, no add).
+  - **No totals.** No month totals, balances or per-farmer sums.
 
 ## Backup and restore (Phase 8)
 

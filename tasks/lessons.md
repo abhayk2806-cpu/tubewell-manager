@@ -116,6 +116,11 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule (Phase 4A): every update in the data layer ends with `.select().maybeSingle()`, and a `null` row becomes `DataError('not_found')`. Never trust `error === null` alone for an update.
 - Impact: medium. Date: 2026-10-06.
 
+**A failed refresh after a successful save must not hide the list**
+- Mistake (Phase 4A, found in owner review): the quiet reload after a mutation used the same failure path as the initial load, so a saved change could be followed by the full error screen.
+- Rule: keep "load failed" (no data yet: error state) and "refresh failed" (data on screen: keep it, show one line with a retry) as separate states. Both hooks share this through `useRowStore`.
+- Impact: medium. Date: 2026-10-06.
+
 **pnpm 11 skips packages published less than a day ago**
 - Finding (Phase 4A): `pnpm add @radix-ui/react-dialog` installed 1.1.23 while 1.2.0 was the newest; 1.2.0 was under a day old (pnpm's default minimum release age).
 - Rule: report the version actually installed (`pnpm add` output or `package.json`), not the registry's "latest".

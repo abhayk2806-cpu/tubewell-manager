@@ -24,14 +24,18 @@
   - [x] Data layer `src/lib/data/`: pages every read until empty, checks every `error`, rows unchanged, classification via `isActiveFarmer`
   - [x] Farmer name trims ALL whitespace in the app, and migration 005 tightens `farmers_name_not_blank` the same way
   - [ ] Owner: smoke-test the Kisan screen; review the 4A notes (`PROJECT_STATUS.md`, 2026-10-06 Phase 4A entry)
-  - [ ] Update `.claude/rules/database-and-migrations.md` (still says 001–004 and 80 checks) when that file is in scope
-- [ ] **4B** — Pani Entry ← **next**
-  - [ ] Usage data functions in `src/lib/data/` (paged list, create, edit, soft delete, restore), same `DataError` and 0-row rules as farmers.
-  - [ ] Farmer picker shows ACTIVE farmers only (`classifyFarmers(...).active`).
-  - [ ] Form builds `used_at` as ISO with `+05:30` from the IST wall clock the owner typed (helper in the engine or data layer, never in the page), parses the rate with `parseRupeesToPaise`, and calls `validateUsageInput`.
-  - [ ] Duplicate warning with `findDuplicateUsage`, never a block (L14); Hinglish messages for its codes in a copy module.
-  - [ ] Show money with `paiseToDecimalString` (add "₹" and grouping in the UI only); handle `LedgerInputError` as an error state.
-- [ ] **5** — Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore
+  - [x] Update `.claude/rules/database-and-migrations.md` (done in 4B)
+- [x] **4B** — Pani Entry (done 2026-10-06; pending owner review)
+  - [x] Part 0 (D23): mobile needs a digit; saved-but-not-refreshed keeps the list; rules file updated
+  - [x] Engine helpers `istWallClockToIso`, `istTimeKey`, `formatRupees` (additive)
+  - [x] Usage rules + data layer, `useUsage`, Pani Entry screen (filters, live amount, warnings, delete/restore)
+  - [ ] Owner: smoke-test the Pani tab; review the 4B notes (`PROJECT_STATUS.md`, 2026-10-06 Phase 4B entry)
+- [ ] **5** — Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore ← **next**
+  - [ ] Payment data functions in `src/lib/data/` (paged list, create, edit, soft delete, restore) with the same `DataError`, 0-row and changed-columns rules.
+  - [ ] Form: date + time via `istWallClockToIso` (prefill from `currentIstMoment`); amount text via `parseRupeesToPaise`; `validatePaymentInput`; show money with `formatRupees` and times with `istTimeKey`.
+  - [ ] Live FIFO preview with `previewPayment` (use `replacesPaymentId` when editing; show before/after, pieces and "Advance / Credit").
+  - [ ] Duplicate warning with `findDuplicatePayments`, never a block (L14).
+  - [ ] Farmer picker shows ACTIVE farmers only; hook on `useRowStore`; one copy module.
 - [ ] **6** — Farmer profile
 - [ ] **7** — Dashboard + months
 - [ ] **8** — Backup / restore
