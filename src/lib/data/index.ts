@@ -124,3 +124,12 @@ export type {
   PeriodOptions,
   RecentItem,
 } from './dashboardRules';
+export {
+  buildMonthsScreen,
+  deepLinkMonth,
+  filterMonthsByYear,
+  monthsStrip,
+  monthsYearOptions,
+  sortMonthFarmers,
+} from './monthsRules';
+export type { MonthsFarmerRow, MonthsMonth, MonthsScreen, MonthsScreenResult, MonthsStrip } from './monthsRules';
