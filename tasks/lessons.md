@@ -102,6 +102,25 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Practice (Phase 3): after the static guard and fixtures passed, temporarily inject a violation, see the tests fail, then revert. Examples: `Date.now()` in `money.ts`, or rounding `+ 60` → `+ 59`.
 - Impact: medium. Date: 2026-10-06.
 
+**`react-hooks/set-state-in-effect` also flags state set after an `await`**
+- Finding (Phase 4A): an effect that called a `useCallback` async loader failed lint, even though every `setState` came after `await`.
+- Rule: in a load-on-mount effect, set state only inside promise callbacks (`listX().then(onOk, onError)`). Put the "show loading again" step in the explicit `reload()` handler, not in the effect.
+- Impact: low. Date: 2026-10-06.
+
+**Radix modals hide the rest of the page from role queries**
+- Finding (Phase 4A): while a Radix `Dialog` is open, everything outside it gets `aria-hidden`, so `getByRole('list')` in a test fails.
+- Rule: to assert on the page behind an open modal, pass `{ hidden: true }` to the role query. Don't remove the modal behaviour; it is what traps focus for real users.
+- Impact: low. Date: 2026-10-06.
+
+**supabase-js reports a 0-row update as success**
+- Rule (Phase 4A): every update in the data layer ends with `.select().maybeSingle()`, and a `null` row becomes `DataError('not_found')`. Never trust `error === null` alone for an update.
+- Impact: medium. Date: 2026-10-06.
+
+**pnpm 11 skips packages published less than a day ago**
+- Finding (Phase 4A): `pnpm add @radix-ui/react-dialog` installed 1.1.23 while 1.2.0 was the newest; 1.2.0 was under a day old (pnpm's default minimum release age).
+- Rule: report the version actually installed (`pnpm add` output or `package.json`), not the registry's "latest".
+- Impact: low. Date: 2026-10-06.
+
 **shadcn components trip `react-refresh/only-export-components`**
 - Finding: `button.tsx` exports `buttonVariants` next to the component, so lint fails with `--max-warnings=0`.
 - Rule: don't hand-edit generated `src/components/ui/*`. Turn that one rule off only for that folder (done in `eslint.config.js`).

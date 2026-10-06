@@ -1,10 +1,10 @@
 # Architecture — Tubewell Manager (rebuild)
 
 > **Status (2026-10-06):**
-> - The **database schema is live** (Phase 2A, migrations 001–003; 004 from Phase 2B locks RLS to the owner).
+> - The **database schema is live** (Phase 2A, migrations 001–003; 004 from Phase 2B locks RLS to the owner; 005 from Phase 4A adds farmer input checks).
 > - The **app foundation exists** (Phase 2B): auth, routing, layout shell, Supabase client, generated types, tests.
-> - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3). Nothing calls it yet.
-> - The data and hooks layers are still planned (Phase 4 onwards).
+> - The **ledger engine exists** (Phase 3): `src/lib/ledger/`, see [Ledger engine](#ledger-engine-phase-3).
+> - The **data layer and the Farmers screen exist** (Phase 4A): see [Data layer](#data-layer-phase-4a) and [Farmers screen](#farmers-screen-kisan-phase-4a). Usage, payments and all money screens are still planned.
 > - The code and the live database beat this file. Update this file when they differ.
 >
 > Calculation rules are **not** restated here. They live only in [LEDGER_AND_ALLOCATION.md](LEDGER_AND_ALLOCATION.md).
@@ -24,7 +24,7 @@
 |---|---|---|---|
 | Ledger engine | `src/lib/ledger/` | Pure functions: amount rounding, IST month, buckets, FIFO waterfall, trail, as-of, months list, duplicate checks, totals | Do I/O, read React state, or use floats for money |
 | Time | `src/lib/ledger/time.ts` | The ONE IST month/day function used everywhere | Use browser-local time or UTC for business dates |
-| Data access | `src/lib/data/` | All Supabase queries: active-farmer filter, soft-delete filter, pagination, error checks, mapping DB rows to engine types | Contain business math |
+| Data access | `src/lib/data/` (exists since Phase 4A) | All Supabase queries: active-farmer filter, soft-delete filter, pagination, error checks, mapping DB rows to engine types | Contain business math |
 | Hooks | `src/hooks/` | Load data → call the engine → expose results to pages | Contain their own formulas |
 | Pages/components | `src/pages/`, `src/components/` | Render engine output; forms; Hinglish copy | Calculate due, paid, credit or months |
 
@@ -32,24 +32,26 @@ Rules that follow from this:
 - **No calculation inside a component or page.**
 - Every figure on every screen comes from the same engine call, so totals always reconcile.
 
-## Actual `src/` layout (Phase 2B, 2026-10-05)
+## Actual `src/` layout (updated Phase 4A, 2026-10-06)
 
 | Path | What it is |
 |---|---|
 | `main.tsx` | Entry: `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App` |
 | `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. |
-| `routes/routes.ts` | Feature routes (Hinglish title + build phase) and the 6 bottom-nav tabs |
+| `routes/routes.ts` | Feature routes (Hinglish title, build phase, optional built `page`) and the 6 bottom-nav tabs. `App.tsx` renders `page` when set, else the placeholder. |
 | `routes/RouteGuards.tsx` | `ProtectedRoute` (loading → spinner, logged out → `/login`) and `PublicRoute` (logged in → `/`) |
 | `auth/` | `auth-context.ts` (types + context), `AuthProvider.tsx`, `useAuth.ts` |
 | `lib/config.ts` | Pure `parseConfig(env)`: validates `VITE_SUPABASE_URL` (https) and `VITE_SUPABASE_PUBLISHABLE_KEY` (D14) |
 | `lib/supabase.ts` | `createClient<Database>` with `persistSession` and `autoRefreshToken` |
 | `lib/utils.ts` | `cn()` class helper |
 | `lib/ledger/` | Ledger engine (Phase 3), see [Ledger engine](#ledger-engine-phase-3) |
+| `lib/data/` | Data layer (Phase 4A), see [Data layer](#data-layer-phase-4a) |
+| `hooks/useFarmers.ts` | Loads farmers, exposes the three lists and the mutations (Phase 4A) |
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
 | `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
-| `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label` only. Add more with the shadcn CLI. |
-| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage` |
+| `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
+| `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan screen) |
 | `test/setup.ts`, `**/*.test.ts(x)` | Vitest + React Testing Library (D16) |
 | `index.css` + `tailwind.config.js` | Design tokens as CSS variables (no hex colours or inline styles in components) |
 
@@ -68,11 +70,11 @@ Rules that follow from this:
 - Then run `pnpm run typecheck`.
 - CLI alternative: `npx supabase gen types typescript --project-id ciszgagzhfubuqhpmyeh > src/types/database.ts`, then re-add the header.
 
-## Database schema (live, migrations 001–004, 2026-10-05)
+## Database schema (live, migrations 001–005, updated 2026-10-06)
 
 Sources:
-- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`.
-- Checks: `supabase/tests/001_schema_checks.sql` (80 checks, all rolled back) plus a residue check.
+- SQL: `supabase/migrations/001_core_tables.sql`, `002_audit_triggers.sql`, `003_rls_policies.sql`, `004_lock_rls_to_owner.sql`, `005_farmers_input_checks.sql`.
+- Checks: `supabase/tests/001_schema_checks.sql` (100 checks since 005, all rolled back) plus a residue check.
 
 All tables are in `public`. IDs are `uuid` with default `gen_random_uuid()`. Timestamps are `timestamptz`. Money is integer paise in `bigint`.
 
@@ -94,8 +96,9 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 | Column | Type | Constraints |
 |---|---|---|
 | `id` | uuid PK | default `gen_random_uuid()` |
-| `name` | text NOT NULL | `farmers_name_not_blank`: `length(btrim(name)) > 0` |
-| `mobile`, `notes` | text NULL | — |
+| `name` | text NOT NULL | `farmers_name_not_blank` (same name, redefined in 005): not empty after trimming space, tab, LF, VT, FF, CR and NBSP (U+00A0). `farmers_name_max_length`: at most 100 characters (005) |
+| `mobile` | text NULL | `farmers_mobile_max_length`: NULL or at most 20 characters (005) |
+| `notes` | text NULL | `farmers_notes_max_length`: NULL or at most 500 characters (005) |
 | `is_disabled` | boolean NOT NULL | default `false` (temporary pause, separate from soft delete) |
 
 **`usage_entries`** (no stored money amount)
@@ -176,6 +179,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - **Runner (D16):** Vitest + jsdom + React Testing Library + jest-dom.
   - `pnpm run test` runs `src/**/*.test.{ts,tsx}`.
   - Phase 2B tests cover config parsing, the route guards and login error handling (with a mocked Supabase client).
+  - Phase 4A tests cover the farmer rules, `DataError` mapping, paging, every farmer data function (mocked Supabase client, never the live DB), the `useFarmers` hook and the Farmers screen. `src/lib/data/layer-guard.test.ts` statically checks the UI layers (see Data layer).
 - **Phase 3 (done 2026-10-06):** the engine is unit-tested before any UI exists. See [Ledger engine → Tests](#tests).
 - **Phase 9:**
   - an independent verification script that recomputes figures from raw rows and compares them with the app;
@@ -295,6 +299,87 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
   - IST or calendar math outside `time.ts`;
   - the rounding constant outside `entry.ts`.
 - The suite also passes with `TZ=America/Los_Angeles` and `TZ=UTC` (checked 2026-10-06, run from PowerShell).
+
+## Data layer (Phase 4A)
+
+`src/lib/data/`: every Supabase read and write. Pages and hooks import the barrel `@/lib/data` only, never the Supabase client.
+
+### Module map
+
+| File | Owns |
+|---|---|
+| `index.ts` | The barrel |
+| `errors.ts` | `DataError` and `toDataError` |
+| `paging.ts` | `fetchAllRows`, `PAGE_SIZE` (1,000) |
+| `clock.ts` | `nowIso()`: the ONLY clock read in the app |
+| `farmerRules.ts` | Pure farmer form rules (no I/O) |
+| `farmers.ts` | Farmer queries, the one classification function, and the mutations |
+| `test-support/` | Test-only fake Supabase query builder and fictional rows |
+
+### API
+
+```ts
+// errors.ts
+class DataError extends Error { kind: 'network' | 'permission' | 'constraint' | 'not_found' | 'unknown'; code: string | null }
+toDataError(error: unknown, status?: number): DataError
+// paging.ts
+fetchAllRows<T>(fetchPage: (from, to) => PromiseLike<{ data, error, status? }>, pageSize = 1000): Promise<T[]>
+// farmerRules.ts (limits = migration 005: name 100, mobile 20, notes 500)
+normalizeFarmerInput({ name, mobile?, notes? }): { name, mobile: string | null, notes: string | null }
+validateFarmerInput(input): ('name_required' | 'name_too_long' | 'mobile_invalid' | 'notes_too_long')[]
+findDuplicateFarmerNames(name, farmers, { excludeId? }): farmers[]   // warning only
+sortFarmersByName(farmers)     matchesFarmerSearch(farmer, text)
+// farmers.ts
+listFarmers(): Promise<FarmerRow[]>                  // all rows, paged, unchanged DB rows
+classifyFarmers(rows): { active, disabled, deleted } // sorted by name
+createFarmer(values)   updateFarmer(current, values)   setFarmerDisabled(id, disabled)
+softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the saved row
+```
+
+**`DataError` kinds** (`toDataError`):
+- `constraint`: SQLSTATE 23514, 23502, 23505, 23503 or 22001, or the data layer's own `client_validation`.
+- `permission`: 42501, 28000/28P01, PGRST301–303, or HTTP 401/403.
+- `not_found`: PGRST116, or an update that matched 0 rows (code `no_rows`).
+- `network`: HTTP status 0, or a fetch failure message.
+- `unknown`: everything else.
+- The original code and message are kept.
+
+**Rules:**
+- **Every call checks `error`.** Every update selects the row back with `.select().maybeSingle()`: supabase-js reports a 0-row update as success, so `null` data becomes `not_found`.
+- **Paging.** `fetchAllRows` asks for ranges in a stable order (by `id`) and stops only at an EMPTY page. A short page is not taken as the end, so a server cap smaller than the page size cannot truncate a list silently. This costs one extra request per list.
+- **Classification.** `classifyFarmers` is the one place that splits farmers.
+  - Chalu = the engine's `isActiveFarmer`.
+  - Deleted = `deleted_at` set (also when disabled).
+  - Band = the rest.
+- **Mutations** filter to the right state: edit, disable and soft delete only touch a non-deleted row (`deleted_at is null`); restore only touches a deleted row. Otherwise the result is `not_found`.
+- **Columns.**
+  - Updates send only the columns that changed. With nothing changed, no request is made.
+  - Rows go back to callers unchanged, so they stay assignable to the engine input types.
+- **Audit columns.** The audit trigger (002) sets `created_*`/`updated_*` and `deleted_by`, but NOT `deleted_at`.
+  - Soft delete therefore sends `deleted_at: nowIso()`.
+  - Restore sends `deleted_at: null`, and the trigger then clears `deleted_by`.
+- **Layer guard** (`layer-guard.test.ts`, raw source text via `import.meta.glob`):
+  - files under `src/pages`, `src/components` and `src/hooks` may not contain `new Date`, `Date.now`, `getHours`, `getDate`, `getMonth`, `getFullYear`, `toFixed`, `parseFloat`, or a Supabase import;
+  - only `lib/supabase.ts`, `lib/data/*` and `auth/*` (Phase 2B) import Supabase;
+  - in `src/lib/data`, `new Date` appears only in `nowIso`.
+
+## Farmers screen (Kisan, Phase 4A)
+
+- **Route.** `/farmers` → `src/pages/farmers/FarmersPage.tsx`; `/farmers/:id` is still the placeholder, and rows do not link to it yet.
+- **Hook.** `useFarmers()`:
+  - loads once, exposes `status` (loading / error / ready), `error`, `all`, `lists` and `reload`;
+  - mutations: `create`, `update`, `setDisabled`, `remove`, `restore`, each returning `{ ok, farmer }` or `{ ok: false, error }`;
+  - `pending` holds the one mutation in flight; a second call while one runs is refused (no double submit);
+  - after a successful mutation it reloads quietly.
+- **Copy.** All Hinglish strings, plus the mapping from validation codes and `DataError` kinds to messages, live in `src/pages/farmers/copy.ts`.
+- **Screen:**
+  - Segments Chalu / Band / Deleted with counts, and search on name and mobile.
+  - "Naya Kisan" and Edit open one form dialog with field-level errors.
+  - A same-name, non-deleted farmer gives a warning with "Phir bhi save karo" / "Naam badlo". On edit, the farmer itself is excluded, and an unchanged name does not warn again.
+  - Delete asks for confirmation; Restore warns about a same-name farmer.
+  - The deleted date is the engine's `istDateKey(parseInstantMs(deleted_at))`.
+  - Messages go to an `aria-live` region. Buttons are 44 px tall and disabled while a change is saved.
+  - No money is shown.
 
 ## Backup and restore (Phase 8)
 

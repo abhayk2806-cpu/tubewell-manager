@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** 3 done (ledger engine, pending owner review); Phase 4 next
+> **Current phase:** 4A done (data layer + Farmers screen + migration 005, pending owner review); Phase 4B (Pani Entry) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -25,7 +25,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), pending owner review |
 | 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ✅ Done (2026-10-06), pending owner review |
 | 3B | Repo sync check + docs fixes (spec E9/E19 rows, D19→D20 relabel) | ✅ Done (2026-10-06) |
-| 4 | Farmers + usage entry (Pani Entry) | ⬜ Not started (next) |
+| 4A | Data layer `src/lib/data/` + Farmers screen (Kisan) + migration 005 (farmer input checks) | ✅ Done (2026-10-06), pending owner review |
+| 4B | Usage entry (Pani Entry) | ⬜ Not started (next) |
 | 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore | ⬜ Not started |
 | 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ⬜ Not started |
 | 7 | Dashboard + months view | ⬜ Not started |
@@ -37,7 +38,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
 2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
-3. **Phase 4: Farmers + Pani Entry**, including the data layer `src/lib/data/` that feeds the engine. Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+3. Owner smoke-tests Phase 4A: the Kisan screen (`pnpm run dev`, then the Kisan tab). See the 2026-10-06 Phase 4A session entry.
+4. **Phase 4B: Pani Entry.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -290,6 +292,33 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Relabel:** the Phase 3 engine details are now D20 (were "D19"). See the numbering note in the Decisions Log.
 - **Gates:** unchanged behaviour; typecheck, lint, test and build green.
 - **Failed attempt:** none.
+
+### 2026-10-06 — Phase 4A: data layer, Farmers screen, migration 005
+- **Preconditions:**
+  - HEAD = origin = `a37f592`; `main` = `46e3872`; spec md5 `47b5d688…`;
+  - migrations 001–004 only; `farmers` had 0 rows; only SELECT/INSERT/UPDATE policies for `authenticated`; trigger `farmers_set_audit` exists.
+  - Audit trigger (002): created_*/updated_* are forced by the trigger, `deleted_at` is NOT set by it (the client sends it), and `deleted_by` is set on soft delete and cleared on restore.
+- **Migration 005** (`005_farmers_input_checks.sql`, applied to `ciszgagzhfubuqhpmyeh`):
+  - `farmers_name_not_blank` is redefined (same name) to trim space, tab, LF, VT, FF, CR and NBSP;
+  - new length checks: name ≤100, mobile ≤20, notes ≤500 (NULL allowed);
+  - stored md5 = file md5 `a0e4593f…`.
+- **SQL tests:** 100/100 PASS (80 before plus T7.01–T7.20), and the residue check found 0 rows. Advisors: no new findings. Generated types unchanged (CHECK constraints do not appear in them).
+- **Code:**
+  - `src/lib/data/`: errors, paging, clock, farmerRules, farmers, barrel;
+  - `src/hooks/useFarmers.ts`;
+  - `src/pages/farmers/`: page, form dialog, list item, copy;
+  - shadcn-style `dialog` and `alert-dialog`;
+  - `/farmers` wired through an optional `page` on the feature route (2-line change in `App.tsx`).
+- **Dependencies:** `@radix-ui/react-dialog` ^1.1.23 and `@radix-ui/react-alert-dialog` ^1.1.23. pnpm 11's one-day minimum release age skipped react-dialog 1.2.0 (published 2026-10-05).
+- **Tests:** 21 files / 367 tests (before: 14 / 268).
+- **Gates:** typecheck, lint, test and build green. The build warns that the single JS chunk is 525 kB (over Vite's 500 kB hint). Not an error.
+- **Notes for owner review:**
+  1. Mobile accepts digits, spaces, `+` and `-` (≤20), even without a digit; tell us if it should require one.
+  2. Editing a farmer without changing the name does not warn again about an already-known duplicate.
+  3. `.claude/rules/database-and-migrations.md` still says "Live: 001–004" and "80 checks". It was not in this phase's allowed files, so it was not updated.
+- **Failed attempt:** none.
+  - The first hook version failed lint (`react-hooks/set-state-in-effect`); fixed by setting state only in promise callbacks.
+  - One page test failed because Radix hides the page behind a modal; fixed in the test with `hidden: true`.
 
 ---
 
