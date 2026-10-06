@@ -61,7 +61,6 @@ export const PAYMENTS_COPY = {
     credit: 'Advance / Credit',
     nowValue: (amountText: string) => `(abhi ${amountText})`,
     pieces: 'Is payment se',
-    noPieces: 'Koi baaki mahina nahi; poora paisa Advance / Credit mein jayega.',
     creditCreated: (amountText: string) => `Is payment se naya Advance / Credit: ${amountText}`,
   },
   warnings: {
