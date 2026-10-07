@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-07**
-> **Current phase:** 10A done (repo deploy-ready: `netlify.toml`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); owner sets up Netlify / Supabase by hand, then 10B (test-data wipe on owner approval) and the cutover
+> **Current phase:** 10B done (test data wiped on owner approval; the database is EMPTY, 0 / 0 / 0); next 10C (owner enters real data locally and compares with his notebook), 10D (owner's Netlify test deploy), then the cutover
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -37,6 +37,9 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
 | PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), pending owner smoke test |
 | 10A | Deployment readiness (repo side): `netlify.toml` (pnpm build, Node 24, SPA rewrite, headers, caching), pnpm 11.1.3 via `packageManager` (fix 1), the config-error screen (fix 1), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps pending |
+| 10B | Test-data wipe in the NEW project (owner approval and JSON backup on 2026-10-07): one self-asserting transaction, database now empty; schema and Auth untouched | ✅ Done (2026-10-07) |
+| 10C | Owner enters real data locally (`pnpm run dev`) and compares the figures with his notebook | ⬜ Next (owner) |
+| 10D | Netlify test deploy by the owner ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) section 5) | ⬜ Owner |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -51,7 +54,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
 9. Owner smoke-tests PL1: tabs and a refresh on a deep URL, the Dashboard Mahina link to `/months?month=`, and airplane mode then an unvisited tab (the "Dobara try karo" message). See the 2026-10-07 PL1 session entry.
 10. Owner follows [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Netlify checklist (section 2), Supabase checklist (section 3), and picks a pre-cutover test option (section 5) or none.
-11. **Phase 10B onward: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+11. **10C:** the owner enters his real data locally and compares every figure with his notebook. **10D:** the owner's Netlify test deploy. Then the cutover (owner decision and phrase only).
+12. ~~Phase 10B: data wipe~~ done 2026-10-07. **Cutover, Netlify re-enable** remain. Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -513,6 +517,13 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Config-error screen:** `main.tsx` checks the two variables (`configProblem` on `parseConfig`) and dynamically imports the app only when they are fine; otherwise a full-screen Hinglish message with the variable names, never values. Checked in real builds (missing key, `http://` URL) at 360 px: names only, nothing in the console.
 - **Bundle:** entry 235.01 kB → 3.64 kB; the app chunks (startApp, react-dom, client, router, Supabase) load in parallel after it. First load 467.55 kB / 139.24 kB gzip → 469.06 kB / 141.72 kB gzip, plus one extra round trip.
 - **Tests:** 53 files / 3,825 tests; gates green. No change in `src/lib/`, pages, hooks, router, configs or the lockfile.
+
+### 2026-10-07 — P10B: test-data wipe (owner approval)
+- **Approval:** the owner explicitly approved wiping ALL test rows (7 farmers / 6 usage entries / 10 payments) on 2026-10-07 in the manager chat and confirmed a JSON backup of them, taken from the Backup screen and kept outside the repo. Claude did not read the backup.
+- **Pre-checks (read-only):** tip `4ef6091`, tree clean, `main` = `46e3872`. Counts incl. soft-deleted rows: farmers 7, usage_entries 6, payments 10. Migrations 7, public policies 9, RLS on for the three tables, `auth.users` 1. The three `*_set_audit` triggers are BEFORE INSERT OR UPDATE only; both foreign keys (`payments` → `farmers`, `usage_entries` → `farmers`) are ON DELETE RESTRICT; no other table references the three; no rules.
+- **Wipe:** ONE `DO` block (one transaction): lock the three tables, assert the counts are exactly 7 / 6 / 10, DELETE all payments, then usage_entries, then farmers, assert 10 / 6 / 7 rows deleted and 0 / 0 / 0 left, else raise (rollback). No TRUNCATE, triggers untouched, run once.
+- **Post-checks:** 0 / 0 / 0; migrations 7, policies 9, RLS on, `auth.users` 1, three audit triggers enabled, `restore_backup` present. Advisors unchanged: security WARN `authenticated_security_definer_function_executable` (restore_backup, intentional) and `auth_leaked_password_protection` (optional); performance INFO `unused_index` ×3 (re-check after real data).
+- **The app still never hard-deletes** (soft delete only); this was the one planned hard delete (D8). No code or schema change.
 
 ---
 

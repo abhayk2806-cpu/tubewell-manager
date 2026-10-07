@@ -77,7 +77,10 @@
   - [x] Hinglish config-error screen instead of a blank page (P10A-fix1)
   - [x] pnpm pinned through `packageManager` in `package.json` instead of the undocumented `PNPM_VERSION` (P10A-fix1)
   - [ ] Later: a tested Content-Security-Policy (needs a real Netlify deploy)
-- [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs ← **next**
+- [x] **10B** — Test-data wipe (done 2026-10-07, owner approval and JSON backup): 7 / 6 / 10 rows removed in one self-asserting transaction; database empty; schema, RLS, triggers and Auth untouched
+- [ ] **10C** — Owner enters real data locally (`pnpm run dev`) and compares every figure with his notebook ← **next**
+- [ ] **10D** — Owner's Netlify test deploy ([docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) sections 2–5), then the smoke test
+- [ ] **10** — Cutover (owner decision and phrase only), Netlify re-enable, final docs
 
 ## Parked — not in scope unless the owner asks
 
