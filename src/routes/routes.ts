@@ -1,12 +1,16 @@
-import type { ComponentType } from 'react';
+import { lazy, type ComponentType } from 'react';
 import { CalendarDays, Database, Droplets, LayoutDashboard, Users, Wallet, type LucideIcon } from 'lucide-react';
-import { DashboardPage } from '@/pages/dashboard/DashboardPage';
-import { FarmersPage } from '@/pages/farmers/FarmersPage';
-import { FarmerProfilePage } from '@/pages/farmers/FarmerProfilePage';
-import { MonthsPage } from '@/pages/months/MonthsPage';
-import { BackupPage } from '@/pages/backup/BackupPage';
-import { UsagePage } from '@/pages/usage/UsagePage';
-import { PaymentsPage } from '@/pages/payments/PaymentsPage';
+
+// Each screen is its own chunk (Polish PL1): it is downloaded the first time its route opens, so
+// the first load carries only the shell (layout, navigation, guards, login, 404). App.tsx wraps
+// every page in one Suspense fallback; a failed download is caught by the top-level ErrorBoundary.
+const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const FarmersPage = lazy(() => import('@/pages/farmers/FarmersPage').then((m) => ({ default: m.FarmersPage })));
+const FarmerProfilePage = lazy(() => import('@/pages/farmers/FarmerProfilePage').then((m) => ({ default: m.FarmerProfilePage })));
+const MonthsPage = lazy(() => import('@/pages/months/MonthsPage').then((m) => ({ default: m.MonthsPage })));
+const BackupPage = lazy(() => import('@/pages/backup/BackupPage').then((m) => ({ default: m.BackupPage })));
+const UsagePage = lazy(() => import('@/pages/usage/UsagePage').then((m) => ({ default: m.UsagePage })));
+const PaymentsPage = lazy(() => import('@/pages/payments/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
 
 export interface FeatureRoute {
   path: string;
