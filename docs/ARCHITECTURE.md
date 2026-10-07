@@ -22,7 +22,7 @@
 - Supabase: Postgres + Auth + RLS.
   - NEW project `tubewell-hisab`, ID `ciszgagzhfubuqhpmyeh`, region ap-south-1, org `digital-store`, Postgres 17.
   - Schema applied on 2026-10-05; no data yet.
-- Netlify static hosting (site `tubewellhisab.netlify.app`, currently disabled by the owner).
+- Netlify static hosting (site `tubewellhisab.netlify.app`, currently disabled by the owner). Build, headers, env vars and the owner's Netlify / Supabase checklists: [docs/DEPLOYMENT.md](DEPLOYMENT.md) (Phase 10A).
 - pnpm package manager. Repo: `abhayk2806-cpu/tubewell-manager`; rebuild branch `rebuild/fresh-system`.
 
 ## Layers (dependency direction: pages → hooks → data → engine)
@@ -186,7 +186,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - Public sign-ups must stay disabled in the Supabase dashboard (owner setting).
 - RLS is enabled on every table, and policies match only the owner's uid (D13, see Database schema).
 - The publishable key is public by design: it ships in the browser bundle. The service-role key never goes in `VITE_*` vars or in the repo.
-- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10.
+- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10 (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). A missing value throws while the modules load, so the page stays blank with the message in the browser console (no Hinglish screen yet).
 
 ## Testing approach
 

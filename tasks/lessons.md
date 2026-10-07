@@ -167,6 +167,16 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 
 ### Process and deployment
 
+**`vite preview` does not serve `netlify.toml`**
+- Finding (Phase 10A): `vite preview` ignores `netlify.toml` headers and redirects and sends its own `Cache-Control: no-cache` on every file, assets included.
+- Rule: a preview check proves the SPA shell and status codes only. Never report Netlify headers, caching or redirects as tested until a real Netlify deploy shows them.
+- Impact: low. Date: 2026-10-07.
+
+**A missing `VITE_*` variable gives a blank page, not the error screen**
+- Finding (Phase 10A): `parseConfig` throws while `src/lib/supabase.ts` loads, before React mounts the ErrorBoundary; a build without the variables shows a white page with the message in the console only.
+- Rule: when a deploy shows a blank page, open the browser console first and check the two Netlify variables, then redeploy (Vite reads them at build time). Variables already in the process environment override `.env`, so a dummy-value build proves exactly what lands in the bundle.
+- Impact: medium. Date: 2026-10-07.
+
 **"Live" does not mean "tested"**
 - Mistake: three latent v1 calculation bugs survived several deploys because no end-to-end audit was done.
 - Rule: after any change touching calculations or filters, cross-check totals against the per-farmer breakdowns, and run the fixture tests (E1–E24).

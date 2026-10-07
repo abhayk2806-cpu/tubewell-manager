@@ -70,6 +70,11 @@
   - [x] Lazy-loaded routes: one chunk per page, shared "Load ho raha hai..." fallback, chunk-error message with "Dobara try karo"
   - [x] `/months?month=YYYY-MM` scrolls that month into view once (reduced motion, no focus move, invalid month ignored)
   - [ ] Owner: smoke-test tabs, refresh on a deep URL, the Dashboard Mahina link, airplane mode → an unvisited tab
+- [x] **10A** — Deployment readiness, repo side (done 2026-10-07): `netlify.toml`, `.env.example`, [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)
+  - [ ] Owner: Netlify checklist (DEPLOYMENT.md section 2): env vars, branch deploys OFF, previews OFF, builds stopped until needed
+  - [ ] Owner: Supabase checklist (section 3): sign-ups OFF, Site URL, leaked-password protection
+  - [ ] Owner: choose a pre-cutover test option (section 5) or none
+  - [ ] Later (needs a `src/` change): a Hinglish screen for a missing env variable instead of a blank page; a tested Content-Security-Policy
 - [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs ← **next**
 
 ## Parked — not in scope unless the owner asks

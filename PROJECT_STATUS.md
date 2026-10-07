@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-07**
-> **Current phase:** PL1 polish done (lazy routes, month deep-link scroll); owner manual checks, then Phase 10 (data wipe on owner approval, cutover)
+> **Current phase:** 10A done (repo deploy-ready: `netlify.toml`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); owner sets up Netlify / Supabase by hand, then 10B (test-data wipe on owner approval) and the cutover
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -36,6 +36,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
 | 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
 | PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), pending owner smoke test |
+| 10A | Deployment readiness (repo side): `netlify.toml` (pnpm, Node 24, pnpm 11.1.3, SPA rewrite, headers, caching), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps pending |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -49,7 +50,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
 8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
 9. Owner smoke-tests PL1: tabs and a refresh on a deep URL, the Dashboard Mahina link to `/months?month=`, and airplane mode then an unvisited tab (the "Dobara try karo" message). See the 2026-10-07 PL1 session entry.
-10. **Phase 10: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+10. Owner follows [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Netlify checklist (section 2), Supabase checklist (section 3), and picks a pre-cutover test option (section 5) or none.
+11. **Phase 10B onward: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -59,7 +61,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 |---|---|---|---|
 | 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | **Auth user: done.** 1 confirmed user, verified by count on 2026-10-05. **Sign-ups disabled: owner to confirm.** Claude may not read Auth settings. |
 | 1b | Optional | Turn on leaked-password protection (Auth → Password security), if the plan offers it. The security advisor reports it as WARN since the Auth user exists. | Optional |
-| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (D14), re-enable the site with **branch deploys OFF and deploy previews OFF** | Pending |
+| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (D14), re-enable the site with **branch deploys OFF and deploy previews OFF**. Exact steps: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) sections 2–3 | Pending |
 | 3 | After cutover | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
 | 4 | Optional | GitHub branch protection on `main` (extra layer on top of the push gate) | Optional |
 
@@ -498,8 +500,15 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Tests:** 52 files / 3,819 tests; gates green. No change in `src/lib/`, hooks, configs, `package.json` or the lockfile.
 - **Failed attempts:** (1) an App-level fallback test passed or failed by test order, because a lazy chunk loaded once stays cached (moved to a never-resolving lazy page in `ErrorBoundary.test.tsx`); (2) a `node -e` script inside bash double quotes lost a backticked `?month=` in a comment (fixed with a quoted heredoc / the Edit tool); (3) a helper exported from `MonthsSections.tsx` failed the react-refresh lint rule (moved to `monthCardId.ts`).
 
+### 2026-10-07 — Phase 10A: deployment readiness (repo side)
+- **Preconditions:** HEAD = origin = `4e91ad4`; `main` = `46e3872`; spec md5 `47b5d688…`. Row counts: farmers 7, usage_entries 6, payments 10 at the start and at the end. Baseline gates: 52 files / 3,819 tests.
+- **Discovery:** the app reads only `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (one `import.meta.env` read in `src/lib/supabase.ts`) and calls only the Supabase URL; no fonts or CDNs; no source maps; `dist` has no `service_role`, `sb_secret_` or JWT-like strings (one "secret" hit is a supabase-js route name). A missing variable gives a blank page (console error only).
+- **Changed:** `netlify.toml` (pnpm build, `NODE_VERSION` 24, `PNPM_VERSION` 11.1.3, SPA rewrite kept, security headers, `/assets/*` immutable, `/index.html` no-cache; no CSP), `.env.example` (two names, no values), new [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+- **Verified:** clean `node_modules` / `dist`, frozen install with pnpm 11.1.3, build with only dummy values (the real project ref is not in the bundle); `vite preview` served `/`, `/farmers`, `/months?month=2026-01` with 200 and the shell (the `netlify.toml` headers are NOT served by `vite preview`, so they are untested until a Netlify deploy); `netlify.toml` checked with a strict subset parser (no TOML tool is installed). Advisors (read-only): leaked-password protection off; `restore_backup` SECURITY DEFINER (known, intentional).
+- **Not visible to Claude:** the Netlify account and the Supabase Auth settings (sign-ups, Site URL); these are owner steps in DEPLOYMENT.md.
+
 ---
 
 ## Known Local Issues
 
-- `netlify.toml` builds with `npm run build` while the repo uses pnpm. Review in Phase 10.
+- ~~`netlify.toml` builds with `npm run build` while the repo uses pnpm.~~ Fixed in Phase 10A (`pnpm run build`, Node 24, pnpm 11.1.3). `main` (v1) still has its old `netlify.toml` until the cutover.
