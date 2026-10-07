@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
-> **Last Updated: 2026-10-06**
-> **Current phase:** 9 done (independent verification, 0 mismatches); Phase 10 (data wipe on owner approval, cutover) next
+> **Last Updated: 2026-10-07**
+> **Current phase:** PL1 polish done (lazy routes, month deep-link scroll); owner manual checks, then Phase 10 (data wipe on owner approval, cutover)
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -35,6 +35,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), pending owner review |
 | PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
 | 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
+| PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), pending owner smoke test |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -47,7 +48,8 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
 7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
 8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
-9. **Phase 10: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+9. Owner smoke-tests PL1: tabs and a refresh on a deep URL, the Dashboard Mahina link to `/months?month=`, and airplane mode then an unvisited tab (the "Dobara try karo" message). See the 2026-10-07 PL1 session entry.
+10. **Phase 10: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -231,6 +233,11 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 ### 2026-10-06 — D31 Backup and restore (Phase 8; manager design choices (a)–(j), owner may revisit)
 - Versioned JSON backup of every row (soft-deleted included) with counts and the engine All Time summary; validation before any database call; Excel CSV exports (not restorable); Merge / Replace through the migration-007 function in one transaction; preview; Replace safety (safety backup first, typed REPLACE); verification; a per-browser reminder with one Dashboard note.
 - Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Backup and restore.
+
+### 2026-10-07 — D34 Keep what is built (owner decision, given in the PL1 prompt)
+- PL1 adds only lazy routes and the month deep-link scroll; no new feature, no copy change on existing screens, no number change.
+- The Dashboard Band note keeps following the chosen period (S-04).
+- Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) → Polish PL1.
 
 ---
 
@@ -482,6 +489,14 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Live database (read-only):** per-farmer SQL waterfall = engine = oracle for every farmer with rows (12 PASS, 0 FAIL); the temporary script and row files were deleted.
 - **Tests:** 50 files / 3,783 tests; gates green; JS chunk unchanged (666 kB).
 - **Failed attempts:** (1) the split-payment property first compared payment counts too (a test bug, fixed); (2) generated ids were not uuids, so the backup validator rejected them in the round trip (fixed in the test with stable uuids).
+
+### 2026-10-07 — PL1: polish (lazy routes, month deep-link scroll)
+- **Preconditions:** HEAD = origin = `cd7bffe`; `main` = `46e3872`. Row counts: farmers 7, usage_entries 6, payments 10 at the start and at the end.
+- **Lazy routes:** every page is `React.lazy` with one shared `Suspense` fallback ("Load ho raha hai..."); a chunk-load error shows "Yeh screen load nahi ho payi." with "Dobara try karo" (reload). First load 665.64 kB / 188.74 kB gzip → 467.55 kB / 139.24 kB gzip (index 235.01 + supabase 232.54); no chunk over 500 kB.
+- **Month scroll:** `/months?month=YYYY-MM` scrolls the card into view once after the data loads; reduced motion = no animation; no focus move; invalid or unknown months do nothing.
+- **Route recheck:** `src/App.test.tsx` (direct loads, deep URLs, tabs, 404, logged-out redirect, login → Dashboard, logout). `vite preview` served `/`, `/months?month=2026-10`, `/farmers/abc`, `/usage`, `/nahi-hai`, `/login` with 200 and the app shell; stopped afterwards. `netlify.toml` already has the `/* → /index.html` 200 rewrite.
+- **Tests:** 52 files / 3,819 tests; gates green. No change in `src/lib/`, hooks, configs, `package.json` or the lockfile.
+- **Failed attempts:** (1) an App-level fallback test passed or failed by test order, because a lazy chunk loaded once stays cached (moved to a never-resolving lazy page in `ErrorBoundary.test.tsx`); (2) a `node -e` script inside bash double quotes lost a backticked `?month=` in a comment (fixed with a quoted heredoc / the Edit tool); (3) a helper exported from `MonthsSections.tsx` failed the react-refresh lint rule (moved to `monthCardId.ts`).
 
 ---
 

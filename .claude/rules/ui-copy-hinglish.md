@@ -29,6 +29,10 @@ Never label one figure with the other's words, and never add them together.
 - **D32 (owner, 2026-10-06):** the screens keep the spelling **"Baaki"** ("Abhi baaki", "Baaki nahi"); "Kitna Baki Hai" is not used. Picker options read "Naam — Baaki ₹x" / "Naam — Advance ₹x" / "Naam — Baaki nahi".
 - Other D32 labels: "Pura ₹X bharo" (fill the full Baaki), "Band karo (delete nahi)", "Pani ka samay", "Total pani ka samay", "Chalu kisan", "Kisan dhundo (naam ya mobile)", "Kahan laga" (a payment's trail).
 
+**App shell strings (PL1, `src/components/shellCopy.ts`):**
+- While a screen's code loads: "Load ho raha hai..." (muted line).
+- When a screen's code cannot be downloaded: "Yeh screen load nahi ho payi." / "Internet check karo, ya app ka naya version aa gaya hai. Page dobara load karo." / button "Dobara try karo" (reloads the page).
+
 **Month status words:** "Settled", "Partial", "Unpaid".
 - A month with charge 0 and cash received > 0 shows the badge **"Sirf Payment"** (D3, 2026-10-05).
 - In a payment's allocation trail, an unapplied remainder is labelled **"Advance / Credit"** (D5).

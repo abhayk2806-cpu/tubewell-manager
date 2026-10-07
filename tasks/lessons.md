@@ -155,6 +155,16 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Practice (migration 004): read the owner id from `auth.users` at apply or test time and build the policy with `format(%L)`. The repo is public.
 - Impact: medium. Date: 2026-10-05.
 
+**A lazy page chunk stays cached across tests in one file**
+- Finding (PL1): once one test has loaded a `React.lazy` page, later tests in the same file render it at once, so a "shows the fallback" check passed or failed by test order.
+- Rule: test a Suspense fallback with its own never-resolving `lazy(() => new Promise(() => {}))` component, not through the real routes. Route tests await pages with `findBy...`.
+- Impact: low. Date: 2026-10-07.
+
+**Bash double quotes run backticks, even inside a `node -e` script**
+- Finding (PL1): a `node -e "..."` edit whose text held `?month=` in backticks ran it as a command, and the comment lost the words silently.
+- Rule: write edit scripts to a file through a quoted heredoc (`<<'EOF'`) or use the Edit tool. Check the edited lines afterwards.
+- Impact: low. Date: 2026-10-07.
+
 ### Process and deployment
 
 **"Live" does not mean "tested"**

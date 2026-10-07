@@ -44,8 +44,8 @@ Rules that follow from this:
 | Path | What it is |
 |---|---|
 | `main.tsx` | Entry: `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App` |
-| `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. |
-| `routes/routes.ts` | Feature routes (Hinglish title, build phase, optional built `page`) and the 6 bottom-nav tabs. `App.tsx` renders `page` when set, else the placeholder. |
+| `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. Each built page renders inside one `Suspense` with the shared `PageLoading` fallback (PL1). |
+| `routes/routes.ts` | Feature routes (Hinglish title, build phase, optional built `page`) and the 6 bottom-nav tabs. `App.tsx` renders `page` when set, else the placeholder. Every `page` is `React.lazy` (its own chunk, PL1). |
 | `routes/RouteGuards.tsx` | `ProtectedRoute` (loading → spinner, logged out → `/login`) and `PublicRoute` (logged in → `/`) |
 | `auth/` | `auth-context.ts` (types + context), `AuthProvider.tsx`, `useAuth.ts` |
 | `lib/config.ts` | Pure `parseConfig(env)`: validates `VITE_SUPABASE_URL` (https) and `VITE_SUPABASE_PUBLISHABLE_KEY` (D14) |
@@ -59,7 +59,8 @@ Rules that follow from this:
 | `hooks/usePayments.ts` | Loads payments, exposes live / deleted lists and the mutations (Phase 5) |
 | `types/database.ts` | GENERATED Supabase types (see Type generation) |
 | `components/layout/AppLayout.tsx` | Header (app name + Logout) and mobile-first bottom nav; centred `max-w-2xl` |
-| `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen; loading/status screen |
+| `components/ErrorBoundary.tsx`, `components/FullScreenMessage.tsx` | Top-level error screen (a chunk-load error gets its own message and "Dobara try karo", PL1); loading/status screen |
+| `components/PageLoading.tsx`, `components/chunkError.ts`, `components/shellCopy.ts` | Lazy-page fallback line; `isChunkLoadError`; the shell's Hinglish copy (PL1) |
 | `components/tone.ts` | Semantic colour tones and meaning lookups (Phase 6C, D28) |
 | `components/ui/` | shadcn/ui: `button`, `card`, `input`, `label`, plus `dialog` and `alert-dialog` (Phase 4A, written by hand in the shadcn Tailwind-3 style, because the current shadcn CLI targets Tailwind 4). Never hand-edit them otherwise. |
 | `pages/` | `LoginPage`, `PlaceholderPage` ("Yeh screen Phase N mein banegi"), `NotFoundPage`, `farmers/` (Kisan), `usage/` (Pani Entry), `payments/` (Paisa), `shared/monthLabel.ts` (month label "Oct 2026", used by Pani Entry, Paisa and the profile); `farmers/FarmerProfilePage.tsx` (Kisan ka Hisaab, Phase 6); `dashboard/` (Dashboard at `/`, Phase 7A); `months/` (Mahine at `/months`, Phase 7B) |
@@ -627,7 +628,7 @@ monthsYearOptions(monthKeys)    sortMonthFarmers(rows)    deepLinkMonth(value, m
 | Month card | `MonthRow` charge, paid (Charge Clear), remaining (Baaki), cash (Cash Mila), minutes, status, counts | "Kisan-wise dekho (n)" opens the breakdown |
 | Breakdown row | that farmer's profile month (`ProfileMonth`) | name → `/farmers/:id` |
 | Year strip | `sumPaise` of the shown months' minutes, `chargePaise`, `cashPaise` (= Dashboard year view charges / cash) | "Dashboard kholo" → `/` for year-end Baaki / credit |
-| Deep link `/months?month=YYYY-MM` | — | opens that month expanded, year filter set; invalid values ignored |
+| Deep link `/months?month=YYYY-MM` | — | opens that month expanded, year filter set, scrolls its card into view once (PL1); invalid values ignored |
 | Dashboard Mahina view | — | "Is mahine ka kisan-wise hisaab" → `/months?month=<month>` |
 
 **Decision D30** (manager design choices, 2026-10-06; the owner may revisit):
@@ -785,3 +786,18 @@ verifyRestore(file, mode): { ok: true, verification: { verified, counts, summary
 - **(j) Screen order**: reminder and the not-encrypted warning, JSON backup, CSV, restore.
 
 **Known limits.** One request per restore (10 MB); the reminder remembers only this browser / phone; files are not encrypted; Google Drive and automatic backups are parked. Verification of a Merge checks that every file row is present and equal (rows only in the database stay, so counts and totals may differ from the file).
+
+## Polish PL1 (lazy routes and month scroll, D34)
+
+**Lazy routes.**
+- `src/routes/routes.ts` declares every screen page with `React.lazy`, so each page is its own chunk. The shell stays in the main chunk: `AppLayout` and the bottom nav, the route guards, `LoginPage`, `NotFoundPage`, `PlaceholderPage`, `ErrorBoundary`.
+- `src/App.tsx` wraps each page route element in ONE shared fallback: `<Suspense fallback={<PageLoading />}>`. `PageLoading` (`src/components/PageLoading.tsx`) is a muted `role="status"` line, "Load ho raha hai...".
+- A chunk that cannot be downloaded (offline, or a new deploy replaced the files) throws inside the lazy boundary. The top-level `ErrorBoundary` (`src/components/ErrorBoundary.tsx`, mounted in `main.tsx`) recognises it with `isChunkLoadError` (`src/components/chunkError.ts`) and shows "Yeh screen load nahi ho payi." with a "Dobara try karo" button (`h-11`) that reloads the page. Other errors keep the old message.
+- Copy: `src/components/shellCopy.ts` (`SHELL_COPY`). Tests: `src/App.test.tsx` (every route, deep URLs, tabs, 404, logged-out redirect, login and logout through the real App), `src/components/ErrorBoundary.test.tsx` (fallback, chunk error, retry, other errors).
+- Build after PL1: first load = `index` 235.01 kB + `supabase` 232.54 kB (modulepreload) = 467.55 kB raw / 139.24 kB gzip, down from one 665.64 kB / 188.74 kB chunk. Page chunks are 8–19 kB. No Vite config change (manual chunks would need one).
+
+**Month deep-link scroll.**
+- Each month card's `<li>` has `id = monthCardId(monthKey)` = `month-card-YYYY-MM` (`src/pages/months/monthCardId.ts`).
+- `MonthsPage` scrolls that card into view ONCE, after the data is in and only when `deepLinkMonth` accepts the `?month=` value; a ref remembers the scrolled month, so toggles, the year filter and quiet reloads never scroll again.
+- `scrollIntoView({ block: 'start' })` with `behavior: 'smooth'`, or `'auto'` under `prefers-reduced-motion: reduce`. It does nothing where `scrollIntoView` is missing. Focus is never moved; no new colour. The month still opens expanded as before (D30 f).
+- The only link that points at a month is the Dashboard Mahina view's "Is mahine ka kisan-wise hisaab" → `/months?month=<month>`.

@@ -61,11 +61,15 @@
   - [x] `balanceRules.ts` (balances, trails), Dashboard and profile Pani time, tests for the audited gaps (date move, 2,500-row paging)
   - [x] Kisan balances + Band karo in the delete dialog; Pani form and strip; Paisa trails, picker positions, search, "Pura ₹X bharo"; Dashboard time and Chalu tiles; profile total time (D32)
   - [ ] Owner: smoke-test with test data
-  - [ ] Later polish (not in PR1): lazy routes for a smaller bundle
+  - [x] Later polish (not in PR1): lazy routes for a smaller bundle (done in PL1)
 - [x] **9** — Verification (done 2026-10-07; 0 mismatches)
   - [x] Independent oracle (`src/lib/verification/oracle.ts`) vs engine, data layer and every screen function over 320 seeded scenarios and E1–E24
   - [x] Edge-case matrix with test names: [docs/VERIFICATION.md](../docs/VERIFICATION.md)
   - [x] Cross-section consistency, scale (3,000 / 1,500 rows), three device timezones, backup round trip, live read-only cross-check
+- [x] **PL1** — Polish (done 2026-10-07; pending owner smoke test)
+  - [x] Lazy-loaded routes: one chunk per page, shared "Load ho raha hai..." fallback, chunk-error message with "Dobara try karo"
+  - [x] `/months?month=YYYY-MM` scrolls that month into view once (reduced motion, no focus move, invalid month ignored)
+  - [ ] Owner: smoke-test tabs, refresh on a deep URL, the Dashboard Mahina link, airplane mode → an unvisited tab
 - [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs ← **next**
 
 ## Parked — not in scope unless the owner asks
