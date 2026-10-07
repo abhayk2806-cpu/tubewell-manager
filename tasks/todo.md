@@ -62,11 +62,11 @@
   - [x] Kisan balances + Band karo in the delete dialog; Pani form and strip; Paisa trails, picker positions, search, "Pura ₹X bharo"; Dashboard time and Chalu tiles; profile total time (D32)
   - [ ] Owner: smoke-test with test data
   - [ ] Later polish (not in PR1): lazy routes for a smaller bundle
-- [ ] **9** — Verification: independent script + edge-case matrix ← **next**
-  - [ ] An independent script (not the app's engine) recomputes every figure from raw rows and compares with the app (Dashboard, profile, Months, backup summary).
-  - [ ] Edge-case matrix: IST midnight / month / year boundaries, rounding (D7), soft delete and restore, duplicates, Band / deleted farmers, credit carry-forward, more than 1,000 rows per table (paging in every read and in the backup).
-  - [ ] Cross-section consistency: Dashboard All Time = sum of profiles = backup summary; Months sums = Dashboard year views; CSV figures = screen figures.
-- [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs
+- [x] **9** — Verification (done 2026-10-07; 0 mismatches)
+  - [x] Independent oracle (`src/lib/verification/oracle.ts`) vs engine, data layer and every screen function over 320 seeded scenarios and E1–E24
+  - [x] Edge-case matrix with test names: [docs/VERIFICATION.md](../docs/VERIFICATION.md)
+  - [x] Cross-section consistency, scale (3,000 / 1,500 rows), three device timezones, backup round trip, live read-only cross-check
+- [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs ← **next**
 
 ## Parked — not in scope unless the owner asks
 

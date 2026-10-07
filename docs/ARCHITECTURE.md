@@ -10,6 +10,7 @@
 > - The **farmer profile (Kisan ka Hisaab) exists** (Phase 6): see [Farmer profile](#farmer-profile-kisan-ka-hisaab-phase-6). The **Dashboard exists** (Phase 7A): see [Dashboard](#dashboard-phase-7a-d29). The **Months screen exists** (Phase 7B): see [Months screen](#months-screen-phase-7b-d30).
 > - **Backup and restore exist** (Phase 8): migration 007 adds `restore_backup`; see [Backup and restore](#backup-and-restore-phase-8-d31).
 > - **Audit gap fixes** (PR1, D32): balances in the Kisan list and the Pani section, trails in the Paisa list, picker search, "Pura ₹X bharo", Pani time on the Dashboard and profile; see [Audit gap fixes](#audit-gap-fixes-pr1-d32).
+> - **Independent verification** (Phase 9): an oracle written from the spec checks every screen function over 320 seeded scenarios, E1–E24, scale, timezones and the backup round trip; see [VERIFICATION.md](VERIFICATION.md).
 > - **Semantic colours** (Phase 6C, D28): every kind of information has one fixed tone; see [Semantic colours](#semantic-colours-phase-6c-d28).
 > - The code and the live database beat this file. Update this file when they differ.
 >

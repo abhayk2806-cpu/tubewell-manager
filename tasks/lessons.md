@@ -185,6 +185,12 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 
 ## Tooling-only (environment-specific; kept for reference)
 
+**Generated test rows must have the database's shape when they cross a validator**
+- Finding (Phase 9): seeded rows with readable ids passed every ledger check but the backup validator (correctly) rejected them, because real ids are uuids.
+- Rule: map generated ids to stable uuids (or generate uuids) before a test goes through `validateBackup` or anything else that checks DB shapes.
+- Date: 2026-10-07.
+
+
 **The Write tool decodes `\uXXXX` escapes into real characters**
 - Finding (Phase 8): writing `'\ufeff'` or a regex with `\u00a0` through the Write tool put the real BOM / NBSP into the source (ESLint `no-irregular-whitespace` caught the NBSP).
 - Rule: after writing a file with `\u` escapes, check it for non-ASCII bytes and re-escape with a script, or build such characters with `String.fromCharCode`.

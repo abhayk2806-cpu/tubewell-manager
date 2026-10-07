@@ -1,7 +1,7 @@
 # Tubewell Manager — Project Status
 
 > **Last Updated: 2026-10-06**
-> **Current phase:** PR1 done (audit gap fixes, D32, pending owner review); Phase 9 (Verification) next
+> **Current phase:** 9 done (independent verification, 0 mismatches); Phase 10 (data wipe on owner approval, cutover) next
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
 
 **Update policy.** Update this file:
@@ -34,7 +34,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), pending owner review |
 | 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), pending owner review |
 | PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
-| 9 | Verification: independent script + edge-case matrix | ⬜ Not started (next) |
+| 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -47,7 +47,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
 7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
 8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
-9. **Phase 9: Verification.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+9. **Phase 10: data wipe (owner approval), cutover, Netlify re-enable.** Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
 
 ---
 
@@ -473,6 +473,15 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Changed expectations (by design):** the Kisan list test no longer asserts "no money"; the Paisa picker options carry the position; a payment row shows its amount twice (amount and trail).
 - **Not verified:** a real-browser look at 360 px (behind the owner's login).
 - **Failed attempt:** none.
+
+### 2026-10-07 — Phase 9: independent verification
+- **Preconditions:** HEAD = origin = `52d3f3d`; `main` = `46e3872`; spec md5 `47b5d688…`; migrations 001–007. Row counts at the start: farmers 7, usage_entries 6, payments 10; unchanged at the end. Baseline gates: 46 files / 875 tests (71.6 s).
+- **Added (tests and docs only):** `src/lib/verification/` (oracle written from the spec with BigInt, its own IST calendar maths and an explicit FIFO queue; seeded generator; comparison, examples, scale and backup tests) and [docs/VERIFICATION.md](docs/VERIFICATION.md) (edge-case matrix, how to run). No production file changed.
+- **Results:** 320 seeds plus E1–E24, 0 mismatches. Comparisons: ledger 2,184 · profile 1,092 · Dashboard views 4,820 · months 3,453 · balances 913 · trails 3,224 · preview new 1,092 / edit 922 / delete 922 · CSV rows 4,215 · cross-screen 762 · property sets 1,092.
+- **Scale:** 30 farmers, 3,000 usage rows, 1,500 payments through the paged reads; about 0.5 s. **Timezones:** the whole suite passes under UTC, America/Los_Angeles and Pacific/Auckland. **Backup round trip:** 10 seeds, Merge and Replace, figures equal the oracle.
+- **Live database (read-only):** per-farmer SQL waterfall = engine = oracle for every farmer with rows (12 PASS, 0 FAIL); the temporary script and row files were deleted.
+- **Tests:** 50 files / 3,783 tests; gates green; JS chunk unchanged (666 kB).
+- **Failed attempts:** (1) the split-payment property first compared payment counts too (a test bug, fixed); (2) generated ids were not uuids, so the backup validator rejected them in the round trip (fixed in the test with stable uuids).
 
 ---
 
