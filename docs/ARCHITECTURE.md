@@ -43,7 +43,7 @@ Rules that follow from this:
 
 | Path | What it is |
 |---|---|
-| `main.tsx` | Entry: `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App` |
+| `main.tsx` | Entry (P10A-fix1): imports `index.css`, checks the Supabase variables with `configProblem` (`configProblem.ts`, built on `parseConfig`), then dynamically imports `startApp.tsx` (the unchanged tree `StrictMode` → `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App`) or, on a bad config, `showConfigError.tsx` → `ConfigErrorScreen.tsx` (copy in `configErrorCopy.ts`). |
 | `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. Each built page renders inside one `Suspense` with the shared `PageLoading` fallback (PL1). |
 | `routes/routes.ts` | Feature routes (Hinglish title, build phase, optional built `page`) and the 6 bottom-nav tabs. `App.tsx` renders `page` when set, else the placeholder. Every `page` is `React.lazy` (its own chunk, PL1). |
 | `routes/RouteGuards.tsx` | `ProtectedRoute` (loading → spinner, logged out → `/login`) and `PublicRoute` (logged in → `/`) |
@@ -186,7 +186,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - Public sign-ups must stay disabled in the Supabase dashboard (owner setting).
 - RLS is enabled on every table, and policies match only the owner's uid (D13, see Database schema).
 - The publishable key is public by design: it ships in the browser bundle. The service-role key never goes in `VITE_*` vars or in the repo.
-- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10 (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). A missing value throws while the modules load, so the page stays blank with the message in the browser console (no Hinglish screen yet).
+- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10 (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). `src/lib/supabase.ts` throws while its module loads on a missing or non-https value, so `main.tsx` checks first and loads the app only when the config is fine; otherwise `ConfigErrorScreen` shows the variable NAMES (never values) and the Netlify hint. The entry is a 3.6 kB chunk; the app chunks load in parallel after it (one extra round trip).
 
 ## Testing approach
 

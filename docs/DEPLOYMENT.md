@@ -12,12 +12,12 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
 | Build command | `pnpm run build` (= `tsc -b && vite build`) | `netlify.toml` |
 | Publish directory | `dist` | `netlify.toml` |
 | Node | major 24 (LTS "Krypton"; the project builds and tests on 24.14.0) | `netlify.toml` → `NODE_VERSION` |
-| pnpm | 11.1.3 (the version that wrote the lockfile) | `netlify.toml` → `PNPM_VERSION` |
+| pnpm | 11.1.3 (the version that wrote the lockfile) | `package.json` → `"packageManager": "pnpm@11.1.3"`, read by Corepack. Without it Netlify would use its own default (pnpm 10.x). |
 | Env vars | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (nothing else) | Netlify UI (section 2, step 4) |
 
 - The app calls only the Supabase project URL (REST and Auth). No fonts, CDNs or other hosts. No source maps are emitted.
 - The two values are read at **build** time (Vite puts them into the bundle). After changing either, run a new deploy.
-- If a value is **missing**, the page stays blank and the browser console shows "Missing environment variable(s): …" (`src/lib/config.ts`). If the URL is not `https://`, the same happens with a URL message. If the values point at the wrong project, the login screen loads but login fails with "Login nahi ho paya…" or "Email ya password galat hai.".
+- If a value is **missing**, or the URL is not a valid `https://` address, the app shows a full-screen Hinglish message instead of a blank page: "App shuru nahi ho paya.", the NAMES of the variables to fix (never their values) and "Netlify mein Environment variables check karo, phir dobara deploy karo." If the values point at the wrong project, the login screen loads but login fails with "Login nahi ho paya…" or "Email ya password galat hai.".
 
 `netlify.toml` also sets the single-page-app rewrite (every path → `/index.html`, status 200), safe response headers on every path (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy` that turns off camera, microphone, location, payment, USB and motion sensors), a one-year immutable cache for `/assets/*` (hashed file names) and `no-cache` for `/index.html`. There is **no Content-Security-Policy** yet (section 7).
 
@@ -36,7 +36,12 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
    Never add the secret / service-role key (`sb_secret_…` or the legacy `service_role` JWT) to Netlify or to any `VITE_*` variable.
 5. **Branch deploys OFF.** Branches and deploy contexts → Branch deploys = "Deploy only the production branch" (none) **(verify in the dashboard)**.
 6. **Deploy previews OFF.** Same area → Deploy previews = "Don't deploy pull requests" / None **(verify in the dashboard)**.
-7. **First deploy** (only when you choose to). Deploys → Trigger deploy → Deploy project **(verify in the dashboard)**. In the deploy log check: Node `v24.x`, pnpm `11.1.3`, "built in …", and no "secrets scanning" failure.
+7. **First deploy** (only when you choose to). Deploys → Trigger deploy → Deploy project **(verify in the dashboard)**. In the deploy log check: Node `v24.x`, pnpm `11.1.3` (from `packageManager` in `package.json`; if the log shows pnpm 10.x, Corepack did not pick up the field: tell Claude), "built in …", and no "secrets scanning" failure (box below).
+   > **If the build fails with a secrets-scanning message.** Netlify scans the built files for values that look like secrets (smart detection) and may flag one of the two Supabase values. Only if the deploy log shows such a failure, add ONE of these Netlify environment variables (Project configuration → Environment variables), per Netlify's docs:
+   > - `SECRETS_SCAN_OMIT_KEYS` = `VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY` (the names of variables that must not be scanned), or
+   > - `SECRETS_SCAN_SMART_DETECTION_OMIT_VALUES` = the exact flagged string shown in the log.
+   >
+   > Both Supabase values are public by design (they ship in the browser bundle; RLS protects the data). Never do this for a secret / service-role key. Then trigger the deploy again.
 8. **Stop builds to save credits.** Project configuration → Build & deploy → Continuous deployment → Build settings → Configure → Build status = "Stopped builds" **(verify in the dashboard)**. The last published deploy stays online; pushes no longer build. Turn it back to "Active builds" only when you want a deploy.
 9. Custom domain, HTTPS: the `*.netlify.app` address already has HTTPS. Nothing else is needed.
 
@@ -55,7 +60,8 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
 3. Open a farmer, then press refresh: the same profile reloads (no Netlify 404). Do the same on `/months?month=YYYY-MM`.
 4. Open `/nahi-hai`: the app's "Yeh page nahi mila" page.
 5. Log out: the login screen. Open `/payments` while logged out: the login screen.
-6. Optional: browser devtools → Network → the page response shows `X-Frame-Options: DENY`; an `/assets/…js` file shows `max-age=31536000, immutable`. (These headers are served only by Netlify, never by `pnpm run preview`.)
+6. Wrong or missing variables show the Hinglish config message ("App shuru nahi ho paya." with the variable names), not a blank page.
+7. Optional: browser devtools → Network → the page response shows `X-Frame-Options: DENY`; an `/assets/…js` file shows `max-age=31536000, immutable`. (These headers are served only by Netlify, never by `pnpm run preview`.)
 
 ## 5. Testing a real deploy BEFORE the cutover (options, owner decides)
 
@@ -78,4 +84,4 @@ Credit costs differ by Netlify plan: check Team → Billing / Usage before choos
 ## 7. Not done yet
 
 - **Content-Security-Policy:** not set, because it can only be tested on a real Netlify deploy with Supabase calls. A starting point to try later (in a test deploy only): `default-src 'self'; connect-src 'self' https://<project-ref>.supabase.co wss://<project-ref>.supabase.co; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`.
-- **Missing env screen:** a missing variable gives a blank page (the error is thrown while modules load, before the error screen exists). Showing a Hinglish message instead needs a change in `src/` (a later step).
+- ~~Missing env screen~~ done (P10A-fix1): `src/main.tsx` checks the two variables with `parseConfig` before it loads the app module, and shows `ConfigErrorScreen` (names only) when one is missing or not `https://`. Cost: the first load now fetches a 3.6 kB entry before the app chunks (one extra round trip; the app chunks then load in parallel).

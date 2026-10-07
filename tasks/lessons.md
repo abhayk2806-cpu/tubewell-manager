@@ -172,9 +172,14 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: a preview check proves the SPA shell and status codes only. Never report Netlify headers, caching or redirects as tested until a real Netlify deploy shows them.
 - Impact: low. Date: 2026-10-07.
 
-**A missing `VITE_*` variable gives a blank page, not the error screen**
-- Finding (Phase 10A): `parseConfig` throws while `src/lib/supabase.ts` loads, before React mounts the ErrorBoundary; a build without the variables shows a white page with the message in the console only.
-- Rule: when a deploy shows a blank page, open the browser console first and check the two Netlify variables, then redeploy (Vite reads them at build time). Variables already in the process environment override `.env`, so a dummy-value build proves exactly what lands in the bundle.
+**A module that throws while it loads cannot be caught by the importer**
+- Finding (Phase 10A): `parseConfig` throws while `src/lib/supabase.ts` loads, before React mounts the ErrorBoundary, so a build without the variables showed a white page. Static import order does not help: the bundler puts that module in a chunk the entry imports, and imported chunks run before the entry's own code.
+- Rule (P10A-fix1): check the config in `main.tsx` first and load the app with a dynamic `import()` only when it is fine. Variables already in the process environment override `.env`, so a dummy-value build proves exactly what lands in the bundle.
+- Impact: medium. Date: 2026-10-07.
+
+**Check a platform's documented setting before pinning a tool version**
+- Finding (P10A-fix1): Phase 10A pinned pnpm with `PNPM_VERSION` in `netlify.toml`, which Netlify does not document; its docs pick pnpm through the `packageManager` field in `package.json` (Corepack), else its default pnpm 10.x.
+- Rule: before pinning a runtime or tool version for a host, find the host's own documented mechanism and cite it; mark anything else "unverified" instead of shipping it. After the first real deploy, read the version in the build log.
 - Impact: medium. Date: 2026-10-07.
 
 **"Live" does not mean "tested"**

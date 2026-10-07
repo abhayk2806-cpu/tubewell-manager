@@ -36,7 +36,7 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
 | 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
 | PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), pending owner smoke test |
-| 10A | Deployment readiness (repo side): `netlify.toml` (pnpm, Node 24, pnpm 11.1.3, SPA rewrite, headers, caching), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps pending |
+| 10A | Deployment readiness (repo side): `netlify.toml` (pnpm build, Node 24, SPA rewrite, headers, caching), pnpm 11.1.3 via `packageManager` (fix 1), the config-error screen (fix 1), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps pending |
 | 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
 
 ## Next Action
@@ -507,8 +507,15 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Verified:** clean `node_modules` / `dist`, frozen install with pnpm 11.1.3, build with only dummy values (the real project ref is not in the bundle); `vite preview` served `/`, `/farmers`, `/months?month=2026-01` with 200 and the shell (the `netlify.toml` headers are NOT served by `vite preview`, so they are untested until a Netlify deploy); `netlify.toml` checked with a strict subset parser (no TOML tool is installed). Advisors (read-only): leaked-password protection off; `restore_backup` SECURITY DEFINER (known, intentional).
 - **Not visible to Claude:** the Netlify account and the Supabase Auth settings (sign-ups, Site URL); these are owner steps in DEPLOYMENT.md.
 
+### 2026-10-07 — P10A-fix1: documented pnpm pin, config-error screen
+- **Preconditions:** HEAD = origin = `be707df`; `main` = `46e3872`; spec md5 `47b5d688…`. Row counts: farmers 7, usage_entries 6, payments 10 at the start and at the end. Baseline 52 files / 3,819 tests.
+- **pnpm pin:** `PNPM_VERSION` (not a documented Netlify setting) removed from `netlify.toml`; `"packageManager": "pnpm@11.1.3"` added to `package.json` (one line; lockfile byte-identical). Clean frozen install ran with pnpm 11.1.3; Corepack resolves the field to 11.1.3. Netlify's own default would be pnpm 10.x.
+- **Config-error screen:** `main.tsx` checks the two variables (`configProblem` on `parseConfig`) and dynamically imports the app only when they are fine; otherwise a full-screen Hinglish message with the variable names, never values. Checked in real builds (missing key, `http://` URL) at 360 px: names only, nothing in the console.
+- **Bundle:** entry 235.01 kB → 3.64 kB; the app chunks (startApp, react-dom, client, router, Supabase) load in parallel after it. First load 467.55 kB / 139.24 kB gzip → 469.06 kB / 141.72 kB gzip, plus one extra round trip.
+- **Tests:** 53 files / 3,825 tests; gates green. No change in `src/lib/`, pages, hooks, router, configs or the lockfile.
+
 ---
 
 ## Known Local Issues
 
-- ~~`netlify.toml` builds with `npm run build` while the repo uses pnpm.~~ Fixed in Phase 10A (`pnpm run build`, Node 24, pnpm 11.1.3). `main` (v1) still has its old `netlify.toml` until the cutover.
+- ~~`netlify.toml` builds with `npm run build` while the repo uses pnpm.~~ Fixed in Phase 10A (`pnpm run build`, Node 24; pnpm 11.1.3 through `packageManager` since P10A-fix1). `main` (v1) still has its old `netlify.toml` until the cutover.

@@ -33,6 +33,11 @@ Never label one figure with the other's words, and never add them together.
 - While a screen's code loads: "Load ho raha hai..." (muted line).
 - When a screen's code cannot be downloaded: "Yeh screen load nahi ho payi." / "Internet check karo, ya app ka naya version aa gaya hai. Page dobara load karo." / button "Dobara try karo" (reloads the page).
 
+**Config-error screen (P10A-fix1, `src/configErrorCopy.ts`):** shown at start-up when a Supabase variable is missing or wrong; it names the variables, never their values.
+- "App shuru nahi ho paya." / "Supabase se judne ki setting adhoori ya galat hai."
+- "Yeh variable nahi mila:" / "Yeh variable galat hai (https:// se shuru hona chahiye):"
+- "Netlify mein Environment variables check karo, phir dobara deploy karo." / button "Dobara try karo".
+
 **Month status words:** "Settled", "Partial", "Unpaid".
 - A month with charge 0 and cash received > 0 shows the badge **"Sirf Payment"** (D3, 2026-10-05).
 - In a payment's allocation trail, an unapplied remainder is labelled **"Advance / Credit"** (D5).

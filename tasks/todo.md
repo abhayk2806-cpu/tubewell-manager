@@ -74,7 +74,9 @@
   - [ ] Owner: Netlify checklist (DEPLOYMENT.md section 2): env vars, branch deploys OFF, previews OFF, builds stopped until needed
   - [ ] Owner: Supabase checklist (section 3): sign-ups OFF, Site URL, leaked-password protection
   - [ ] Owner: choose a pre-cutover test option (section 5) or none
-  - [ ] Later (needs a `src/` change): a Hinglish screen for a missing env variable instead of a blank page; a tested Content-Security-Policy
+  - [x] Hinglish config-error screen instead of a blank page (P10A-fix1)
+  - [x] pnpm pinned through `packageManager` in `package.json` instead of the undocumented `PNPM_VERSION` (P10A-fix1)
+  - [ ] Later: a tested Content-Security-Policy (needs a real Netlify deploy)
 - [ ] **10** — Data wipe (on owner approval), cutover, Netlify re-enable, final docs ← **next**
 
 ## Parked — not in scope unless the owner asks
