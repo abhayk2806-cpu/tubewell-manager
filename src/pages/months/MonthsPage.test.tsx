@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -228,6 +228,71 @@ describe('MonthsPage deep link', () => {
     expect(screen.getByLabelText('Saal')).toHaveValue('all');
     expect(monthKeys()).toHaveLength(4);
     expect(screen.queryByRole('button', { name: 'Band karo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+// Polish PL1: a month deep link scrolls that card into view once the data is in; never moves focus.
+describe('MonthsPage deep link scroll', () => {
+  const original = {
+    scrollIntoView: Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView'),
+    matchMedia: Object.getOwnPropertyDescriptor(window, 'matchMedia'),
+  };
+  const scroll = vi.fn();
+
+  function restore(target: object, key: string, descriptor: PropertyDescriptor | undefined) {
+    if (descriptor) Object.defineProperty(target, key, descriptor);
+    else delete (target as Record<string, unknown>)[key];
+  }
+
+  beforeEach(() => {
+    scroll.mockReset();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, writable: true, value: scroll });
+  });
+
+  afterEach(() => {
+    restore(Element.prototype, 'scrollIntoView', original.scrollIntoView);
+    restore(window, 'matchMedia', original.matchMedia);
+  });
+
+  it('scrolls the linked month card into view once, after the data loads, without moving focus', async () => {
+    await renderReady('/months?month=2026-09');
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(scroll.mock.contexts[0]).toBe(card('2026-09'));
+    expect(card('2026-09')).toHaveAttribute('id', 'month-card-2026-09');
+    expect(document.activeElement).toBe(document.body);
+    // The breakdown stays open as before; closing and reopening it or changing the year never re-scrolls.
+    fireEvent.click(within(card('2026-09')).getByRole('button', { name: 'Band karo' }));
+    fireEvent.click(within(card('2026-09')).getByRole('button', { name: /Kisan-wise dekho/ }));
+    fireEvent.change(screen.getByLabelText('Saal'), { target: { value: 'all' } });
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['2026-07', '2026-13', 'kal', ''])('no scroll for a month that is missing or invalid (%s)', async (value) => {
+    await renderReady(`/months?month=${value}`);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('no scroll without ?month=', async () => {
+    await renderReady('/months');
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it('reduced motion: the jump has no smooth animation', async () => {
+    const matchMedia = vi.fn((query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' }));
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: matchMedia });
+    await renderReady('/months?month=2026-09');
+    expect(matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+  });
+
+  it('a browser without scrollIntoView still opens the month, with no error', async () => {
+    delete (Element.prototype as unknown as Record<string, unknown>).scrollIntoView;
+    await renderReady('/months?month=2026-09');
+    expect(within(card('2026-09')).getByRole('button', { name: 'Band karo' })).toHaveAttribute('aria-expanded', 'true');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

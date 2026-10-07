@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { MONEY_TONE, MONTH_STATUS_TONE, TONE, type Tone } from '@/components/tone';
 import { cn } from '@/lib/utils';
 import { MONTHS_COPY } from './copy';
+import { monthCardId } from './monthCardId';
 
 // Every figure below is an engine field (via buildMonthsScreen / monthsStrip), shown with
 // formatRupees. No arithmetic, no money sorting, no status of our own (L10, L11).
@@ -157,7 +158,7 @@ function Breakdown({ month }: { month: MonthsMonth }) {
 export function MonthCard({ month, open, onToggle }: { month: MonthsMonth; open: boolean; onToggle(): void }) {
   const panelId = `month-${month.monthKey}-farmers`;
   return (
-    <li className="rounded-lg border bg-card p-3 shadow-sm" data-testid={`month-${month.monthKey}`}>
+    <li id={monthCardId(month.monthKey)} className="rounded-lg border bg-card p-3 shadow-sm" data-testid={`month-${month.monthKey}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="font-medium">{M.label(month.monthKey)}</h3>
         <StatusBadge status={month.status} />

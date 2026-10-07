@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { buildMonthsScreen, deepLinkMonth, filterMonthsByYear, monthsStrip } from '@/lib/data';
 import { useFarmers } from '@/hooks/useFarmers';
@@ -7,6 +7,15 @@ import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/button';
 import { MONTHS_COPY, MONTHS_DATA_ERROR_TEXT } from './copy';
 import { Explanation, MonthCard, YearFilter, YearStrip } from './MonthsSections';
+import { monthCardId } from './monthCardId';
+
+/** Scrolls a deep-linked month card into view; no animation for reduced motion; safe where unsupported. */
+function scrollToMonth(monthKey: string): void {
+  const card = document.getElementById(monthCardId(monthKey));
+  if (card === null || typeof card.scrollIntoView !== 'function') return;
+  const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  card.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
 
 /**
  * Mahine (L11, D30): every month with usage or payments of active farmers, newest first, with a
@@ -31,6 +40,19 @@ export function MonthsPage() {
     () => buildMonthsScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all }),
     [farmers.all, usage.all, payments.all],
   );
+
+  // The month a valid `?month=` link points at, once the data is in (null otherwise).
+  const deepMonth =
+    status === 'ready' && result.ok && result.screen.hasFarmers
+      ? (deepLinkMonth(params.get('month'), result.screen.months.map((m) => m.monthKey))?.monthKey ?? null)
+      : null;
+  // Scroll that month's card into view ONCE, after it is on screen; focus is never moved (PL1).
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (deepMonth === null || scrolledFor.current === deepMonth) return;
+    scrolledFor.current = deepMonth;
+    scrollToMonth(deepMonth);
+  }, [deepMonth]);
 
   const retryLoad = () => {
     if (farmers.status === 'error') void farmers.reload();
