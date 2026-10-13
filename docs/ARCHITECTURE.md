@@ -21,8 +21,8 @@
 - React 19 + TypeScript + Vite + Tailwind 3 + shadcn/ui; UI in Hinglish.
 - Supabase: Postgres + Auth + RLS.
   - NEW project `tubewell-hisab`, ID `ciszgagzhfubuqhpmyeh`, region ap-south-1, org `digital-store`, Postgres 17.
-  - Schema applied on 2026-10-05; no data yet.
-- Netlify static hosting (site `tubewellhisab.netlify.app`, currently disabled by the owner). Build, headers, env vars and the owner's Netlify / Supabase checklists: [docs/DEPLOYMENT.md](DEPLOYMENT.md) (Phase 10A).
+  - Schema applied on 2026-10-05 (7 migrations). Since 10C (2026-10) it holds the owner's REAL data; in maintenance mode Claude never writes to it (`CLAUDE.md` → Maintenance mode).
+- Netlify static hosting: live app `https://tubewell-hisab-rebuild.netlify.app/`, a separate Netlify project built from `rebuild/fresh-system`, with builds stopped between deploys (the old v1 app stays at `tubewellhisab.netlify.app`). Build, headers, env vars, checklists and the deploy routine: [docs/DEPLOYMENT.md](DEPLOYMENT.md).
 - pnpm package manager. Repo: `abhayk2806-cpu/tubewell-manager`; rebuild branch `rebuild/fresh-system`.
 
 ## Layers (dependency direction: pages → hooks → data → engine)
@@ -186,7 +186,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - Public sign-ups must stay disabled in the Supabase dashboard (owner setting).
 - RLS is enabled on every table, and policies match only the owner's uid (D13, see Database schema).
 - The publishable key is public by design: it ships in the browser bundle. The service-role key never goes in `VITE_*` vars or in the repo.
-- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and go into the Netlify env in Phase 10 (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). `src/lib/supabase.ts` throws while its module loads on a missing or non-https value, so `main.tsx` checks first and loads the app only when the config is fine; otherwise `ConfigErrorScreen` shows the variable NAMES (never values) and the Netlify hint. The entry is a 3.6 kB chunk; the app chunks load in parallel after it (one extra round trip).
+- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and are set in the Netlify project's environment (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). `src/lib/supabase.ts` throws while its module loads on a missing or non-https value, so `main.tsx` checks first and loads the app only when the config is fine; otherwise `ConfigErrorScreen` shows the variable NAMES (never values) and the Netlify hint. The entry is a 3.6 kB chunk; the app chunks load in parallel after it (one extra round trip).
 
 ## Testing approach
 

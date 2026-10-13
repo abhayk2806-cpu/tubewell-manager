@@ -1,7 +1,7 @@
 # Tubewell Manager — Claude Instructions
 
 > Owner-only web app that replaces a paper notebook. It tracks tubewell water usage (time × rate) and farmer payments and credit.
-> **Status:** full rebuild in progress on branch `rebuild/fresh-system` (backed up on `origin`). Production (`main`) is the OLD v1 system, untouched until cutover.
+> **Status:** COMPLETE and in daily use; MAINTENANCE mode since 2026-10-13 (see "Maintenance mode" below). Live app: `https://tubewell-hisab-rebuild.netlify.app/`, built from `rebuild/fresh-system`. `main` is the OLD v1 system, untouched.
 > UI language: Hinglish. Single user (the owner).
 
 ---
@@ -17,6 +17,17 @@ At the start of EVERY session, in this order:
 2. Read `PROJECT_STATUS.md`: current phase, next action, open questions, owner actions.
 3. **Verify** its claims against `git log`, the code and the live DB (schema live since Phase 2A) before trusting them. Report any mismatch.
 4. Load other docs only on demand (see the doc map below). Scan `tasks/lessons.md` headings when the task touches that area.
+
+## Maintenance mode (since 2026-10-13)
+
+- **Complete and live.** All phases are built and owner-approved; the owner uses the app every day. Active development is over.
+- **Work starts only from the owner.** A problem he saw while using the app, or a change he asks for, relayed by his manager assistant as a prompt. No unrequested features, refactors or "improvements".
+- **Every bug:** reproduce it first; write a failing test that captures it (fictional data only); make the SMALLEST fix; then run the full gates (test, typecheck, lint with 0 warnings, build).
+- **Ledger rules** (`docs/LEDGER_AND_ALLOCATION.md`) change only on the owner's explicit decision, never as a "fix" of a number the owner did not question.
+- **The database is the owner's live data.** Never write to it, wipe it or restore it. Read-only SQL only when the prompt asks. Schema changes only through a new numbered migration, and only when the prompt says so.
+- **A fix is not live until the owner deploys it.** Netlify builds are stopped; a push builds nothing. Routine: `docs/DEPLOYMENT.md` → "Live setup and deploy routine".
+- **Keep current:** docs, tests, `tasks/lessons.md`, and the "Reported issues" list in `tasks/todo.md`.
+- **Push guard unchanged.** The push-to-`main` guard and every Deploy Safety rule below stay exactly as they are.
 
 ## Doc map (one owner per kind of information — link, never duplicate)
 
@@ -36,8 +47,8 @@ At the start of EVERY session, in this order:
 ## Deploy Safety (non-negotiable)
 
 **Branches**
-- All rebuild work happens on `rebuild/fresh-system`, which is backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push on 2026-10-05.
-- `main` is the old production system and stays untouched until the owner-approved cutover (Phase 10).
+- All work happens on `rebuild/fresh-system`, which is backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push on 2026-10-05.
+- `main` is the old v1 system (`46e3872`) and stays untouched. Any cutover to `main` is the owner's own decision, not scheduled.
 
 **Push Policy**
 - Pushing `rebuild/fresh-system` is part of the workflow, but **only** as an explicit final step written in the owner's prompt.
@@ -63,8 +74,9 @@ At the start of EVERY session, in this order:
 - The guard consumes the unlock when it allows the push, and deletes its marker after a successful push. No manual cleanup is needed.
 
 **Hosting**
-- The live site `tubewellhisab.netlify.app` (owner's NEW Netlify account) is **disabled** to save build credits.
-- Claude cannot see this Netlify account, so every Netlify change is a manual owner action.
+- Live app: `https://tubewell-hisab-rebuild.netlify.app/`, a separate Netlify project built from `rebuild/fresh-system`. Build status is **Stopped** to save credits, so a push does not go live by itself.
+- The old v1 app stays online and untouched at `tubewellhisab.netlify.app` (its own Netlify project, `main`, the old Supabase project).
+- Claude cannot see the Netlify account, so every Netlify change is a manual owner action. Details: `docs/DEPLOYMENT.md`.
 - The old site ID `cfff021f-…` is stale; ignore it.
 
 ## Non-Negotiable Rules (details in the linked files)
@@ -119,7 +131,7 @@ node .claude/hooks/main-push-guard.mjs selftest   # push-gate self-test (expects
 - **Generated files**: `src/components/ui/*` (shadcn), `pnpm-lock.yaml` (pnpm-managed), `dist/` (build output).
 - **`archive/`**: reference only. Move or add files there; don't edit history.
 
-Only the NEW Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`) may be changed, and only in the phase that calls for it.
+Only the NEW Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`) may be changed, and only when the prompt calls for it. It holds the owner's REAL data (see Maintenance mode).
 
 **Database access rule.**
 - Pass `project_id: ciszgagzhfubuqhpmyeh` explicitly on EVERY Supabase MCP call.

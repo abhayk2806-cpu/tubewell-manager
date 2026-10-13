@@ -198,8 +198,9 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Impact: medium. Date: 2026-10-05.
 
 **Netlify build credits make frequent pushes costly**
-- Rule: push only `rebuild/fresh-system`, once at the end of a completed task, via the prompt's push step. This rule was updated on 2026-10-05; it originally said "no pushes during the rebuild". Netlify stays disabled until Phase 10. When it is re-enabled, keep branch deploys and deploy previews OFF.
-- Impact: medium. Date: 2026-10-05.
+- Rule: push only `rebuild/fresh-system`, once at the end of a completed task, via the prompt's push step. This rule was updated on 2026-10-05; it originally said "no pushes during the rebuild".
+- Since 10D the live project keeps Build status = Stopped, so a push builds nothing and a fix is **not live until the owner deploys it** (Active → Trigger deploy → check → Stopped; [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) section 0). Every fix summary must say so. If builds are ever left Active, keep branch deploys and deploy previews OFF.
+- Impact: medium. Date: 2026-10-05, updated 2026-10-13.
 
 **Shell commands must not mention the push guard's marker filename**
 - Mistake: twice in Phase 0/1, a harmless read-only check (`git check-ignore`, a `node -e` link check) named the guard's marker file together with `echo`/`node`. The guard blocked it, failing closed.

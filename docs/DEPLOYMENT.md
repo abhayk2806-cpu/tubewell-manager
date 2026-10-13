@@ -1,8 +1,26 @@
-# Deployment — Tubewell Hisab (Phase 10A)
+# Deployment — Tubewell Hisab
 
-How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify account or the Supabase dashboard settings, so every step here is done **by hand by the owner**.
+How the rebuilt app runs on Netlify and how a fix goes live. Claude cannot see the Netlify account or the Supabase dashboard settings, so every step here is done **by hand by the owner**.
 - Dashboard menu names change from time to time. A step marked **(verify in the dashboard)** is the path as far as it is known on 2026-10-07; if the menu differs, look for the same setting name.
-- Production (`main`, old v1) is untouched by everything in this file. The cutover is a separate step (section 6).
+- `main` (old v1) and its Netlify project are untouched by everything in this file.
+
+## 0. Live setup and deploy routine (maintenance)
+
+**Live setup (since 10D, in daily use; maintenance mode since 2026-10-13)**
+- Live app: `https://tubewell-hisab-rebuild.netlify.app/`, a **separate** Netlify project built from branch `rebuild/fresh-system`: build `pnpm run build`, publish `dist`, the two `VITE_*` variables set in Netlify, no secret keys.
+- Database: Supabase project `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`), 7 migrations, RLS locked to the owner, sign-ups OFF. It holds the owner's REAL data.
+- Netlify **Build status = Stopped** (deliberately, to save build credits). A push to GitHub does **not** go live by itself.
+- The old v1 app stays online and untouched at `https://tubewellhisab.netlify.app/` (its own Netlify project, `main` = `46e3872`, the old Supabase project).
+
+**Deploying a fix (owner, after Claude has pushed it)**
+1. Netlify → the live project → Project configuration → Build & deploy → Continuous deployment → Build settings → Configure → Build status = **Active** **(verify in the dashboard)**.
+2. Deploys → Trigger deploy → Deploy project.
+3. Wait for "Published", then check the fix on the live URL (phone too) and run the short smoke test (section 4) for the screens the fix touches.
+4. Set Build status back to **Stopped**.
+
+**Rollback:** Deploys → open an older "Published" deploy → **Publish deploy**. Instant, no build, no credits. The database is not touched by a rollback.
+
+**If builds are ever left Active:** keep branch deploys and deploy previews OFF (section 2, steps 5–6), so only `rebuild/fresh-system` builds.
 
 ## 1. What the build needs
 
@@ -23,8 +41,10 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
 
 ## 2. Owner's Netlify checklist (in this order)
 
-1. **Project.** The existing project behind `tubewellhisab.netlify.app` (owner's NEW Netlify account) is disabled. Open it, or create one: Add new project → Import an existing project → GitHub → `abhayk2806-cpu/tubewell-manager` **(verify in the dashboard)**. If Netlify asks to start a build right away, cancel it until step 4 is done.
-2. **Production branch.** Project configuration → Build & deploy → Continuous deployment → Branches and deploy contexts → Production branch = `main` **(verify in the dashboard)**. Before the cutover `main` is still the old v1 code, so keep builds stopped (step 8) until you decide the test option in section 5.
+Done for the live project in 10D; kept as the reference for re-creating it.
+
+1. **Project.** A separate project for the rebuild (the live one is `tubewell-hisab-rebuild`): Add new project → Import an existing project → GitHub → `abhayk2806-cpu/tubewell-manager` **(verify in the dashboard)**. If Netlify asks to start a build right away, cancel it until step 4 is done. The old v1 project behind `tubewellhisab.netlify.app` is not touched.
+2. **Production branch.** Project configuration → Build & deploy → Continuous deployment → Branches and deploy contexts → Production branch = `rebuild/fresh-system` **(verify in the dashboard)**.
 3. **Build settings.** Same area → Build settings: leave Build command and Publish directory **empty** (or exactly `pnpm run build` / `dist`), so `netlify.toml` wins. Base directory empty.
 4. **Environment variables.** Project configuration → Environment variables → Add a variable **(verify in the dashboard)**. Scope: all scopes; Values: same value for all deploy contexts. Do **not** tick "Contains secret values": both values are public and appear in the built JavaScript, and Netlify's secret check would then stop the build.
 
@@ -47,8 +67,8 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
 
 ## 3. Owner's Supabase checklist (project `tubewell-hisab`, `ciszgagzhfubuqhpmyeh`)
 
-1. **Sign-ups OFF.** Authentication → Sign In / Providers → turn off "Allow new users to sign up" **(verify in the dashboard)**. Claude cannot read this setting; it is still an open owner action (PROJECT_STATUS, action 1).
-2. **Site URL.** Authentication → URL Configuration → Site URL = `https://tubewellhisab.netlify.app` (it replaces `http://localhost:3000`) **(verify in the dashboard)**. The app logs in with email and password only and sends no email links, so it needs no Redirect URLs. The Site URL is used by emails the dashboard sends (for example a password reset).
+1. **Sign-ups OFF.** Authentication → Sign In / Providers → turn off "Allow new users to sign up" **(verify in the dashboard)**. Claude cannot read this setting; the owner set it OFF (PROJECT_STATUS, action 1).
+2. **Site URL.** Authentication → URL Configuration → Site URL = the live app, `https://tubewell-hisab-rebuild.netlify.app` (it replaces `http://localhost:3000`; not `tubewellhisab.netlify.app`, which is the old v1 app) **(verify in the dashboard; Claude cannot see the current value)**. The app logs in with email and password only and sends no email links, so it needs no Redirect URLs. The Site URL is used by emails the dashboard sends (for example a password reset).
 3. **Leaked-password protection.** Authentication → Attack Protection (or Password security) → "Prevent use of leaked passwords" **(verify in the dashboard; it may need a paid plan)**. The security advisor reports it as off (WARN), as on 2026-10-07.
 4. **Keys.** Use only the publishable key in Netlify. If the secret key was ever pasted anywhere public, rotate it in Project Settings → API Keys **(verify in the dashboard)**.
 5. Known advisor WARN, intentional: `restore_backup` is a SECURITY DEFINER function callable by signed-in users; it checks the owner inside (Phase 8). No action.
@@ -63,25 +83,18 @@ How the owner puts the rebuilt app on Netlify. Claude cannot see the Netlify acc
 6. Wrong or missing variables show the Hinglish config message ("App shuru nahi ho paya." with the variable names), not a blank page.
 7. Optional: browser devtools → Network → the page response shows `X-Frame-Options: DENY`; an `/assets/…js` file shows `max-age=31536000, immutable`. (These headers are served only by Netlify, never by `pnpm run preview`.)
 
-## 5. Testing a real deploy BEFORE the cutover (options, owner decides)
+## 5. Where the app is hosted (decided in 10D)
 
-| Option | Pros | Cons | Build credits |
-|---|---|---|---|
-| A. Set the Netlify production branch to `rebuild/fresh-system` for the test, back to `main` at the cutover | Exactly the production setup, URL and headers | The public URL serves the new app (test data) before the cutover; must remember to switch back; any push to the branch builds while builds are active | One production build per deploy |
-| B. Allow a branch deploy for `rebuild/fresh-system` only ("Let me add individual branches") | Production URL untouched; real Netlify headers and rewrites | Goes against "branch deploys OFF" until switched off again; a separate URL `rebuild-fresh-system--<project>.netlify.app`; each push builds while active | One branch build per push (whether branch builds cost credits depends on the plan) |
-| C. A separate throw-away Netlify project linked to the repo, production branch `rebuild/fresh-system` | Real project untouched; deleted after the test | A second project to set up (env vars again); must be deleted afterwards | One production build per deploy, on the same account |
-| D. No pre-test: deploy at the cutover and smoke-test at once, with rollback (section 6) ready | No extra setup, fewest builds | The first real run is the live one | Only the cutover build |
+The four pre-test options listed in 10A (production branch switched for a test, a branch deploy, a separate project, no pre-test) are history. The owner chose a **separate Netlify project**, built from `rebuild/fresh-system` (section 0). Its production URL is the live app; the old v1 project was not changed. Uploading a locally built `dist` by drag-and-drop is still not an option: it skips `netlify.toml`, so deep URLs and headers would not work.
 
-Credit costs differ by Netlify plan: check Team → Billing / Usage before choosing **(verify in the dashboard)**. Uploading a locally built `dist` by drag-and-drop is not listed as an option: it skips `netlify.toml`, so deep URLs and headers would not work.
-
-## 6. Rollback and cutover
+## 6. Rollback
 
 - **Netlify rollback:** Deploys → open an earlier "Published" deploy → "Publish deploy" **(verify in the dashboard)**. Instant, no build.
-- **Code rollback:** `git revert <commit>` on the branch, push (owner-approved), then deploy again. Never force-push.
-- **Data:** a JSON backup from the Backup screen before any risky step; restore it with Merge or Replace.
-- **Cutover:** moving the rebuild onto `main` is NOT part of this step. It needs the owner's own decision and the exact approval phrase (the push guard); Claude never starts it.
+- **Code rollback:** `git revert <commit>` on the branch, push (only as the prompt's push step), then deploy with the routine in section 0. Never force-push.
+- **Data:** the owner takes a JSON backup from the Backup screen before any risky step; only the owner restores it (Merge or Replace). Claude never restores or wipes the live database.
+- **`main`:** untouched. A cutover of the repo to `main` is the owner's own decision and is not scheduled; Claude never starts it.
 
 ## 7. Not done yet
 
-- **Content-Security-Policy:** not set, because it can only be tested on a real Netlify deploy with Supabase calls. A starting point to try later (in a test deploy only): `default-src 'self'; connect-src 'self' https://<project-ref>.supabase.co wss://<project-ref>.supabase.co; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`.
+- **Content-Security-Policy:** not set, because it can only be tested on a real Netlify deploy with Supabase calls. A starting point to try later (only on the owner's request, in a deploy the owner checks at once, with the rollback in section 0 ready): `default-src 'self'; connect-src 'self' https://<project-ref>.supabase.co wss://<project-ref>.supabase.co; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`.
 - ~~Missing env screen~~ done (P10A-fix1): `src/main.tsx` checks the two variables with `parseConfig` before it loads the app module, and shows `ConfigErrorScreen` (names only) when one is missing or not `https://`. Cost: the first load now fetches a 3.6 kB entry before the app chunks (one extra round trip; the app chunks then load in parallel).

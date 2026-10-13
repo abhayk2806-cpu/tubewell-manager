@@ -2,7 +2,7 @@
 
 Owner-only web app for a family tubewell business in India. It records water usage (time × rate) and farmer payments, and derives each farmer's account: monthly charges, FIFO allocation of payments, outstanding dues and carried-forward credit. The UI is in Hinglish.
 
-> **Status:** full rebuild in progress on branch `rebuild/fresh-system` (backed up on `origin`). `main` is the old v1 system, untouched until cutover. See [PROJECT_STATUS.md](PROJECT_STATUS.md).
+> **Status:** complete and in daily use; maintenance mode since 2026-10-13 (work only on problems or changes the owner reports). The live app is built from branch `rebuild/fresh-system` (backed up on `origin`); `main` is the old v1 system, untouched. See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Stack
 
@@ -38,7 +38,8 @@ pnpm run build       # type-check + production build into dist/
 | [PROJECT_STATUS.md](PROJECT_STATUS.md) | Phase plan, decisions log, session log, owner actions, open questions |
 | [BUSINESS_KNOWLEDGE.md](BUSINESS_KNOWLEDGE.md) | Business, terminology, Hinglish labels |
 | [docs/LEDGER_AND_ALLOCATION.md](docs/LEDGER_AND_ALLOCATION.md) | **Authoritative** calculation spec with worked examples |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, data model, data-access and testing approach (draft) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, data model, data-access and testing approach |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Netlify / Supabase setup, live setup and the deploy routine |
 | [tasks/todo.md](tasks/todo.md) | Phase checklist and parked ideas |
 | [tasks/lessons.md](tasks/lessons.md) | Lessons learned |
 | `.claude/rules/` | Path-scoped rules for Claude Code |

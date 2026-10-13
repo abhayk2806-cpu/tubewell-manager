@@ -1,8 +1,8 @@
 # Tubewell Manager — Project Status
 
-> **Last Updated: 2026-10-07**
-> **Current phase:** 10B done (test data wiped on owner approval; the database is EMPTY, 0 / 0 / 0); next 10C (owner enters real data locally and compares with his notebook), 10D (owner's Netlify test deploy), then the cutover
-> **Branch:** `rebuild/fresh-system`, backed up on `origin`. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 production, untouched at `46e3872`.
+> **Last Updated: 2026-10-13**
+> **Current phase:** COMPLETE — in daily use; MAINTENANCE mode since 2026-10-13. Work starts only from a problem or change the owner reports (see [Maintenance](#maintenance)).
+> **Branch:** `rebuild/fresh-system`, backed up on `origin`; the live app is built from it. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 system, untouched at `46e3872`.
 
 **Update policy.** Update this file:
 - after each phase or task;
@@ -21,41 +21,61 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 |---|---|---|
 | 0 | System understanding, rebuild branch, push gate | ✅ Done (2026-10-04, closed 2026-10-05) |
 | 1 | Documentation foundation | ✅ Done (2026-10-05, including the closure with decisions D1–D8 and the first branch push) |
-| 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), pending owner review |
-| 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), pending owner review |
-| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ✅ Done (2026-10-06), pending owner review |
+| 2A | Database schema in the NEW project: migrations 001–003 (tables, constraints, audit triggers, RLS), SQL tests, advisors | ✅ Done (2026-10-05), owner approved |
+| 2B | App foundation: v1 code removed, deps + Vitest, `.env` + config + typed client, single-user auth, routing, layout shell, migration 004 (RLS locked to the owner) | ✅ Done (2026-10-05), owner approved |
+| 3 | Ledger engine in `src/lib/ledger/` with tests (fixtures E1–E24) — **before any UI** | ✅ Done (2026-10-06), owner approved |
 | 3B | Repo sync check + docs fixes (spec E9/E19 rows, D19→D20 relabel) | ✅ Done (2026-10-06) |
-| 4A | Data layer `src/lib/data/` + Farmers screen (Kisan) + migration 005 (farmer input checks) | ✅ Done (2026-10-06), pending owner review |
-| 4B | Usage entry (Pani Entry) + Phase 4A carry-forwards (D23) + 3 additive engine helpers | ✅ Done (2026-10-06), pending owner review |
-| 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), pending owner review |
-| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), pending owner review |
-| 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), pending owner review |
-| 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), pending owner review |
-| 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), pending owner review |
-| 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), pending owner review |
-| PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), pending owner review |
+| 4A | Data layer `src/lib/data/` + Farmers screen (Kisan) + migration 005 (farmer input checks) | ✅ Done (2026-10-06), owner approved |
+| 4B | Usage entry (Pani Entry) + Phase 4A carry-forwards (D23) + 3 additive engine helpers | ✅ Done (2026-10-06), owner approved |
+| 5 | Payments: live FIFO preview, duplicate warning, edit / soft-delete / restore (+ migration 006, D25) | ✅ Done (2026-10-06), owner approved |
+| 6 | Farmer profile (summary, month table, trail, ledger with running balance) | ✅ Done (2026-10-06), owner approved |
+| 6C | Semantic colours for the whole app (tokens, tone module, rules for future screens; D28) | ✅ Done (2026-10-06), owner approved |
+| 7A | Dashboard at `/` (period views, tiles, summary, month chart, farmers by baaki, recent activity, Band note; D29) + C-2 fresh dialog moment | ✅ Done (2026-10-06), owner approved |
+| 7B | Months screen at `/months` (year filter, strip, farmer-wise breakdown, deep link; D30) + Dashboard moment refresh | ✅ Done (2026-10-06), owner approved |
+| 8 | Backup / restore: JSON backup, CSV exports, Merge / Replace restore via migration 007, preview, verification, reminder (D31) | ✅ Done (2026-10-06), owner approved |
+| PR1 | Audit gap fixes: balances in Kisan and Pani, trails in the Paisa list, picker search, "Pura ₹X bharo", Band karo in the delete dialog, Pani time and Chalu count (D32) | ✅ Done (2026-10-06), owner approved |
 | 9 | Verification: independent oracle, seeded scenarios, edge-case matrix, scale / timezone / backup round trip, live read-only cross-check | ✅ Done (2026-10-07), 0 mismatches |
-| PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), pending owner smoke test |
-| 10A | Deployment readiness (repo side): `netlify.toml` (pnpm build, Node 24, SPA rewrite, headers, caching), pnpm 11.1.3 via `packageManager` (fix 1), the config-error screen (fix 1), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps pending |
-| 10B | Test-data wipe in the NEW project (owner approval and JSON backup on 2026-10-07): one self-asserting transaction, database now empty; schema and Auth untouched | ✅ Done (2026-10-07) |
-| 10C | Owner enters real data locally (`pnpm run dev`) and compares the figures with his notebook | ⬜ Next (owner) |
-| 10D | Netlify test deploy by the owner ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) section 5) | ⬜ Owner |
-| 10 | Data wipe on owner approval (test rows in the NEW project only; D8), cutover to `main`, Netlify re-enable, final docs | ⬜ Not started |
+| PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), owner approved |
+| 10A | Deployment readiness (repo side): `netlify.toml` (pnpm build, Node 24, SPA rewrite, headers, caching), pnpm 11.1.3 via `packageManager` (fix 1), the config-error screen (fix 1), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps done in 10D |
+| 10B | Test-data wipe in the NEW project (owner approval and JSON backup on 2026-10-07): one self-asserting transaction, database emptied (real data entered in 10C); schema and Auth untouched | ✅ Done (2026-10-07) |
+| 10C | Owner enters real data and compares the figures with his notebook | ✅ Done (owner, before 2026-10-13) |
+| 10D | Real Netlify deploy by the owner: separate project `tubewell-hisab-rebuild`, smoke test passed (login, deep-link refresh, logout guard on a protected route, phone) | ✅ Done (owner, before 2026-10-13) |
+| 10 | Wipe (done in 10B), live hosting (done in 10D, separate Netlify project), final docs (done in PMAINT1). A repo cutover to `main` is the owner's decision, not scheduled | ✅ Done (2026-10-13) |
+| PMAINT1 | Status change: project COMPLETE, workflow moves to MAINTENANCE (docs only) | ✅ Done (2026-10-13) |
 
 ## Next Action
 
-1. Owner reviews Phase 2B (if not done yet). Run the app locally (`pnpm run dev`), log in, check the 6 tabs, log out, and confirm that a refresh keeps the session. Also review decisions D13–D16 below.
-2. Owner reviews Phase 3: decisions D18/D20 and the Phase 3 notes in the 2026-10-06 session entry.
-3. Owner smoke-tests Phase 6: open a farmer from the Kisan list (`pnpm run dev`). See the 2026-10-06 Phase 6 session entry.
-4. Owner checks the Phase 6C colours by eye (Kisan, Pani, Paisa with preview, Kisan ka Hisaab) and confirms or revisits D28.
-5. Owner smoke-tests the Dashboard (Phase 7A) with the worked numbers and confirms or revisits D29. See the 2026-10-06 Phase 7A session entry.
-6. Owner smoke-tests the Months screen (Phase 7B) with the worked numbers and confirms or revisits D30.
-7. Owner smoke-tests Backup / restore (Phase 8) with test data and confirms or revisits D31. See the 2026-10-06 Phase 8 session entry.
-8. Owner smoke-tests the PR1 audit gap fixes (Kisan, Pani, Paisa, Dashboard, profile) with test data.
-9. Owner smoke-tests PL1: tabs and a refresh on a deep URL, the Dashboard Mahina link to `/months?month=`, and airplane mode then an unvisited tab (the "Dobara try karo" message). See the 2026-10-07 PL1 session entry.
-10. Owner follows [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Netlify checklist (section 2), Supabase checklist (section 3), and picks a pre-cutover test option (section 5) or none.
-11. **10C:** the owner enters his real data locally and compares every figure with his notebook. **10D:** the owner's Netlify test deploy. Then the cutover (owner decision and phrase only).
-12. ~~Phase 10B: data wipe~~ done 2026-10-07. **Cutover, Netlify re-enable** remain. Prerequisites are in [tasks/todo.md](tasks/todo.md). The prompt will be written by the owner's assistant.
+None planned. The project is in maintenance mode: the next step is whatever the owner reports (see [Maintenance](#maintenance)).
+
+## Maintenance
+
+Since 2026-10-13 the owner uses the app every day. Active development is over.
+
+**How a problem is handled**
+1. The owner reports what he saw (or asks for a change); his manager assistant relays it as a prompt. Nothing starts without such a prompt.
+2. Claude logs it in [tasks/todo.md](tasks/todo.md) → Maintenance → Reported issues.
+3. Bug: reproduce it, write a failing test that captures it (fictional data only), make the smallest fix, run the full gates (test, typecheck, lint with 0 warnings, build), commit, push `rebuild/fresh-system` (the prompt's push step).
+4. The owner deploys it with the stopped-builds routine below; the fix is not live before that.
+5. Ledger rules change only on the owner's explicit decision. Claude never writes to, wipes or restores the live database; schema changes only by a new numbered migration when the prompt says so. Rules: `CLAUDE.md` → Maintenance mode.
+
+**Live setup**
+- App: `https://tubewell-hisab-rebuild.netlify.app/`, a separate Netlify project built from `rebuild/fresh-system` (build `pnpm run build`, publish `dist`, the two `VITE_*` variables; no secret keys).
+- Database: Supabase `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`), 7 migrations, RLS locked to the owner, sign-ups OFF. It holds the owner's REAL data: no names, amounts, row counts or backup content ever go into this public repo.
+- The old v1 app stays online and untouched at `https://tubewellhisab.netlify.app/` (its own Netlify project, `main` = `46e3872`, the old Supabase project).
+- Last verified code: `c3e08a5` (53 test files / 3,825 tests, tsc 0, eslint 0 warnings, build OK).
+
+**Deploy routine** (Netlify Build status is STOPPED to save credits, so a push does not go live by itself)
+1. After the fix is pushed, the owner sets Build status to Active.
+2. Deploys → Trigger deploy.
+3. The owner checks the fix on the live URL.
+4. Build status back to Stopped.
+- Rollback: Deploys → an older deploy → Publish deploy. Details: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) section 0.
+
+**Open / optional items** (tracked in [tasks/todo.md](tasks/todo.md) → Maintenance)
+- Leaked-password protection in Supabase (may need a paid plan).
+- Re-check the `unused_index` performance advisor after real use.
+- If Netlify builds are ever turned Active again: branch deploys and deploy previews must be OFF.
+- The first real payment is the first real FIFO check against the notebook (Phase 9 tests already cover FIFO).
 
 ---
 
@@ -63,15 +83,16 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 
 | # | When | Action | Status |
 |---|---|---|---|
-| 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | **Auth user: done.** 1 confirmed user, verified by count on 2026-10-05. **Sign-ups disabled: owner to confirm.** Claude may not read Auth settings. |
+| 1 | Before Phase 2B | In NEW Supabase project `tubewell-hisab`: add your email + password under Auth → Users, and **disable public sign-ups** | **Done.** Auth user verified by count on 2026-10-05; sign-ups OFF (owner, recorded 2026-10-13). Claude may not read Auth settings. |
 | 1b | Optional | Turn on leaked-password protection (Auth → Password security), if the plan offers it. The security advisor reports it as WARN since the Auth user exists. | Optional |
-| 2 | Phase 10 | In the NEW Netlify account: set `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (D14), re-enable the site with **branch deploys OFF and deploy previews OFF**. Exact steps: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) sections 2–3 | Pending |
-| 3 | After cutover | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
+| 2 | Phase 10 | Netlify: a separate project for the rebuild with `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (D14), builds Stopped between deploys. Steps: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) sections 0, 2–3 | **Done** (10D) |
+| 2b | Each fix | Deploy it with the stopped-builds routine ([Maintenance](#maintenance)) | Ongoing |
+| 3 | Owner's decision, not scheduled | Delete the OLD Supabase project `tubewell-manager` (`vsgptyuvnistwjjmrfby`) in the dashboard | Pending |
 | 4 | Optional | GitHub branch protection on `main` (extra layer on top of the push gate) | Optional |
 
 ## Open Questions (owner)
 
-None blocking. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
+None. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
 
 Phase 2A and 2B raised notes for the owner's review, listed in their 2026-10-05 session entries. None of them blocks Phase 3.
 
@@ -86,7 +107,9 @@ Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry
 | Calculation drift between screens | Medium | One engine, no page formulas, fixture tests E1–E24, Phase 9 verification |
 | Timezone month errors | Medium | One IST function; E20 boundary fixtures |
 | Silent row truncation (Supabase 1,000-row default) | Medium | Paginate every read in the data layer; Phase 9 >1,000-row test |
-| Frequent pushes burn Netlify credits | Medium | Netlify disabled until Phase 10; only `rebuild/fresh-system` is pushed, once per completed task; branch deploys and previews OFF when the site is re-enabled |
+| Frequent pushes burn Netlify credits | Low | Build status Stopped; the owner deploys by hand (Maintenance routine); branch deploys and previews OFF if builds are ever Active |
+| A pushed fix is assumed live but was never deployed | Medium | Every fix summary says "not live until the owner deploys"; deploy routine in [Maintenance](#maintenance) |
+| A maintenance step writes to or wipes the owner's REAL data | Low | `CLAUDE.md` → Maintenance mode: no writes, wipes or restores by Claude; read-only SQL only on request |
 | A pushed commit leaks a secret or real farmer data (the repo is PUBLIC) | Low | Secrets scan before every push; fictional data only in tests; public-repo rule in `CLAUDE.md` |
 | A Supabase call hits the wrong project | Low | Always pass `project_id ciszgagzhfubuqhpmyeh`; never the old project or StreakForge (`CLAUDE.md`) |
 | Old Supabase project auto-deleted after 90 days paused | Low | Only a fallback; no migration planned |
@@ -125,6 +148,7 @@ Transcribed into [docs/LEDGER_AND_ALLOCATION.md](docs/LEDGER_AND_ALLOCATION.md) 
 
 ### 2026-10-05 — Netlify facts
 The live site is `tubewellhisab.netlify.app` in the owner's NEW Netlify account. It is deliberately disabled. The old site ID `cfff021f-…` is stale. When the site is re-enabled in Phase 10: branch deploys OFF, previews OFF.
+- **Superseded (2026-10-13):** the rebuild runs in a separate Netlify project, `tubewell-hisab-rebuild.netlify.app`; `tubewellhisab.netlify.app` serves the old v1 app, online and untouched. See [Maintenance](#maintenance).
 
 ### 2026-10-05 — v1 docs archived
 Archived to `archive/v1-2026-10/`. The v1 `CLAUDE.md` was renamed `CLAUDE.v1.md` so Claude Code never auto-loads it.
@@ -525,8 +549,18 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Post-checks:** 0 / 0 / 0; migrations 7, policies 9, RLS on, `auth.users` 1, three audit triggers enabled, `restore_backup` present. Advisors unchanged: security WARN `authenticated_security_definer_function_executable` (restore_backup, intentional) and `auth_leaked_password_protection` (optional); performance INFO `unused_index` ×3 (re-check after real data).
 - **The app still never hard-deletes** (soft delete only); this was the one planned hard delete (D8). No code or schema change.
 
+### 2026-10-07 to 2026-10-13 — 10C and 10D (owner)
+- **10C:** the owner entered his real data and compared the figures with his notebook. No real data is recorded in this repo.
+- **10D:** the owner deployed to a separate Netlify project (`tubewell-hisab-rebuild.netlify.app`, built from `rebuild/fresh-system`) and the smoke test passed: login, deep-link refresh, logout guard on a protected route, phone. Build status is set to Stopped.
+- No code, schema or `main` change.
+
+### 2026-10-13 — PMAINT1: project COMPLETE, maintenance mode
+- **Status:** all phases built and owner-approved; the owner uses the app daily. The workflow moves from active development to MAINTENANCE.
+- **Docs only:** this file, [tasks/todo.md](tasks/todo.md) (Maintenance section, Reported issues list), `CLAUDE.md` (Maintenance mode section, status and hosting lines), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (section 0, live setup and deploy routine; sections 2, 3, 5, 6 updated), `README.md`, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (hosting and data lines), `tasks/lessons.md` (Netlify lesson). No code, config, schema or database change; no SQL.
+- **Preconditions:** tip `c3e08a5` = `origin/rebuild/fresh-system`, tree clean; `main` = `46e3872`.
+
 ---
 
 ## Known Local Issues
 
-- ~~`netlify.toml` builds with `npm run build` while the repo uses pnpm.~~ Fixed in Phase 10A (`pnpm run build`, Node 24; pnpm 11.1.3 through `packageManager` since P10A-fix1). `main` (v1) still has its old `netlify.toml` until the cutover.
+- ~~`netlify.toml` builds with `npm run build` while the repo uses pnpm.~~ Fixed in Phase 10A (`pnpm run build`, Node 24; pnpm 11.1.3 through `packageManager` since P10A-fix1). `main` (v1) keeps its old `netlify.toml` (untouched).

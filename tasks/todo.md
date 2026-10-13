@@ -1,6 +1,7 @@
 # Tubewell Manager — Checklist
 
-> **Last Updated: 2026-10-06**
+> **Last Updated: 2026-10-13**
+> **Status:** COMPLETE, in daily use; MAINTENANCE mode since 2026-10-13. The unticked owner review items below are historical: all phases were reviewed and approved by the owner.
 > Mirrors the phase table in [PROJECT_STATUS.md](../PROJECT_STATUS.md). Details, decisions and owner actions live there, not here.
 
 ## Phases
@@ -71,16 +72,38 @@
   - [x] `/months?month=YYYY-MM` scrolls that month into view once (reduced motion, no focus move, invalid month ignored)
   - [ ] Owner: smoke-test tabs, refresh on a deep URL, the Dashboard Mahina link, airplane mode → an unvisited tab
 - [x] **10A** — Deployment readiness, repo side (done 2026-10-07): `netlify.toml`, `.env.example`, [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)
-  - [ ] Owner: Netlify checklist (DEPLOYMENT.md section 2): env vars, branch deploys OFF, previews OFF, builds stopped until needed
-  - [ ] Owner: Supabase checklist (section 3): sign-ups OFF, Site URL, leaked-password protection
-  - [ ] Owner: choose a pre-cutover test option (section 5) or none
+  - [x] Owner: Netlify checklist (DEPLOYMENT.md section 2): env vars set, builds Stopped (done in 10D)
+  - [x] Owner: Supabase checklist (section 3): sign-ups OFF (leaked-password protection moved to Maintenance → optional items)
+  - [x] Owner: hosting option chosen: a separate Netlify project built from `rebuild/fresh-system` (10D)
   - [x] Hinglish config-error screen instead of a blank page (P10A-fix1)
   - [x] pnpm pinned through `packageManager` in `package.json` instead of the undocumented `PNPM_VERSION` (P10A-fix1)
   - [ ] Later: a tested Content-Security-Policy (needs a real Netlify deploy)
-- [x] **10B** — Test-data wipe (done 2026-10-07, owner approval and JSON backup): 7 / 6 / 10 rows removed in one self-asserting transaction; database empty; schema, RLS, triggers and Auth untouched
-- [ ] **10C** — Owner enters real data locally (`pnpm run dev`) and compares every figure with his notebook ← **next**
-- [ ] **10D** — Owner's Netlify test deploy ([docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) sections 2–5), then the smoke test
-- [ ] **10** — Cutover (owner decision and phrase only), Netlify re-enable, final docs
+- [x] **10B** — Test-data wipe (done 2026-10-07, owner approval and JSON backup): 7 / 6 / 10 rows removed in one self-asserting transaction; database emptied before 10C; schema, RLS, triggers and Auth untouched
+- [x] **10C** — Owner entered real data and compared every figure with his notebook (owner, before 2026-10-13)
+- [x] **10D** — Owner's real Netlify deploy (separate project `tubewell-hisab-rebuild`, built from `rebuild/fresh-system`, builds then Stopped) and smoke test passed: login, deep-link refresh, logout guard on a protected route, phone
+- [x] **PMAINT1** — Status change to maintenance mode, docs only (2026-10-13)
+- [ ] **10** — Repo cutover to `main`: owner's decision, not scheduled. (Netlify hosting done in 10D; final docs done in PMAINT1.)
+
+## Maintenance
+
+Work starts only from a problem or change the owner reports (rules: `CLAUDE.md` → Maintenance mode; deploy routine: [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) section 0). A fix is not live until the owner deploys it.
+
+### Reported issues
+
+Format: `ID | date | what the owner saw | status | fix commit` (no real names or amounts; the repo is public).
+
+| ID | Date | What the owner saw | Status | Fix commit |
+|---|---|---|---|---|
+
+_(none yet)_
+
+### Open / optional items
+
+- [ ] Leaked-password protection in Supabase (Auth → Attack Protection; may need a paid plan)
+- [ ] Re-check the `unused_index` performance advisor after real use
+- [ ] If Netlify builds are ever turned Active again: branch deploys and deploy previews OFF
+- [ ] First real payment = first real FIFO check against the notebook (Phase 9 tests already cover FIFO)
+- [ ] Content-Security-Policy (only on the owner's request; see DEPLOYMENT.md section 7)
 
 ## Parked — not in scope unless the owner asks
 
