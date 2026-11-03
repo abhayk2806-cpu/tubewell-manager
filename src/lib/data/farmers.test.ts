@@ -49,21 +49,21 @@ beforeEach(() => {
 });
 
 describe('listFarmers', () => {
-  it('reads every page in id order until an empty page', async () => {
+  it('reads every row in id order: the first page with an exact count, the rest by range', async () => {
     const page1 = Array.from({ length: 1000 }, (_, i) => farmerRow({ id: `f-${String(i).padStart(4, '0')}`, name: `Kisan ${i}` }));
     const page2 = [farmerRow({ id: 'f-9999', name: 'Last' })];
-    const [q1, q2, q3] = queue({ data: page1, error: null }, { data: page2, error: null }, { data: [], error: null });
+    const [q1, q2] = queue({ data: page1, error: null, count: 1001 }, { data: page2, error: null });
     const rows = await listFarmers();
     expect(rows).toHaveLength(1001);
     expect(supabaseMock.from).toHaveBeenCalledWith('farmers');
-    expect(methods(q1)).toEqual([['select', '*'], ['order', 'id'], ['range', 0, 999]]);
-    expect(methods(q2)).toEqual([['select', '*'], ['order', 'id'], ['range', 1000, 1999]]);
-    expect(methods(q3)).toEqual([['select', '*'], ['order', 'id'], ['range', 1001, 2000]]);
+    expect(methods(q1)).toEqual([['select', '*', { count: 'exact' }], ['order', 'id'], ['range', 0, 999]]);
+    expect(methods(q2)).toEqual([['select', '*'], ['order', 'id'], ['range', 1000, 1000]]);
   });
 
-  it('returns rows unchanged (field names as in the database)', async () => {
-    queue({ data: [ramu], error: null }, { data: [], error: null });
+  it('returns rows unchanged (field names as in the database) in ONE request', async () => {
+    queue({ data: [ramu], error: null, count: 1 });
     expect(await listFarmers()).toEqual([ramu]);
+    expect(supabaseMock.from).toHaveBeenCalledTimes(1);
   });
 
   it('maps an error to a DataError', async () => {

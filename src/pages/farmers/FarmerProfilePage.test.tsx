@@ -269,7 +269,7 @@ describe('FarmerProfilePage shortcuts', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Payment save ho gaya.');
   });
 
-  it('saved but the refresh failed: figures stay, one line with retry', async () => {
+  it('saved but the refresh failed: figures include the saved entry, one line with retry', async () => {
     await renderReady();
     usageApi.createUsage.mockResolvedValue(usageRow({ id: 'u2', farmer_id: 'r', used_at: '2026-10-06T08:35:00+00:00', hours: 1, minutes: 0 }));
     usageApi.listUsage.mockRejectedValueOnce(new DataError('network', null, 'offline'));
@@ -278,7 +278,8 @@ describe('FarmerProfilePage shortcuts', () => {
     fireEvent.change(within(dialog).getByLabelText('Ghante'), { target: { value: '1' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Save ho gaya, par hisaab refresh nahi ho paya.'));
-    expect(value('total-charges')).toBe(`${R}358.33`);
+    // The entry the server returned is shown at once (FIX-1): 1 hour at Rs 100 more.
+    expect(value('total-charges')).toBe(`${R}458.33`);
   });
 
   it.each(['Pani add', 'Paisa add'])('"%s" takes the IST moment of opening, not of page load (C-2)', async (button) => {

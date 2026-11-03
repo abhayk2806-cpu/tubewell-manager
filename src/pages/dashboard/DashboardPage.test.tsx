@@ -300,7 +300,7 @@ describe('DashboardPage states', () => {
     await screen.findByRole('heading', { level: 2, name: 'Hisaab' });
   });
 
-  it('saved but the refresh failed: figures stay, one line with retry', async () => {
+  it('saved but the refresh failed: figures include the saved entry, one line with retry', async () => {
     await renderReady();
     usageApi.createUsage.mockResolvedValue(usageRow({ id: 'u9', farmer_id: 'a', used_at: '2026-10-06T08:35:00+00:00', hours: 1, minutes: 0 }));
     usageApi.listUsage.mockRejectedValueOnce(new DataError('network', null, 'offline'));
@@ -309,7 +309,8 @@ describe('DashboardPage states', () => {
     fireEvent.change(within(dialog).getByLabelText('Ghante'), { target: { value: '1' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Save ho gaya, par dashboard refresh nahi ho paya.'));
-    expect(value('dash-charges')).toBe(`${R}558.33`);
+    // The entry the server returned is shown at once (FIX-1): 1 hour at Rs 100 more.
+    expect(value('dash-charges')).toBe(`${R}658.33`);
   });
 });
 

@@ -3,7 +3,7 @@
 // with a mocked Supabase client. Nothing touches a real database.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// An in-memory store behind a range-aware fake of supabase-js (select * order id range).
+// An in-memory store behind a range-aware fake of supabase-js (select * [count exact] order id range).
 const db = vi.hoisted(() => ({
   tables: { farmers: [] as Record<string, unknown>[], usage_entries: [] as Record<string, unknown>[], payments: [] as Record<string, unknown>[] },
   rangeCalls: { farmers: 0, usage_entries: 0, payments: 0 } as Record<string, number>,
@@ -11,13 +11,17 @@ const db = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/supabase', () => {
   const from = (table: 'farmers' | 'usage_entries' | 'payments') => {
+    let withCount = false;
     const builder = {
-      select: () => builder,
+      select: (_columns: string, options?: { count?: string }) => {
+        withCount = options?.count === 'exact';
+        return builder;
+      },
       order: () => builder,
       range: (lo: number, hi: number) => {
         db.rangeCalls[table] = (db.rangeCalls[table] ?? 0) + 1;
         const rows = [...db.tables[table]].sort((a, b) => (String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0));
-        return Promise.resolve({ data: rows.slice(lo, hi + 1), error: null, status: 200 });
+        return Promise.resolve({ data: rows.slice(lo, hi + 1), error: null, status: 200, count: withCount ? rows.length : null });
       },
     };
     return builder;
@@ -182,9 +186,10 @@ describe('scale: 30 farmers, 3,000 usage rows, 1,500 payments through the paged 
     await expectFiguresEqualOracle({ farmers, usage, payments }, 'scale');
     const ms = performance.now() - t0;
     console.info(`[phase9] scale: 30 farmers, 3000 usage, 1500 payments, reads + screens + oracle in ${Math.round(ms)} ms`);
-    // 3,000 rows = 3 full pages + an empty page; 1,500 = 2 pages + an empty page (twice: once per read).
-    expect(db.rangeCalls.usage_entries).toBe(4);
-    expect(db.rangeCalls.payments).toBe(3);
+    // 3,000 rows = the counted first page + 2 parallel pages; 1,500 = the counted first page + 1 (FIX-1).
+    expect(db.rangeCalls.usage_entries).toBe(3);
+    expect(db.rangeCalls.payments).toBe(2);
+    expect(db.rangeCalls.farmers).toBe(1);
     expect(ms).toBeLessThan(20_000);
   });
 });

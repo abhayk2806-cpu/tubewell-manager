@@ -196,7 +196,7 @@ describe('PaymentsPage list', () => {
     expect(paymentApi.restorePayment).toHaveBeenCalledWith('pe');
   });
 
-  it('saved but the reload failed: the list stays with a retry line', async () => {
+  it('saved but the reload failed: the restored payment shows, with a retry line', async () => {
     await renderReady();
     paymentApi.restorePayment.mockResolvedValue({ ...pe, deleted_at: null });
     paymentApi.listPayments.mockRejectedValueOnce(new DataError('network', null, 'offline'));
@@ -204,7 +204,8 @@ describe('PaymentsPage list', () => {
     fireEvent.click(row('Shyam Test').getByRole('button', { name: 'Wapas lao' }));
     const status = screen.getByRole('status');
     await waitFor(() => expect(status).toHaveTextContent('Save ho gaya, par list refresh nahi ho payi.'));
-    expect(items()).toHaveLength(1);
+    // The row the server returned is shown at once (FIX-1): it left Deleted.
+    expect(screen.getByRole('button', { name: 'Deleted (0)' })).toBeInTheDocument();
   });
 });
 

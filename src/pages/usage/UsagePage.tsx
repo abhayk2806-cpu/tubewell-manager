@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { buildFarmerBalances, currentIstMoment, filterUsage, listUsageMonths, sortFarmersByName, usageAmountPaise } from '@/lib/data';
+import { currentIstMoment, filterUsage, listUsageMonths, sortFarmersByName, usageAmountPaise } from '@/lib/data';
 import type { FarmerRow, IstMoment, UsageRow } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage, type UsageMutationResult } from '@/hooks/useUsage';
@@ -39,6 +40,7 @@ export function UsagePage() {
   const farmers = useFarmers();
   // Payments only feed the current Baaki / Advance shown for a farmer (D32); the list never waits for them.
   const payments = usePayments();
+  const derive = useDerive();
   const [now] = useState(currentIstMoment);
   const [segment, setSegment] = useState<UsageSegment>('live');
   const [farmerFilter, setFarmerFilter] = useState<string>(ALL);
@@ -61,9 +63,9 @@ export function UsagePage() {
   const balances = useMemo(
     () =>
       payments.status === 'ready' && usage.status === 'ready'
-        ? buildFarmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
+        ? derive.farmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
         : undefined,
-    [farmers.all, usage.status, usage.all, payments.status, payments.all],
+    [derive, farmers.all, usage.status, usage.all, payments.status, payments.all],
   );
 
   const farmersById = useMemo(() => new Map(farmers.all.map((f) => [f.id, f])), [farmers.all]);

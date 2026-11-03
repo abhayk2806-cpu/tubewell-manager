@@ -39,21 +39,20 @@ beforeEach(() => {
 });
 
 describe('listPayments', () => {
-  it('reads every page of payments in id order until an empty page, rows unchanged', async () => {
-    const [q1, q2] = queue({ data: [stored], error: null }, { data: [], error: null });
+  it('reads payments in id order in ONE request (exact count), rows unchanged', async () => {
+    const [q1] = queue({ data: [stored], error: null, count: 1 });
     expect(await listPayments()).toEqual([stored]);
     expect(supabaseMock.from).toHaveBeenCalledWith('payments');
-    expect(methods(q1)).toEqual([['select', '*'], ['order', 'id'], ['range', 0, 999]]);
-    expect(methods(q2)).toEqual([['select', '*'], ['order', 'id'], ['range', 1, 1000]]);
+    expect(supabaseMock.from).toHaveBeenCalledTimes(1);
+    expect(methods(q1)).toEqual([['select', '*', { count: 'exact' }], ['order', 'id'], ['range', 0, 999]]);
   });
 
-  it('more than 1,000 rows: 2,500 rows come back over 3 full pages and an empty one (audit gap)', async () => {
+  it('more than 1,000 rows: 2,500 rows come back over 3 requests, checked against the count (audit gap)', async () => {
     const rows = Array.from({ length: 2500 }, (_, i) => ({ ...stored, id: `p-${String(i).padStart(5, '0')}` }));
     const queries = queue(
-      { data: rows.slice(0, 1000), error: null },
+      { data: rows.slice(0, 1000), error: null, count: 2500 },
       { data: rows.slice(1000, 2000), error: null },
       { data: rows.slice(2000), error: null },
-      { data: [], error: null },
     );
     const all = await listPayments();
     expect(all).toHaveLength(2500);
@@ -61,8 +60,7 @@ describe('listPayments', () => {
     expect(queries.map((q) => methods(q).find((m) => m[0] === 'range'))).toEqual([
       ['range', 0, 999],
       ['range', 1000, 1999],
-      ['range', 2000, 2999],
-      ['range', 2500, 3499],
+      ['range', 2000, 2499],
     ]);
     expect(supabaseMock.from).toHaveBeenCalledWith('payments');
   });

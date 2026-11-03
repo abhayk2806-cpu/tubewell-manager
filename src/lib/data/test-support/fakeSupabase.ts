@@ -18,6 +18,8 @@ export interface FakeResult {
   readonly data: unknown;
   readonly error: unknown;
   readonly status?: number;
+  /** The exact row count, for a read asked with { count: 'exact' }. */
+  readonly count?: number | null;
 }
 
 export function fakeQuery(result: FakeResult): FakeQuery {

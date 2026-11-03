@@ -119,7 +119,7 @@ describe('useFarmers', () => {
     expect(result.current.pending).toBeNull();
   });
 
-  it('saved but the reload failed: keeps the rows, reports ok and sets refreshFailed', async () => {
+  it('saved but the reload failed: shows the saved row, reports ok and sets refreshFailed', async () => {
     const { result } = renderHook(() => useFarmers());
     await waitFor(() => expect(result.current.status).toBe('ready'));
     api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
@@ -131,7 +131,9 @@ describe('useFarmers', () => {
     expect(outcome).toMatchObject({ ok: true });
     expect(result.current.status).toBe('ready');
     expect(result.current.refreshFailed).toBe(true);
-    expect(result.current.lists.active.map((f) => f.id)).toEqual(['a']);
+    // The row the server returned is shown at once (FIX-1); the failed reload changes nothing else.
+    expect(result.current.lists.active.map((f) => f.id)).toEqual([]);
+    expect(result.current.lists.disabled.map((f) => f.id)).toEqual(['a', 'b']);
 
     api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'still offline'));
     await act(() => result.current.retryRefresh());

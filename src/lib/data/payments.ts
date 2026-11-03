@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import type { Database } from '@/types/database';
 import { nowIso } from './clock';
 import { DataError } from './errors';
-import { fetchAllRows } from './paging';
+import { PAGE_SIZE, fetchAllRows } from './paging';
 import { paymentInputCodes } from './paymentRules';
 import type { PaymentInput } from './paymentRules';
 import { oneRow } from './rows';
@@ -19,9 +19,13 @@ function checked(input: PaymentInput): PaymentInput {
   return input;
 }
 
-/** Every payment row (live and deleted), read page by page in id order. */
+/** Every payment row (live and deleted) in id order: one request up to 1,000 rows, count-checked. */
 export function listPayments(): Promise<PaymentRow[]> {
-  return fetchAllRows<PaymentRow>((from, to) => supabase.from('payments').select('*').order('id').range(from, to));
+  return fetchAllRows<PaymentRow>(
+    (from, to, withCount) => (withCount ? supabase.from('payments').select('*', { count: 'exact' }) : supabase.from('payments').select('*')).order('id').range(from, to),
+    PAGE_SIZE,
+    (row) => row.id,
+  );
 }
 
 export async function createPayment(input: PaymentInput): Promise<PaymentRow> {

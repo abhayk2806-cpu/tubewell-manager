@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { buildPaymentTrails, currentIstMoment, filterPayments, listPaymentMonths, sortFarmersByName } from '@/lib/data';
+import { currentIstMoment, filterPayments, listPaymentMonths, sortFarmersByName } from '@/lib/data';
 import type { FarmerRow, IstMoment, PaymentRow } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments, type PaymentMutationResult } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -37,6 +38,7 @@ export function PaymentsPage() {
   const payments = usePayments();
   const usage = useUsage();
   const farmers = useFarmers();
+  const derive = useDerive();
   const [now] = useState(currentIstMoment);
   const [segment, setSegment] = useState<PaymentSegment>('live');
   const [farmerFilter, setFarmerFilter] = useState<string>(ALL);
@@ -49,8 +51,8 @@ export function PaymentsPage() {
 
   // The engine trail of every live payment (D32); shown once the usage rows are in.
   const trails = useMemo(
-    () => (usage.status === 'ready' ? buildPaymentTrails({ usageRows: usage.all, paymentRows: payments.all }) : undefined),
-    [usage.status, usage.all, payments.all],
+    () => (usage.status === 'ready' ? derive.paymentTrails({ usageRows: usage.all, paymentRows: payments.all }) : undefined),
+    [derive, usage.status, usage.all, payments.all],
   );
 
   const farmersById = useMemo(() => new Map(farmers.all.map((f) => [f.id, f])), [farmers.all]);

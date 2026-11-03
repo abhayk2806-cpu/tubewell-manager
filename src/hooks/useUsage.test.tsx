@@ -81,7 +81,7 @@ describe('useUsage', () => {
     expect(result.current.live.map((r) => r.id)).toEqual(['u-4', 'u-2', 'u-1']);
   });
 
-  it('saved but the reload failed: keeps rows, ok result, refreshFailed', async () => {
+  it('saved but the reload failed: shows the saved row, ok result, refreshFailed', async () => {
     const { result } = renderHook(() => useUsage());
     await waitFor(() => expect(result.current.status).toBe('ready'));
     api.softDeleteUsage.mockResolvedValue({ ...newer, deleted_at: '2026-10-06T10:00:00+00:00' });
@@ -92,7 +92,9 @@ describe('useUsage', () => {
     });
     expect(outcome).toMatchObject({ ok: true });
     expect([result.current.status, result.current.refreshFailed]).toEqual(['ready', true]);
-    expect(result.current.live.map((r) => r.id)).toEqual(['u-2', 'u-1']);
+    // The row the server returned is shown at once (FIX-1): u-2 is now deleted.
+    expect(result.current.live.map((r) => r.id)).toEqual(['u-1']);
+    expect(result.current.deleted.map((r) => r.id)).toContain('u-2');
     await act(() => result.current.retryRefresh());
     expect(result.current.refreshFailed).toBe(false);
   });

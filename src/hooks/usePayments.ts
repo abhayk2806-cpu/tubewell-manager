@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { classifyPayments, createPayment, listPayments, restorePayment, softDeletePayment, updatePayment } from '@/lib/data';
+import { classifyPayments, createPayment, restorePayment, softDeletePayment, updatePayment } from '@/lib/data';
 import type { DataError, PaymentInput, PaymentRow } from '@/lib/data';
+import { useTableStore } from '@/data-store/useDataStore';
 import { useRowStore, type LoadStatus } from './useRowStore';
 
 export type PaymentMutation = 'create' | 'update' | 'delete' | 'restore';
@@ -33,9 +34,9 @@ export interface UsePayments {
   restore(id: string): Promise<PaymentMutationResult>;
 }
 
-/** Loads all payments once, splits them into live and deleted, and reloads after every change. */
+/** All payments from the shared store, split into live and deleted; reloaded quietly after every change. */
 export function usePayments(): UsePayments {
-  const store = useRowStore<PaymentRow, PaymentMutation>(listPayments);
+  const store = useRowStore<PaymentRow, PaymentMutation>(useTableStore('payments'));
   const lists = useMemo(() => classifyPayments(store.rows), [store.rows]);
 
   const run = async (kind: PaymentMutation, id: string | null, action: () => Promise<PaymentRow>): Promise<PaymentMutationResult> => {

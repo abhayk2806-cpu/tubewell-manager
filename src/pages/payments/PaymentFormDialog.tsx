@@ -1,7 +1,6 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { formatRupees, istTimeKey, paiseToDecimalString, parseInstantMs } from '@/lib/ledger';
 import {
-  buildFarmerBalances,
   buildPaymentInput,
   buildPaymentPreview,
   describePaymentWarnings,
@@ -19,6 +18,7 @@ import type {
   PaymentWarning,
   UsageRow,
 } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import type { LoadStatus } from '@/hooks/useRowStore';
 import type { PaymentMutationResult } from '@/hooks/usePayments';
 import { Button } from '@/components/ui/button';
@@ -77,11 +77,12 @@ export function PaymentFormDialog(props: PaymentFormDialogProps) {
   const [farmerQuery, setFarmerQuery] = useState('');
 
   const built = buildPaymentInput(form);
+  const derive = useDerive();
 
   // Current position of every farmer, from the engine (D32): picker labels and "Pura X bharo".
   const balances = useMemo(
-    () => (usageStatus === 'ready' ? buildFarmerBalances({ farmers: allFarmers, usageRows, paymentRows: allPayments }) : undefined),
-    [usageStatus, allFarmers, usageRows, allPayments],
+    () => (usageStatus === 'ready' ? derive.farmerBalances({ farmers: allFarmers, usageRows, paymentRows: allPayments }) : undefined),
+    [derive, usageStatus, allFarmers, usageRows, allPayments],
   );
   const optionLabel = (f: FarmerRow): string => {
     const b = balances?.get(f.id);

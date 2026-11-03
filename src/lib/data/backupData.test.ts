@@ -23,8 +23,8 @@ function serve(pages: Record<Table, FakeResult[]>) {
   });
 }
 
-const ok = (data: readonly unknown[]): FakeResult => ({ data, error: null });
-const EMPTY = ok([]);
+/** A page; the first page of a read reports the exact count (here: its own length unless given). */
+const ok = (data: readonly unknown[], count = data.length): FakeResult => ({ data, error: null, count });
 
 function dbRows() {
   const rows = workedRows();
@@ -34,7 +34,7 @@ function dbRows() {
 
 function serveWorked() {
   const rows = dbRows();
-  serve({ farmers: [ok(rows.farmers), EMPTY], usage_entries: [ok(rows.usage_entries), EMPTY], payments: [ok(rows.payments), EMPTY] });
+  serve({ farmers: [ok(rows.farmers)], usage_entries: [ok(rows.usage_entries)], payments: [ok(rows.payments)] });
 }
 
 const workedFile = () => buildBackupFile(workedRows(), EXPORTED_AT);
@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe('exportBackup', () => {
-  it('reads every table until an empty page and builds the file (counts, summary, deleted rows)', async () => {
+  it('reads every table (one count-checked request each) and builds the file (counts, summary, deleted rows)', async () => {
     serveWorked();
     const result = await exportBackup();
     expect(result).toEqual({ ok: true, file: { ...workedFile(), exported_at: '2026-10-06T08:35:00.000Z' } });
@@ -61,9 +61,9 @@ describe('exportBackup', () => {
       farmer_id: asha.id,
     }));
     serve({
-      farmers: [ok(rows.farmers), EMPTY],
-      usage_entries: [ok(many.slice(0, 1000)), ok(many.slice(1000, 2000)), ok(many.slice(2000)), EMPTY],
-      payments: [ok(rows.payments), EMPTY],
+      farmers: [ok(rows.farmers)],
+      usage_entries: [ok(many.slice(0, 1000), 2500), ok(many.slice(1000, 2000)), ok(many.slice(2000))],
+      payments: [ok(rows.payments)],
     });
     const result = await exportBackup();
     expect(result.ok && result.file.counts.usage_entries).toBe(2500);
@@ -72,9 +72,10 @@ describe('exportBackup', () => {
 
   it('an error on page 2 aborts with no file', async () => {
     const rows = dbRows();
+    const many = Array.from({ length: 1500 }, (_, i) => ({ ...rows.usage_entries[0]!, id: `c3000000-0000-4000-8000-${String(i).padStart(12, '0')}` }));
     serve({
-      farmers: [ok(rows.farmers), EMPTY],
-      usage_entries: [ok(rows.usage_entries), { data: null, error: { message: 'Failed to fetch' }, status: 0 }],
+      farmers: [ok(rows.farmers)],
+      usage_entries: [ok(many.slice(0, 1000), 1500), { data: null, error: { message: 'Failed to fetch' }, status: 0 }],
       payments: [],
     });
     expect(await exportBackup()).toEqual({ ok: false, kind: 'network' });
@@ -83,9 +84,9 @@ describe('exportBackup', () => {
   it('rows the engine rejects give bad_data, never a file', async () => {
     const rows = dbRows();
     serve({
-      farmers: [ok(rows.farmers), EMPTY],
-      usage_entries: [ok([{ ...rows.usage_entries[0], rate_paise: 1.5 }]), EMPTY],
-      payments: [ok(rows.payments), EMPTY],
+      farmers: [ok(rows.farmers)],
+      usage_entries: [ok([{ ...rows.usage_entries[0], rate_paise: 1.5 }])],
+      payments: [ok(rows.payments)],
     });
     expect(await exportBackup()).toEqual({ ok: false, kind: 'bad_data' });
   });
@@ -133,15 +134,15 @@ describe('restoreBackup', () => {
 });
 
 describe('verifyRestore', () => {
-  it('more than 1,000 rows: verification reads all 2,500 payments page by page (audit gap)', async () => {
+  it('more than 1,000 rows: verification reads all 2,500 payments, checked against the count (audit gap)', async () => {
     const rows = dbRows();
     const chhotu = rows.payments[2]!;
     const many = Array.from({ length: 2500 }, (_, i) => ({ ...chhotu, id: `d4000000-0000-4000-8000-${String(i).padStart(12, '0')}`, amount_paise: 100 }));
     const file = buildBackupFile({ farmers: rows.farmers, usage_entries: workedRows().usage_entries, payments: many }, EXPORTED_AT);
     serve({
-      farmers: [ok(rows.farmers), EMPTY],
-      usage_entries: [ok(rows.usage_entries), EMPTY],
-      payments: [ok(many.slice(0, 1000)), ok(many.slice(1000, 2000)), ok(many.slice(2000)), EMPTY],
+      farmers: [ok(rows.farmers)],
+      usage_entries: [ok(rows.usage_entries)],
+      payments: [ok(many.slice(0, 1000), 2500), ok(many.slice(1000, 2000)), ok(many.slice(2000))],
     });
     const result = await verifyRestore(file, 'replace');
     expect(result.ok && result.verification.counts.payments).toBe(2500);
@@ -159,7 +160,7 @@ describe('verifyRestore', () => {
   it('replace: an extra row in the database is a mismatch (counts and totals reported)', async () => {
     const rows = dbRows();
     const extra = { ...rows.payments[2]!, id: 'b2000000-0000-4000-8000-000000000099', amount_paise: 1000 };
-    serve({ farmers: [ok(rows.farmers), EMPTY], usage_entries: [ok(rows.usage_entries), EMPTY], payments: [ok([...rows.payments, extra]), EMPTY] });
+    serve({ farmers: [ok(rows.farmers)], usage_entries: [ok(rows.usage_entries)], payments: [ok([...rows.payments, extra])] });
     const result = await verifyRestore(workedFile(), 'replace');
     expect(result.ok && result.verification.verified).toBe(false);
     expect(result.ok && result.verification.counts.payments).toBe(5);
@@ -170,13 +171,13 @@ describe('verifyRestore', () => {
   it('merge: database-only rows are fine; a file row that differs is a mismatch', async () => {
     const rows = dbRows();
     const extra = { ...rows.payments[2]!, id: 'b2000000-0000-4000-8000-000000000099' };
-    serve({ farmers: [ok(rows.farmers), EMPTY], usage_entries: [ok(rows.usage_entries), EMPTY], payments: [ok([...rows.payments, extra]), EMPTY] });
+    serve({ farmers: [ok(rows.farmers)], usage_entries: [ok(rows.usage_entries)], payments: [ok([...rows.payments, extra])] });
     expect((await verifyRestore(workedFile(), 'merge')).ok).toBe(true);
-    serve({ farmers: [ok(rows.farmers), EMPTY], usage_entries: [ok(rows.usage_entries), EMPTY], payments: [ok([...rows.payments, extra]), EMPTY] });
+    serve({ farmers: [ok(rows.farmers)], usage_entries: [ok(rows.usage_entries)], payments: [ok([...rows.payments, extra])] });
     const merged = await verifyRestore(workedFile(), 'merge');
     expect(merged.ok && merged.verification.verified).toBe(true);
     const changed = rows.payments.map((p, i) => (i === 0 ? { ...p, amount_paise: 1 } : p));
-    serve({ farmers: [ok(rows.farmers), EMPTY], usage_entries: [ok(rows.usage_entries), EMPTY], payments: [ok(changed), EMPTY] });
+    serve({ farmers: [ok(rows.farmers)], usage_entries: [ok(rows.usage_entries)], payments: [ok(changed)] });
     const mismatch = await verifyRestore(workedFile(), 'merge');
     expect(mismatch.ok && mismatch.verification.verified).toBe(false);
   });

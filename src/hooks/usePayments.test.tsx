@@ -81,7 +81,7 @@ describe('usePayments', () => {
     expect(result.current.live.map((r) => r.id)).toEqual(['p-4', 'p-2', 'p-1']);
   });
 
-  it('saved but the reload failed: keeps rows, ok result, refreshFailed; retry clears it', async () => {
+  it('saved but the reload failed: shows the saved row, ok result, refreshFailed; retry clears it', async () => {
     const { result } = renderHook(() => usePayments());
     await waitFor(() => expect(result.current.status).toBe('ready'));
     api.softDeletePayment.mockResolvedValue({ ...newer, deleted_at: '2026-10-06T10:00:00+00:00' });
@@ -92,7 +92,9 @@ describe('usePayments', () => {
     });
     expect(outcome).toMatchObject({ ok: true });
     expect([result.current.status, result.current.refreshFailed]).toEqual(['ready', true]);
-    expect(result.current.live.map((r) => r.id)).toEqual(['p-2', 'p-1']);
+    // The row the server returned is shown at once (FIX-1): p-2 is now deleted.
+    expect(result.current.live.map((r) => r.id)).toEqual(['p-1']);
+    expect(result.current.deleted.map((r) => r.id)).toContain('p-2');
     await act(() => result.current.retryRefresh());
     expect(result.current.refreshFailed).toBe(false);
   });

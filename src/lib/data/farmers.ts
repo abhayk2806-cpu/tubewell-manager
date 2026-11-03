@@ -7,7 +7,7 @@ import { nowIso } from './clock';
 import { DataError } from './errors';
 import { normalizeFarmerInput, sortFarmersByName, validateFarmerInput } from './farmerRules';
 import type { FarmerFormValues, FarmerInput } from './farmerRules';
-import { fetchAllRows } from './paging';
+import { PAGE_SIZE, fetchAllRows } from './paging';
 import { oneRow } from './rows';
 
 export type FarmerRow = Database['public']['Tables']['farmers']['Row'];
@@ -38,9 +38,13 @@ export function classifyFarmers(rows: readonly FarmerRow[]): FarmerLists {
   return { active: sortFarmersByName(active), disabled: sortFarmersByName(disabled), deleted: sortFarmersByName(deleted) };
 }
 
-/** Every farmer row (active, disabled and deleted), read page by page in id order. */
+/** Every farmer row (active, disabled and deleted) in id order: one request up to 1,000 rows, count-checked. */
 export function listFarmers(): Promise<FarmerRow[]> {
-  return fetchAllRows<FarmerRow>((from, to) => supabase.from('farmers').select('*').order('id').range(from, to));
+  return fetchAllRows<FarmerRow>(
+    (from, to, withCount) => (withCount ? supabase.from('farmers').select('*', { count: 'exact' }) : supabase.from('farmers').select('*')).order('id').range(from, to),
+    PAGE_SIZE,
+    (row) => row.id,
+  );
 }
 
 function checkedInput(values: FarmerFormValues): FarmerInput {

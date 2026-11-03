@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
-import { buildFarmerBalances, findDuplicateFarmerNames, matchesFarmerSearch } from '@/lib/data';
+import { findDuplicateFarmerNames, matchesFarmerSearch } from '@/lib/data';
 import type { FarmerRow } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers, type MutationResult } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -35,6 +36,7 @@ export function FarmersPage() {
   // Usage and payments only feed the current position of each farmer (D32); the list never waits for them.
   const usage = useUsage();
   const payments = usePayments();
+  const derive = useDerive();
   const [segment, setSegment] = useState<FarmerSegment>('active');
   const [search, setSearch] = useState('');
   const [form, setForm] = useState<FormState>(null);
@@ -46,9 +48,9 @@ export function FarmersPage() {
   const balances = useMemo(
     () =>
       usage.status === 'ready' && payments.status === 'ready'
-        ? buildFarmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
+        ? derive.farmerBalances({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all })
         : null,
-    [farmers.all, usage.status, usage.all, payments.status, payments.all],
+    [derive, farmers.all, usage.status, usage.all, payments.status, payments.all],
   );
   const balancesFailed = usage.status === 'error' || payments.status === 'error';
 

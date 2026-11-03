@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { classifyUsage, createUsage, listUsage, restoreUsage, softDeleteUsage, updateUsage } from '@/lib/data';
+import { classifyUsage, createUsage, restoreUsage, softDeleteUsage, updateUsage } from '@/lib/data';
 import type { DataError, UsageInput, UsageRow } from '@/lib/data';
+import { useTableStore } from '@/data-store/useDataStore';
 import { useRowStore, type LoadStatus } from './useRowStore';
 
 export type UsageMutation = 'create' | 'update' | 'delete' | 'restore';
@@ -33,9 +34,9 @@ export interface UseUsage {
   restore(id: string): Promise<UsageMutationResult>;
 }
 
-/** Loads all usage entries once, splits them into live and deleted, and reloads after every change. */
+/** All usage entries from the shared store, split into live and deleted; reloaded quietly after every change. */
 export function useUsage(): UseUsage {
-  const store = useRowStore<UsageRow, UsageMutation>(listUsage);
+  const store = useRowStore<UsageRow, UsageMutation>(useTableStore('usage'));
   const lists = useMemo(() => classifyUsage(store.rows), [store.rows]);
 
   const run = async (kind: UsageMutation, id: string | null, action: () => Promise<UsageRow>): Promise<UsageMutationResult> => {

@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { Droplets, Wallet } from 'lucide-react';
 import type { DashboardView } from '@/lib/ledger';
 import { backupReminder } from '@/lib/backup';
-import { buildDashboardScreen, currentIstMoment, periodView } from '@/lib/data';
+import { currentIstMoment, periodView } from '@/lib/data';
 import type { IstMoment } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -32,6 +33,7 @@ export function DashboardPage() {
   const farmers = useFarmers();
   const usage = useUsage();
   const payments = usePayments();
+  const derive = useDerive();
   // The IST moment behind the period defaults and the "current" month / year. It is refreshed when
   // the page becomes visible again and when a period button is pressed, so it never goes stale.
   const [now, setNow] = useState(currentIstMoment);
@@ -49,8 +51,8 @@ export function DashboardPage() {
   const busy = usage.pending !== null || payments.pending !== null;
 
   const result = useMemo(
-    () => buildDashboardScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all, view, now }),
-    [farmers.all, usage.all, payments.all, view, now],
+    () => derive.dashboardScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all, view, now }),
+    [derive, farmers.all, usage.all, payments.all, view, now],
   );
 
   useEffect(() => {

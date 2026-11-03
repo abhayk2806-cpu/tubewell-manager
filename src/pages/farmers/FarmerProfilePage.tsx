@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Droplets, Wallet } from 'lucide-react';
 import { formatRupees } from '@/lib/ledger';
-import { buildFarmerProfile, currentIstMoment, findProfileFarmer } from '@/lib/data';
+import { currentIstMoment, findProfileFarmer } from '@/lib/data';
 import type { IstMoment } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -39,6 +40,7 @@ export function FarmerProfilePage() {
   const farmers = useFarmers();
   const usage = useUsage();
   const payments = usePayments();
+  const derive = useDerive();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -49,8 +51,8 @@ export function FarmerProfilePage() {
 
   const lookup = findProfileFarmer(farmers.all, id);
   const result = useMemo(
-    () => buildFarmerProfile({ farmerId: id, usageRows: usage.all, paymentRows: payments.all }),
-    [id, usage.all, payments.all],
+    () => derive.farmerProfile({ farmerId: id, usageRows: usage.all, paymentRows: payments.all }),
+    [derive, id, usage.all, payments.all],
   );
 
   const retryLoad = () => {

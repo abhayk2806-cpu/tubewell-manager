@@ -325,7 +325,7 @@ describe('UsagePage', () => {
     expect(screen.getByRole('button', { name: 'Naya Pani Entry' })).toBeDisabled();
   });
 
-  it('saved but the reload failed: list stays with a retry line', async () => {
+  it('saved but the reload failed: the restored entry shows, with a retry line', async () => {
     await renderReady();
     usageApi.restoreUsage.mockResolvedValue({ ...u5, deleted_at: null });
     usageApi.listUsage.mockRejectedValueOnce(new DataError('network', null, 'offline'));
@@ -333,7 +333,8 @@ describe('UsagePage', () => {
     fireEvent.click(row('Shyam Test').getByRole('button', { name: 'Wapas lao' }));
     const status = screen.getByRole('status');
     await waitFor(() => expect(status).toHaveTextContent('Save ho gaya, par list refresh nahi ho payi.'));
-    expect(items()).toHaveLength(1);
+    // The row the server returned is shown at once (FIX-1): it left Deleted.
+    expect(screen.getByRole('button', { name: 'Deleted (0)' })).toBeInTheDocument();
   });
 
   it('no double submit: save disabled while pending', async () => {

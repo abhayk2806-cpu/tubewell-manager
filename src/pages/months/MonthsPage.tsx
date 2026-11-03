@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { buildMonthsScreen, deepLinkMonth, filterMonthsByYear, monthsStrip } from '@/lib/data';
+import { deepLinkMonth, filterMonthsByYear, monthsStrip } from '@/lib/data';
+import { useDerive } from '@/data-store/useDataStore';
 import { useFarmers } from '@/hooks/useFarmers';
 import { usePayments } from '@/hooks/usePayments';
 import { useUsage } from '@/hooks/useUsage';
@@ -26,6 +27,7 @@ export function MonthsPage() {
   const farmers = useFarmers();
   const usage = useUsage();
   const payments = usePayments();
+  const derive = useDerive();
   const [params] = useSearchParams();
   // undefined = the owner has not chosen yet (the deep link's year, else all years).
   const [yearChoice, setYearChoice] = useState<string | null | undefined>(undefined);
@@ -37,8 +39,8 @@ export function MonthsPage() {
   const firstError = farmers.error ?? usage.error ?? payments.error;
 
   const result = useMemo(
-    () => buildMonthsScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all }),
-    [farmers.all, usage.all, payments.all],
+    () => derive.monthsScreen({ farmers: farmers.all, usageRows: usage.all, paymentRows: payments.all }),
+    [derive, farmers.all, usage.all, payments.all],
   );
 
   // The month a valid `?month=` link points at, once the data is in (null otherwise).

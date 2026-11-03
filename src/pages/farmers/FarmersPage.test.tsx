@@ -288,7 +288,7 @@ describe('FarmersPage', () => {
     expect(api.createFarmer).not.toHaveBeenCalled();
   });
 
-  it('saved but the reload failed: the list stays, with one line and a retry', async () => {
+  it('saved but the reload failed: the saved change shows, with one line and a retry', async () => {
     await renderReady();
     api.setFarmerDisabled.mockResolvedValue({ ...amar, is_disabled: true });
     api.listFarmers.mockRejectedValueOnce(new DataError('network', null, 'offline'));
@@ -296,7 +296,8 @@ describe('FarmersPage', () => {
     const status = screen.getByRole('status');
     await waitFor(() => expect(status).toHaveTextContent('Save ho gaya, par list refresh nahi ho payi.'));
     expect(status).toHaveTextContent('Amar Test band ho gaya.');
-    expect(within(list()).getAllByRole('listitem')).toHaveLength(2);
+    // The row the server returned is shown at once (FIX-1): Amar moved to Band.
+    expect(within(list()).getAllByRole('listitem')).toHaveLength(1);
     api.listFarmers.mockResolvedValue([ramu, { ...amar, is_disabled: true }, band, gone]);
     fireEvent.click(within(status).getByRole('button', { name: 'Dobara try karo' }));
     await waitFor(() => expect(status).not.toHaveTextContent('refresh nahi ho payi'));

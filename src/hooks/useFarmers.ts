@@ -2,13 +2,13 @@ import { useMemo } from 'react';
 import {
   classifyFarmers,
   createFarmer,
-  listFarmers,
   restoreFarmer,
   setFarmerDisabled,
   softDeleteFarmer,
   updateFarmer,
 } from '@/lib/data';
 import type { DataError, FarmerFormValues, FarmerLists, FarmerRow } from '@/lib/data';
+import { useTableStore } from '@/data-store/useDataStore';
 import { useRowStore, type LoadStatus } from './useRowStore';
 
 export type FarmersStatus = LoadStatus;
@@ -41,9 +41,9 @@ export interface UseFarmers {
   restore(id: string): Promise<MutationResult>;
 }
 
-/** Loads all farmers once, exposes them split into Chalu / Band / Deleted, and reloads after every change. */
+/** All farmers from the shared store, split into Chalu / Band / Deleted; reloaded quietly after every change. */
 export function useFarmers(): UseFarmers {
-  const store = useRowStore<FarmerRow, FarmerMutation>(listFarmers);
+  const store = useRowStore<FarmerRow, FarmerMutation>(useTableStore('farmers'));
   const lists = useMemo(() => classifyFarmers(store.rows), [store.rows]);
 
   const run = async (kind: FarmerMutation, id: string | null, action: () => Promise<FarmerRow>): Promise<MutationResult> => {
