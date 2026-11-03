@@ -32,7 +32,8 @@
 | Ledger engine | `src/lib/ledger/` | Pure functions: amount rounding, IST month, buckets, FIFO waterfall, trail, as-of, months list, duplicate checks, totals | Do I/O, read React state, or use floats for money |
 | Time | `src/lib/ledger/time.ts` | The ONE IST month/day function used everywhere | Use browser-local time or UTC for business dates |
 | Data access | `src/lib/data/` (exists since Phase 4A) | All Supabase queries: active-farmer filter, soft-delete filter, pagination, error checks, mapping DB rows to engine types | Contain business math |
-| Hooks | `src/hooks/` | Load data → call the engine → expose results to pages | Contain their own formulas |
+| Shared data store | `src/data-store/` (FIX-1) | One store per signed-in session: the three tables (stale-while-revalidate) and the memoized screen derivations; see [Data flow and shared store](#data-flow-and-shared-store-fix-1-i-001) | Contain formulas, or serve backup / restore verification |
+| Hooks | `src/hooks/` | Read one table of the shared store → expose lists and mutations to pages | Contain their own formulas |
 | Pages/components | `src/pages/`, `src/components/` | Render engine output; forms; Hinglish copy | Calculate due, paid, credit or months |
 
 Rules that follow from this:
@@ -43,7 +44,9 @@ Rules that follow from this:
 
 | Path | What it is |
 |---|---|
-| `main.tsx` | Entry (P10A-fix1): imports `index.css`, checks the Supabase variables with `configProblem` (`configProblem.ts`, built on `parseConfig`), then dynamically imports `startApp.tsx` (the unchanged tree `StrictMode` → `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `App`) or, on a bad config, `showConfigError.tsx` → `ConfigErrorScreen.tsx` (copy in `configErrorCopy.ts`). |
+| `main.tsx` | Entry (P10A-fix1): imports `index.css`, checks the Supabase variables with `configProblem` (`configProblem.ts`, built on `parseConfig`), then dynamically imports `startApp.tsx` (the tree `StrictMode` → `ErrorBoundary` → `BrowserRouter` → `AuthProvider` → `DataStoreProvider` (FIX-1) → `App`) and, in parallel, preloads the current route's page chunk (`pagePreload.ts`, FIX-1); on a bad config it loads `showConfigError.tsx` → `ConfigErrorScreen.tsx` (copy in `configErrorCopy.ts`) and nothing else. |
+| `pagePreload.ts` | `preloadPage(pathname)` (the opened screen's chunk, started by `main.tsx`) and `prefetchAllPages()` (every screen's chunk, started by `startApp.tsx` when the browser is idle after the first paint). Same modules as the lazy routes (FIX-1). |
+| `data-store/` | Shared data store (FIX-1): `tableStore.ts` (one table, stale-while-revalidate), `derive.ts` (memoized derivations), `dataStore.ts` (the three tables + derive), `DataStoreProvider.tsx`, `context.ts`, `useDataStore.ts` (`useTableStore`, `useDerive`) |
 | `App.tsx` | Routes: `/login` (`PublicRoute`), and `ProtectedRoute` + `AppLayout` around `/`, `/farmers`, `/farmers/:id`, `/usage`, `/payments`, `/months`, `/backup`, plus `*` (NotFound). No Settings page. Each built page renders inside one `Suspense` with the shared `PageLoading` fallback (PL1). |
 | `routes/routes.ts` | Feature routes (Hinglish title, build phase, optional built `page`) and the 6 bottom-nav tabs. `App.tsx` renders `page` when set, else the placeholder. Every `page` is `React.lazy` (its own chunk, PL1). |
 | `routes/RouteGuards.tsx` | `ProtectedRoute` (loading → spinner, logged out → `/login`) and `PublicRoute` (logged in → `/`) |
@@ -53,7 +56,7 @@ Rules that follow from this:
 | `lib/utils.ts` | `cn()` class helper |
 | `lib/ledger/` | Ledger engine (Phase 3), see [Ledger engine](#ledger-engine-phase-3) |
 | `lib/data/` | Data layer (Phase 4A), see [Data layer](#data-layer-phase-4a) |
-| `hooks/useRowStore.ts` | Shared hook core (Phase 4B): load once, one mutation at a time, quiet reload, `refreshFailed` |
+| `hooks/useRowStore.ts` | Shared hook core (Phase 4B; a view of one shared-store table since FIX-1): cached rows at once, one mutation at a time, quiet reload, `refreshFailed` |
 | `hooks/useFarmers.ts` | Loads farmers, exposes the three lists and the mutations (Phase 4A, on `useRowStore` since 4B) |
 | `hooks/useUsage.ts` | Loads usage entries, exposes live / deleted lists and the mutations (Phase 4B) |
 | `hooks/usePayments.ts` | Loads payments, exposes live / deleted lists and the mutations (Phase 5) |
@@ -177,8 +180,32 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 
 - **Active-farmer filter is applied in ONE place.** The rule itself lives in `src/lib/ledger/farmers.ts` (`isActiveFarmer`: `deleted_at IS NULL` and not disabled) and is applied through the data layer; pages never re-implement it.
 - **Soft-delete filter:** normal reads exclude rows with `deleted_at`. The Recently Deleted view reads them explicitly.
-- **Pagination:** Supabase/PostgREST returns at most 1,000 rows per request by default. Every list read (including backup) must page until exhausted, or be provably bounded.
+- **Pagination:** Supabase/PostgREST returns at most 1,000 rows per request by default. Every list read (including backup) reads the whole table through `fetchAllRows`: ONE request up to 1,000 rows (first page with an exact count), the remaining pages in parallel, and a DataError instead of a silent truncation (FIX-1).
 - **Every Supabase call checks `error`.** supabase-js returns errors and does not throw them.
+
+## Data flow and shared store (FIX-1, I-001)
+
+Why: until FIX-1 every page called `useFarmers`, `useUsage` and `usePayments`, and each hook kept its own state and loaded on mount. Every tab switch downloaded the three tables again (two sequential requests each, see Paging) behind a loading line, and start-up fetched data only after the page's code had loaded and React had revealed it. Numbers: [docs/PERFORMANCE.md](PERFORMANCE.md).
+
+**Flow.** `AuthProvider` → `DataStoreProvider` → `App`. The provider creates ONE `DataStore` per signed-in session (keyed by the user id; a sign-out sets it to null, so the next sign-in, even as the same user, gets a new empty store). On creation it starts the three table loads in parallel, without waiting for the page chunk. Pages keep using `useFarmers` / `useUsage` / `usePayments` (public API unchanged); `useRowStore` reads the hook's table through `useSyncExternalStore`.
+
+**Table store** (`src/data-store/tableStore.ts`), stale-while-revalidate:
+- First load: `status: 'loading'`, then `'ready'` or `'error'` (as before).
+- After that a screen ALWAYS renders the cached rows at once, with no loading state. A quiet background revalidation runs only when the rows are older than `MAX_AGE_MS` (30 s): when a screen mounts (`ensureFresh`), and when the tab becomes visible again (the provider's `visibilitychange` listener). Concurrent requests for the same table share one load.
+- A failed background revalidation keeps the cached rows and sets `refreshFailed` (the existing refresh-failed notice and its retry).
+- Saves (`run`): one write at a time per table (a second is refused as `busy`, as before). On success the row the server returned is put into the rows at once (replaced by id, or inserted in id order), `pending` clears, and the table reloads quietly once to reconcile. A failing reconcile only sets `refreshFailed`. A failed write changes nothing.
+- Only the newest load may change the rows (an older answer arriving late is dropped). A revalidation that returns the same rows keeps the same array, so nothing downstream recomputes.
+- `clear()` (sign-out) forgets the rows and drops loads in flight.
+
+**Derivations** (`src/data-store/derive.ts`): `dashboardScreen`, `monthsScreen`, `farmerProfile`, `farmerBalances`, `paymentTrails` are the data layer's own builders behind a memo keyed by the identity of the row arrays (plus the view and day for the Dashboard, the farmer for the profile). The store keeps an array unchanged until its data changes, so a screen that mounts again gets the figures without recomputing; Kisan, Pani and the payment dialog share one `farmerBalances` result. No formula lives here.
+
+**Fresh reads.** Backup export and restore verification call `exportBackup` / `verifyRestore`, which read the server with the list functions, never the store (tested in `src/data-store/budgets.test.tsx`). After a restore the Backup page reloads the three tables (full reload, as before).
+
+**Outside a provider** (isolated component tests): each hook gets its own private table store and `useDerive` returns the plain builders. The app always mounts the provider (`startApp.tsx`); `budgets.test.tsx` fails if the hooks stop sharing it.
+
+**Budgets** (tests in `src/data-store/budgets.test.tsx`, mocked client, tables ≤ 1,000 rows, auth refresh excluded): cold open = 3 data requests in one parallel stage; warm tab switch = 0 requests, no loading state; stale (> 30 s) = cached rows + one quiet revalidation; one save = 1 write + 1 reload of that table; backup export / verification = fresh server reads; sign-out clears the store.
+
+**Limits.** Two devices: a change made on another device shows here after the next revalidation (a screen mount or the tab becoming visible, when the cache is older than 30 s), or after a save or a retry. A screen that stays open and visible does not poll.
 
 ## Auth and security
 
@@ -186,7 +213,7 @@ The `*_by` columns are plain uuids **with no foreign key**, so the audit trail s
 - Public sign-ups must stay disabled in the Supabase dashboard (owner setting).
 - RLS is enabled on every table, and policies match only the owner's uid (D13, see Database schema).
 - The publishable key is public by design: it ships in the browser bundle. The service-role key never goes in `VITE_*` vars or in the repo.
-- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and are set in the Netlify project's environment (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). `src/lib/supabase.ts` throws while its module loads on a missing or non-https value, so `main.tsx` checks first and loads the app only when the config is fine; otherwise `ConfigErrorScreen` shows the variable NAMES (never values) and the Netlify hint. The entry is a 3.6 kB chunk; the app chunks load in parallel after it (one extra round trip).
+- Env vars (D14): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. They live in a local `.env` (gitignored; template `.env.example`) and are set in the Netlify project's environment (steps in [docs/DEPLOYMENT.md](DEPLOYMENT.md)). `src/lib/supabase.ts` throws while its module loads on a missing or non-https value, so `main.tsx` checks first and loads the app only when the config is fine; otherwise `ConfigErrorScreen` shows the variable NAMES (never values) and the Netlify hint. The entry is a ~4 kB chunk (1.8 kB gzip); the app chunks and the opened screen's chunk load in parallel after it (FIX-1).
 
 ## Testing approach
 
@@ -356,7 +383,7 @@ validateUsageInput(input): ValidationCode[]  validatePaymentInput(input): Valida
 class DataError extends Error { kind: 'network' | 'permission' | 'constraint' | 'not_found' | 'unknown'; code: string | null }
 toDataError(error: unknown, status?: number): DataError
 // paging.ts
-fetchAllRows<T>(fetchPage: (from, to) => PromiseLike<{ data, error, status? }>, pageSize = 1000): Promise<T[]>
+fetchAllRows<T>(fetchPage: (from, to, withCount) => PromiseLike<{ data, error, status?, count? }>, pageSize = 1000, keyOf = (row) => row): Promise<T[]>
 // farmerRules.ts (limits = migration 005: name 100, mobile 20, notes 500)
 normalizeFarmerInput({ name, mobile?, notes? }): { name, mobile: string | null, notes: string | null }
 validateFarmerInput(input): ('name_required' | 'name_too_long' | 'mobile_invalid' | 'notes_too_long')[]
@@ -380,7 +407,7 @@ softDeleteFarmer(id)   restoreFarmer(id)            // each resolves to the save
 
 **Rules:**
 - **Every call checks `error`.** Every update selects the row back with `.select().maybeSingle()`: supabase-js reports a 0-row update as success, so `null` data becomes `not_found`.
-- **Paging.** `fetchAllRows` asks for ranges in a stable order (by `id`) and stops only at an EMPTY page. A short page is not taken as the end, so a server cap smaller than the page size cannot truncate a list silently. This costs one extra request per list.
+- **Paging (FIX-1).** `fetchAllRows` asks the first page `[0, 999]` with `{ count: 'exact' }`, in a stable order (by `id`). A table of up to 1,000 rows is ONE request. Larger tables: the remaining ranges are asked in parallel. Nothing is truncated silently: when the first page is shorter than asked (a server cap below the page size), the rest is read in steps of the size the server returned; the rows received must equal the count, and no `id` may come back twice (rows shifted while paging); otherwise a DataError (`no_count`, `count_mismatch`, `duplicate_row`, `page_overflow`). Until FIX-1 it read until an EMPTY page, which cost one extra sequential request per list.
 - **Classification.** `classifyFarmers` is the one place that splits farmers.
   - Chalu = the engine's `isActiveFarmer`.
   - Deleted = `deleted_at` set (also when disabled).

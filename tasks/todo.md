@@ -79,8 +79,8 @@
   - [x] pnpm pinned through `packageManager` in `package.json` instead of the undocumented `PNPM_VERSION` (P10A-fix1)
   - [ ] Later: a tested Content-Security-Policy (needs a real Netlify deploy)
 - [x] **10B** — Test-data wipe (done 2026-10-07, owner approval and JSON backup): 7 / 6 / 10 rows removed in one self-asserting transaction; database emptied before 10C; schema, RLS, triggers and Auth untouched
-- [x] **10C** — Owner entered real data and compared every figure with his notebook (owner, before 2026-10-13)
-- [x] **10D** — Owner's real Netlify deploy (separate project `tubewell-hisab-rebuild`, built from `rebuild/fresh-system`, builds then Stopped) and smoke test passed: login, deep-link refresh, logout guard on a protected route, phone
+- [x] **10C** — Owner entered real data and compared every figure with his notebook (owner, 2026-10-07)
+- [x] **10D** — (owner, 2026-10-07) Owner's real Netlify deploy (separate project `tubewell-hisab-rebuild`, built from `rebuild/fresh-system`, builds then Stopped) and smoke test passed: login, deep-link refresh, logout guard on a protected route, phone
 - [x] **PMAINT1** — Status change to maintenance mode, docs only (2026-10-13)
 - [ ] **10** — Repo cutover to `main`: owner's decision, not scheduled. (Netlify hosting done in 10D; final docs done in PMAINT1.)
 
@@ -94,8 +94,7 @@ Format: `ID | date | what the owner saw | status | fix commit` (no real names or
 
 | ID | Date | What the owner saw | Status | Fix commit |
 |---|---|---|---|---|
-
-_(none yet)_
+| I-001 | 2026-11-03 | The app is slow everywhere: slow to open, slow to show data, slow between sections | Fixed in the repo (FIX-1: shared data store, one-request paging, parallel start-up, memoized derivations; numbers in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md)); **live after the owner deploys** | `1319f3c` (code), docs in the next commit |
 
 ### Open / optional items
 

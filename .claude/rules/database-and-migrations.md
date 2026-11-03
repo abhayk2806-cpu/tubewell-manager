@@ -50,7 +50,7 @@ paths:
   - Consequences:
     - soft delete is an UPDATE of `deleted_at`;
     - the Phase 8 Replace restore must not rely on client DELETE;
-    - the Phase 10 test-data wipe is SQL by Claude Code, on explicit owner approval only.
+    - the one planned hard delete, the Phase 10 test-data wipe, was done in 10B (2026-10-07) on explicit owner approval; in maintenance Claude never writes to, wipes or restores the live data.
 - **D12:** the trigger `public.set_audit_columns()` maintains the audit columns.
   - It is SECURITY INVOKER with `search_path = ''`, and EXECUTE is revoked.
   - Client values for `created_*` are ignored on insert and immutable on update.

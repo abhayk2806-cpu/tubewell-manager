@@ -165,6 +165,16 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: write edit scripts to a file through a quoted heredoc (`<<'EOF'`) or use the Edit tool. Check the edited lines afterwards.
 - Impact: low. Date: 2026-10-07.
 
+**Slowness came from round trips, not from size (FIX-1, I-001)**
+- Finding: each page's hooks kept their own state and reloaded all three tables on every mount; paging asked until an EMPTY page (2 sequential requests per table); the data fetch started only in the page's effects, after its lazy chunk and React's 300 ms Suspense reveal throttle. Hosting and data size were fine.
+- Rule: measure first (`scripts/perf/run.mjs`, fixed delay per mocked request, CPU throttling) and count requests and sequential stages, not only bytes. Data shared by several screens lives in ONE store (`src/data-store/`); a list read asks for an exact count instead of an extra empty page; start data loads where the session appears, not in a lazy page. Budgets are tests (`src/data-store/budgets.test.tsx`).
+- Impact: high (the owner felt it on every tap). Date: 2026-11-03.
+
+**A test that needs the Playwright browser does not need the Playwright package**
+- Finding (FIX-1): only Playwright's Chromium binaries are installed; adding the npm package would be a new dependency. Node 24 can drive Chromium over `--remote-debugging-pipe`; the WebSocket endpoint dropped Node's built-in WebSocket, and the sandboxed renderer crashed on this machine (`--no-sandbox` for the local measurement only).
+- Rule: reuse `scripts/perf/cdp.mjs`; keep every measurement on a mocked origin with a guard that aborts on a real `*.supabase.co` URL.
+- Impact: low. Date: 2026-11-03.
+
 ### Process and deployment
 
 **`vite preview` does not serve `netlify.toml`**

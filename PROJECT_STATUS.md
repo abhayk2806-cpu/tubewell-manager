@@ -1,6 +1,6 @@
 # Tubewell Manager — Project Status
 
-> **Last Updated: 2026-10-13**
+> **Last Updated: 2026-11-03**
 > **Current phase:** COMPLETE — in daily use; MAINTENANCE mode since 2026-10-13. Work starts only from a problem or change the owner reports (see [Maintenance](#maintenance)).
 > **Branch:** `rebuild/fresh-system`, backed up on `origin`; the live app is built from it. It has tracked `origin/rebuild/fresh-system` since its first push, the last step of the Phase 1 closure on 2026-10-05. `main` = old v1 system, untouched at `46e3872`.
 
@@ -38,14 +38,16 @@ Do not update it for trivial edits. Every entry carries an exact date (YYYY-MM-D
 | PL1 | Polish: lazy-loaded routes (shared fallback, chunk-error retry) and the `?month=` deep link scrolls its month into view (D34) | ✅ Done (2026-10-07), owner approved |
 | 10A | Deployment readiness (repo side): `netlify.toml` (pnpm build, Node 24, SPA rewrite, headers, caching), pnpm 11.1.3 via `packageManager` (fix 1), the config-error screen (fix 1), `.env.example`, [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) owner checklists | ✅ Done (2026-10-07); owner dashboard steps done in 10D |
 | 10B | Test-data wipe in the NEW project (owner approval and JSON backup on 2026-10-07): one self-asserting transaction, database emptied (real data entered in 10C); schema and Auth untouched | ✅ Done (2026-10-07) |
-| 10C | Owner enters real data and compares the figures with his notebook | ✅ Done (owner, before 2026-10-13) |
-| 10D | Real Netlify deploy by the owner: separate project `tubewell-hisab-rebuild`, smoke test passed (login, deep-link refresh, logout guard on a protected route, phone) | ✅ Done (owner, before 2026-10-13) |
+| 10C | Owner enters real data and compares the figures with his notebook | ✅ Done (owner, 2026-10-07) |
+| 10D | Real Netlify deploy by the owner: separate project `tubewell-hisab-rebuild`, smoke test passed (login, deep-link refresh, logout guard on a protected route, phone) | ✅ Done (owner, 2026-10-07) |
 | 10 | Wipe (done in 10B), live hosting (done in 10D, separate Netlify project), final docs (done in PMAINT1). A repo cutover to `main` is the owner's decision, not scheduled | ✅ Done (2026-10-13) |
 | PMAINT1 | Status change: project COMPLETE, workflow moves to MAINTENANCE (docs only) | ✅ Done (2026-10-13) |
+| FIX-1 | I-001 "slow everywhere": shared data store (stale-while-revalidate), one-request paging with a count, parallel start-up, memoized derivations, budget tests; no figure changed ([docs/PERFORMANCE.md](docs/PERFORMANCE.md)) | ✅ Done in the repo (2026-11-03); live after the owner deploys |
 
 ## Next Action
 
-None planned. The project is in maintenance mode: the next step is whatever the owner reports (see [Maintenance](#maintenance)).
+- **Owner:** deploy FIX-1 with the deploy routine below, then check on the phone that opening the app and moving between tabs feel fast and every figure is unchanged.
+- Otherwise nothing planned: the next step is whatever the owner reports (see [Maintenance](#maintenance)).
 
 ## Maintenance
 
@@ -62,7 +64,7 @@ Since 2026-10-13 the owner uses the app every day. Active development is over.
 - App: `https://tubewell-hisab-rebuild.netlify.app/`, a separate Netlify project built from `rebuild/fresh-system` (build `pnpm run build`, publish `dist`, the two `VITE_*` variables; no secret keys).
 - Database: Supabase `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`), 7 migrations, RLS locked to the owner, sign-ups OFF. It holds the owner's REAL data: no names, amounts, row counts or backup content ever go into this public repo.
 - The old v1 app stays online and untouched at `https://tubewellhisab.netlify.app/` (its own Netlify project, `main` = `46e3872`, the old Supabase project).
-- Last verified code: `c3e08a5` (53 test files / 3,825 tests, tsc 0, eslint 0 warnings, build OK).
+- Last verified code: FIX-1 (2026-11-03): 56 test files / 3,858 tests, tsc 0, eslint 0 warnings, build OK. Not live until the owner deploys it.
 
 **Deploy routine** (Netlify Build status is STOPPED to save credits, so a push does not go live by itself)
 1. After the fix is pushed, the owner sets Build status to Active.
@@ -92,7 +94,9 @@ Since 2026-10-13 the owner uses the app every day. Active development is over.
 
 ## Open Questions (owner)
 
-None. The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
+- **Q-FIX1 (2026-11-03, not blocking):** a failed BACKGROUND refresh (FIX-1) shows the existing refresh-failed notice, whose text starts "Save ho gaya, ..." although nothing was saved in that case. Keep it, or give that case its own wording? Unchanged until the owner decides.
+
+The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
 
 Phase 2A and 2B raised notes for the owner's review, listed in their 2026-10-05 session entries. None of them blocks Phase 3.
 
@@ -106,7 +110,8 @@ Phase 3 raised spec gaps and engine choices for review (2026-10-06 session entry
 | Session started on `main` has no push gate | Low | Session Start Protocol step 1 (stop if on `main`) |
 | Calculation drift between screens | Medium | One engine, no page formulas, fixture tests E1–E24, Phase 9 verification |
 | Timezone month errors | Medium | One IST function; E20 boundary fixtures |
-| Silent row truncation (Supabase 1,000-row default) | Medium | Paginate every read in the data layer; Phase 9 >1,000-row test |
+| Silent row truncation (Supabase 1,000-row default) | Medium | Every read goes through `fetchAllRows` (FIX-1: exact count, parallel pages, count / duplicate checks); Phase 9 >1,000-row test |
+| A change made on another device is not on screen yet (FIX-1 cache) | Low | Revalidation on screen mount and when the tab shows again (cache older than 30 s), after saves and on retry; backup and restore verification always read the server ([docs/PERFORMANCE.md](docs/PERFORMANCE.md) section 6) |
 | Frequent pushes burn Netlify credits | Low | Build status Stopped; the owner deploys by hand (Maintenance routine); branch deploys and previews OFF if builds are ever Active |
 | A pushed fix is assumed live but was never deployed | Medium | Every fix summary says "not live until the owner deploys"; deploy routine in [Maintenance](#maintenance) |
 | A maintenance step writes to or wipes the owner's REAL data | Low | `CLAUDE.md` → Maintenance mode: no writes, wipes or restores by Claude; read-only SQL only on request |
@@ -549,7 +554,7 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Post-checks:** 0 / 0 / 0; migrations 7, policies 9, RLS on, `auth.users` 1, three audit triggers enabled, `restore_backup` present. Advisors unchanged: security WARN `authenticated_security_definer_function_executable` (restore_backup, intentional) and `auth_leaked_password_protection` (optional); performance INFO `unused_index` ×3 (re-check after real data).
 - **The app still never hard-deletes** (soft delete only); this was the one planned hard delete (D8). No code or schema change.
 
-### 2026-10-07 to 2026-10-13 — 10C and 10D (owner)
+### 2026-10-07 — 10C and 10D (owner)
 - **10C:** the owner entered his real data and compared the figures with his notebook. No real data is recorded in this repo.
 - **10D:** the owner deployed to a separate Netlify project (`tubewell-hisab-rebuild.netlify.app`, built from `rebuild/fresh-system`) and the smoke test passed: login, deep-link refresh, logout guard on a protected route, phone. Build status is set to Stopped.
 - No code, schema or `main` change.
@@ -558,6 +563,17 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Status:** all phases built and owner-approved; the owner uses the app daily. The workflow moves from active development to MAINTENANCE.
 - **Docs only:** this file, [tasks/todo.md](tasks/todo.md) (Maintenance section, Reported issues list), `CLAUDE.md` (Maintenance mode section, status and hosting lines), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) (section 0, live setup and deploy routine; sections 2, 3, 5, 6 updated), `README.md`, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (hosting and data lines), `tasks/lessons.md` (Netlify lesson). No code, config, schema or database change; no SQL.
 - **Preconditions:** tip `c3e08a5` = `origin/rebuild/fresh-system`, tree clean; `main` = `46e3872`.
+
+### 2026-11-03 — FIX-1: I-001 "slow everywhere" (performance, no figure changed)
+- **Report:** the owner (via the manager) found the live app slow to open, slow to show data and slow between sections. Logged as I-001 in [tasks/todo.md](tasks/todo.md).
+- **Preconditions:** branch `rebuild/fresh-system`, tip `1ccbb0b` = origin, tree clean; `main` = `46e3872`. No database access (no SQL, no reads): measurements used a mocked backend and fictional data only.
+- **Measured first** (`scripts/perf/`, Chromium over the DevTools protocol, 150 ms per mocked request, 4× CPU): the manager's diagnosis (a)–(c) confirmed; one more stage found (React's 300 ms Suspense reveal throttle delayed the page's data fetch). Before / after table: [docs/PERFORMANCE.md](docs/PERFORMANCE.md). Small data set: cold open 6 reads / 2 stages / 2,065 ms → 3 reads / 1 stage / ~1,170 ms; tab switch 6 blocking reads ~770 ms with a loading line → 0 reads, 20–77 ms, no loading line; a save 1 write + 2 reads → 1 write + 1 read.
+- **Changed:** new `src/data-store/` (shared stale-while-revalidate store, provider, memoized derivations); `src/hooks/useRowStore.ts` and the three hooks read it (public API unchanged); `src/lib/data/paging.ts` and the three list functions (one request up to 1,000 rows, exact count, parallel pages, count and duplicate checks); `src/startApp.tsx` (provider, idle prefetch), `src/main.tsx` + `src/pagePreload.ts` (the opened screen's chunk in parallel); pages use the memoized derivations (`useDerive`). `src/lib/ledger/` untouched; no schema, migration, dependency, `netlify.toml` or hook change.
+- **Existing tests changed** (internal behaviour that the step required): the 8 "saved but the reload failed" tests now expect the saved row on screen (a save patches the store with the server's row at once); the list-function, paging, backup-data and Phase 9 scale tests follow the new request shape (count on the first page, no empty-page request).
+- **Tests:** 56 files / 3,858 tests (+3 files: budgets, table store, derive); tsc 0; eslint 0 warnings; build OK. First load (shell + Dashboard) 186.1 → 188.4 kB gzip.
+- **Found, not changed:** `src/App.test.tsx` "a direct load of / shows its page" fails when that file runs ALONE (also on `1ccbb0b`): the first cold import of the Dashboard chunk can exceed the 1 s `findBy` default. It passes in the full suite.
+- **Commits:** `1319f3c` (code and tests), then this docs commit.
+- **Not live** until the owner deploys it (Maintenance → Deploy routine).
 
 ---
 
