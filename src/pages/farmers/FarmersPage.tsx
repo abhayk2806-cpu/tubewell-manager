@@ -123,9 +123,10 @@ export function FarmersPage() {
             {notice.text}
           </p>
         )}
-        {farmers.refreshFailed && farmers.status === 'ready' && (
+        {(farmers.refreshFailed || farmers.backgroundRefreshFailed) && farmers.status === 'ready' && (
           <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
-            <span>{FARMERS_COPY.refreshFailed}</span>
+            {/* After a save its own message wins; a failed background refresh never mentions saving. */}
+            <span>{farmers.refreshFailed ? FARMERS_COPY.refreshFailed : FARMERS_COPY.backgroundRefreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={() => void farmers.retryRefresh()}>
               {FARMERS_COPY.retry}
             </Button>

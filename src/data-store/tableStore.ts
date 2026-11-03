@@ -18,8 +18,10 @@ export interface TableSnapshot<R> {
   readonly status: LoadStatus;
   /** The error of a failed (initial or retried) full load. */
   readonly error: DataError | null;
-  /** A quiet reload (after a save, or a background revalidation) failed: the cached rows are still shown. */
+  /** The quiet reload after one of the app's own saves failed: the saved row and the other cached rows are still shown. */
   readonly refreshFailed: boolean;
+  /** A background revalidation (stale cache on mount, tab visible again) failed: the cached rows are still shown, maybe old. */
+  readonly backgroundRefreshFailed: boolean;
   readonly pending: Pending | null;
 }
 
@@ -44,7 +46,14 @@ export interface TableStore<R> {
 export const MAX_AGE_MS = 30_000;
 
 const BUSY = new DataError('unknown', 'busy', 'another change is still being saved');
-const INITIAL: TableSnapshot<never> = { rows: [], status: 'loading', error: null, refreshFailed: false, pending: null };
+const INITIAL: TableSnapshot<never> = { rows: [], status: 'loading', error: null, refreshFailed: false, backgroundRefreshFailed: false, pending: null };
+
+/**
+ * Why a load runs. full: the loading state, then the error state on failure. The others keep the rows
+ * on screen; on failure save sets refreshFailed, background sets backgroundRefreshFailed, and retry
+ * leaves both flags as they are. Any successful load clears both.
+ */
+type LoadMode = 'full' | 'save' | 'background' | 'retry';
 
 type Row = { readonly id: string };
 
@@ -85,7 +94,7 @@ export function createTableStore<R extends Row>(load: () => Promise<R[]>, clock:
 
   const isStale = () => loadedAt === null || clock() - loadedAt > MAX_AGE_MS;
 
-  const start = (mode: 'full' | 'quiet'): Promise<void> => {
+  const start = (mode: LoadMode): Promise<void> => {
     latest += 1;
     const mine = latest;
     if (mode === 'full') set({ status: 'loading' });
@@ -94,12 +103,13 @@ export function createTableStore<R extends Row>(load: () => Promise<R[]>, clock:
         (rows) => {
           if (mine !== latest) return;
           loadedAt = clock();
-          set({ rows: sameRows(snapshot.rows, rows) ? snapshot.rows : rows, status: 'ready', error: null, refreshFailed: false });
+          set({ rows: sameRows(snapshot.rows, rows) ? snapshot.rows : rows, status: 'ready', error: null, refreshFailed: false, backgroundRefreshFailed: false });
         },
         (caught: unknown) => {
           if (mine !== latest) return;
           if (mode === 'full') set({ status: 'error', error: toDataError(caught) });
-          else set({ refreshFailed: true });
+          else if (mode === 'save') set({ refreshFailed: true });
+          else if (mode === 'background') set({ backgroundRefreshFailed: true });
         },
       )
       .finally(() => {
@@ -110,7 +120,7 @@ export function createTableStore<R extends Row>(load: () => Promise<R[]>, clock:
   };
 
   const revalidateIfStale = () => {
-    if (inFlight === null && snapshot.status === 'ready' && isStale()) void start('quiet');
+    if (inFlight === null && snapshot.status === 'ready' && isStale()) void start('background');
   };
 
   return {
@@ -125,7 +135,7 @@ export function createTableStore<R extends Row>(load: () => Promise<R[]>, clock:
     },
     revalidateIfStale,
     reload: () => start('full'),
-    retryRefresh: () => start('quiet'),
+    retryRefresh: () => start('retry'),
     async run(kind, id, action) {
       if (writing) return { ok: false, error: BUSY };
       writing = true;
@@ -136,7 +146,7 @@ export function createTableStore<R extends Row>(load: () => Promise<R[]>, clock:
         if (mine === generation) {
           // Saved: a failing reload only sets refreshFailed, it never hides the list.
           set({ rows: withRow(snapshot.rows, row) });
-          void start('quiet');
+          void start('save');
         }
         return { ok: true, row };
       } catch (caught) {

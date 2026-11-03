@@ -12,6 +12,7 @@ export const DASHBOARD_COPY = {
   loadError: 'Dashboard load nahi ho paya.',
   retry: 'Dobara try karo',
   refreshFailed: 'Save ho gaya, par dashboard refresh nahi ho paya.',
+  backgroundRefreshFailed: 'Naya data abhi nahi aa paya. Dashboard par jo dikh raha hai wo purana ho sakta hai.',
   badData: 'Kuch data galat lag raha hai, isliye hisaab nahi dikha sakte. Kuch bhi apne aap theek nahi kiya gaya.',
   addUsage: 'Pani add',
   addPayment: 'Paisa add',

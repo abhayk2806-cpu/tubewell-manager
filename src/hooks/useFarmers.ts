@@ -27,6 +27,8 @@ export interface UseFarmers {
   readonly error: DataError | null;
   /** A change was saved, but the list could not be reloaded afterwards; the old list is still shown. */
   readonly refreshFailed: boolean;
+  /** A background revalidation failed: the list shown may be old (nothing was saved). */
+  readonly backgroundRefreshFailed: boolean;
   /** Every row (all three lists), for duplicate-name checks and names. */
   readonly all: readonly FarmerRow[];
   readonly lists: FarmerLists;
@@ -55,6 +57,7 @@ export function useFarmers(): UseFarmers {
     status: store.status,
     error: store.error,
     refreshFailed: store.refreshFailed,
+    backgroundRefreshFailed: store.backgroundRefreshFailed,
     all: store.rows,
     lists,
     pending: store.pending === null ? null : { kind: store.pending.kind, farmerId: store.pending.id },

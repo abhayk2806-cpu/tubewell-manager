@@ -59,7 +59,7 @@ describe('createTableStore', () => {
     expect(store.getSnapshot().rows).toEqual([{ id: 'a', v: 2 }]);
   });
 
-  it('a failed background revalidation keeps the cached rows and sets refreshFailed', async () => {
+  it('a failed background revalidation keeps the cached rows and sets backgroundRefreshFailed, never refreshFailed (FIX-1b)', async () => {
     const { store, load, tick } = setup();
     store.ensureFresh();
     await flush();
@@ -68,10 +68,59 @@ describe('createTableStore', () => {
     load.mockRejectedValueOnce(new DataError('network', null, 'offline'));
     store.revalidateIfStale();
     await flush();
-    expect(store.getSnapshot()).toMatchObject({ status: 'ready', refreshFailed: true, error: null });
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', refreshFailed: false, backgroundRefreshFailed: true, error: null });
     expect(store.getSnapshot().rows).toBe(rows);
+    // A failed retry keeps the flag (the rows stay); a successful one clears it.
+    load.mockRejectedValueOnce(new DataError('network', null, 'still offline'));
     await store.retryRefresh();
-    expect(store.getSnapshot().refreshFailed).toBe(false);
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', refreshFailed: false, backgroundRefreshFailed: true });
+    await store.retryRefresh();
+    expect(store.getSnapshot()).toMatchObject({ refreshFailed: false, backgroundRefreshFailed: false });
+  });
+
+  it('a failed reload after a save sets refreshFailed only (FIX-1b)', async () => {
+    const { store, load } = setup();
+    store.ensureFresh();
+    await flush();
+    load.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    await store.run('create', null, () => Promise.resolve({ id: 'b', v: 2 }));
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', refreshFailed: true, backgroundRefreshFailed: false });
+    expect(store.getSnapshot().rows.map((r) => r.id)).toEqual(['a', 'b']);
+  });
+
+  it('both failures: both flags stay set, a background failure never clears the save flag; one success clears both (FIX-1b)', async () => {
+    const { store, load, tick } = setup();
+    store.ensureFresh();
+    await flush();
+    load.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    await store.run('create', null, () => Promise.resolve({ id: 'b', v: 2 }));
+    await flush();
+    tick(MAX_AGE_MS + 1);
+    load.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    store.revalidateIfStale();
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ refreshFailed: true, backgroundRefreshFailed: true });
+    load.mockResolvedValueOnce([
+      { id: 'a', v: 1 },
+      { id: 'b', v: 2 },
+    ]);
+    await store.retryRefresh();
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', refreshFailed: false, backgroundRefreshFailed: false });
+  });
+
+  it('a successful background revalidation clears an earlier save flag too (FIX-1b)', async () => {
+    const { store, load, tick } = setup();
+    store.ensureFresh();
+    await flush();
+    load.mockRejectedValueOnce(new DataError('network', null, 'offline'));
+    await store.run('create', null, () => Promise.resolve({ id: 'b', v: 2 }));
+    await flush();
+    expect(store.getSnapshot().refreshFailed).toBe(true);
+    tick(MAX_AGE_MS + 1);
+    store.revalidateIfStale();
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ refreshFailed: false, backgroundRefreshFailed: false });
   });
 
   it('a failed first load shows the error state; the next mount retries it', async () => {

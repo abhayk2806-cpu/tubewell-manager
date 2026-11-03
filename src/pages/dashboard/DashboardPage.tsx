@@ -75,8 +75,8 @@ export function DashboardPage() {
     if (payments.status === 'error') void payments.reload();
   };
   const retryRefresh = () => {
-    if (usage.refreshFailed) void usage.retryRefresh();
-    if (payments.refreshFailed) void payments.retryRefresh();
+    if (usage.refreshFailed || usage.backgroundRefreshFailed) void usage.retryRefresh();
+    if (payments.refreshFailed || payments.backgroundRefreshFailed) void payments.retryRefresh();
   };
   const open = (kind: 'usage' | 'payment', farmerId?: string) => {
     setNotice(null);
@@ -106,9 +106,10 @@ export function DashboardPage() {
       )}
       <div aria-live="polite" role="status">
         {notice && <p className={cn('rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.success].notice)}>{notice}</p>}
-        {(usage.refreshFailed || payments.refreshFailed) && (
+        {(usage.refreshFailed || payments.refreshFailed || usage.backgroundRefreshFailed || payments.backgroundRefreshFailed) && (
           <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
-            <span>{DASHBOARD_COPY.refreshFailed}</span>
+            {/* After a save its own message wins; a failed background refresh never mentions saving. */}
+            <span>{usage.refreshFailed || payments.refreshFailed ? DASHBOARD_COPY.refreshFailed : DASHBOARD_COPY.backgroundRefreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={retryRefresh}>
               {DASHBOARD_COPY.retry}
             </Button>

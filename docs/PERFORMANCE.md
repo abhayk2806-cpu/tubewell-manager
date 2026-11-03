@@ -87,7 +87,7 @@ node scripts/perf/derive-cpu.mjs
 ## 6. Known limits and what was not measured
 
 - **Two devices.** A change made on another phone shows after the next revalidation: a screen mount or the tab becoming visible, once the cache is older than 30 s, or after a save or a retry. A screen kept open and visible does not poll.
-- **Background failure notice.** A failed background revalidation uses the existing refresh-failed notice, whose copy starts "Save ho gaya, ..." although nothing was saved in that case (open question for the owner, not changed).
+- **Two failure flags (FIX-1b).** A failed reload after a save sets `refreshFailed` ("Save ho gaya, par ... refresh nahi ho payi/paya."); a failed background revalidation sets `backgroundRefreshFailed` ("Naya data abhi nahi aa paya. Jo ... dikh raha/rahi hai wo purana/purani ho sakta/sakti hai.", never a word about saving). The cached rows stay; the save message wins when both are set; any successful reload clears both; the retry reloads quietly.
 - **Not measured:** the owner's real phone (CPU, browser, network), the real Supabase server time per request, the real round-trip time from the owner's location to `ap-south-1`, whether preflights are cached by the browser, and a token refresh at start-up (excluded by design). The mock's fixed 150 ms per request stands in for all of these.
 - **Large tables** (> 1,000 rows) still need one more request per extra 1,000 rows, in parallel after the counted first page.
 - **First visit after a data change** on a big data set still computes the derivations once (the Dashboard is the heaviest; the ledger engine was not touched).

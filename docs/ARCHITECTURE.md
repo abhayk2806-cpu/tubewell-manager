@@ -192,7 +192,7 @@ Why: until FIX-1 every page called `useFarmers`, `useUsage` and `usePayments`, a
 **Table store** (`src/data-store/tableStore.ts`), stale-while-revalidate:
 - First load: `status: 'loading'`, then `'ready'` or `'error'` (as before).
 - After that a screen ALWAYS renders the cached rows at once, with no loading state. A quiet background revalidation runs only when the rows are older than `MAX_AGE_MS` (30 s): when a screen mounts (`ensureFresh`), and when the tab becomes visible again (the provider's `visibilitychange` listener). Concurrent requests for the same table share one load.
-- A failed background revalidation keeps the cached rows and sets `refreshFailed` (the existing refresh-failed notice and its retry).
+- A failed background revalidation keeps the cached rows and sets `backgroundRefreshFailed` ("Naya data abhi nahi aa paya ..." notice, same retry); only a failed reload after a save sets `refreshFailed` ("Save ho gaya, par ..."), and that message wins when both are set. Any successful load clears both (FIX-1b).
 - Saves (`run`): one write at a time per table (a second is refused as `busy`, as before). On success the row the server returned is put into the rows at once (replaced by id, or inserted in id order), `pending` clears, and the table reloads quietly once to reconcile. A failing reconcile only sets `refreshFailed`. A failed write changes nothing.
 - Only the newest load may change the rows (an older answer arriving late is dropped). A revalidation that returns the same rows keeps the same array, so nothing downstream recomputes.
 - `clear()` (sign-out) forgets the rows and drops loads in flight.

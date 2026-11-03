@@ -19,6 +19,8 @@ export interface UsePayments {
   readonly error: DataError | null;
   /** A change was saved, but the list could not be reloaded afterwards; the old list is still shown. */
   readonly refreshFailed: boolean;
+  /** A background revalidation failed: the list shown may be old (nothing was saved). */
+  readonly backgroundRefreshFailed: boolean;
   /** Every row (live and deleted), for the preview, duplicate warnings and the month list. */
   readonly all: readonly PaymentRow[];
   /** Not deleted, newest first. */
@@ -48,6 +50,7 @@ export function usePayments(): UsePayments {
     status: store.status,
     error: store.error,
     refreshFailed: store.refreshFailed,
+    backgroundRefreshFailed: store.backgroundRefreshFailed,
     all: store.rows,
     live: lists.live,
     deleted: lists.deleted,

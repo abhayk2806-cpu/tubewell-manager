@@ -13,6 +13,7 @@ export const PROFILE_COPY = {
   loadError: 'Hisaab load nahi ho paya.',
   retry: 'Dobara try karo',
   refreshFailed: 'Save ho gaya, par hisaab refresh nahi ho paya.',
+  backgroundRefreshFailed: 'Naya data abhi nahi aa paya. Jo hisaab dikh raha hai wo purana ho sakta hai.',
   notFound: 'Kisan nahi mila.',
   notFoundHint: 'Yeh kisan list mein nahi hai (shayad delete ho gaya hai).',
   badData: 'Is kisan ke data mein kuch gadbad lag rahi hai, isliye hisaab nahi dikha sakte. Kuch bhi apne aap theek nahi kiya gaya.',

@@ -64,7 +64,7 @@ Since 2026-10-13 the owner uses the app every day. Active development is over.
 - App: `https://tubewell-hisab-rebuild.netlify.app/`, a separate Netlify project built from `rebuild/fresh-system` (build `pnpm run build`, publish `dist`, the two `VITE_*` variables; no secret keys).
 - Database: Supabase `tubewell-hisab` (`ciszgagzhfubuqhpmyeh`), 7 migrations, RLS locked to the owner, sign-ups OFF. It holds the owner's REAL data: no names, amounts, row counts or backup content ever go into this public repo.
 - The old v1 app stays online and untouched at `https://tubewellhisab.netlify.app/` (its own Netlify project, `main` = `46e3872`, the old Supabase project).
-- Last verified code: FIX-1 (2026-11-03): 56 test files / 3,858 tests, tsc 0, eslint 0 warnings, build OK. Not live until the owner deploys it.
+- Last verified code: FIX-1b (2026-11-03): 56 test files / 3,868 tests, tsc 0, eslint 0 warnings, build OK. Not live until the owner deploys it (FIX-1 and FIX-1b go live together).
 
 **Deploy routine** (Netlify Build status is STOPPED to save credits, so a push does not go live by itself)
 1. After the fix is pushed, the owner sets Build status to Active.
@@ -94,7 +94,7 @@ Since 2026-10-13 the owner uses the app every day. Active development is over.
 
 ## Open Questions (owner)
 
-- **Q-FIX1 (2026-11-03, not blocking):** a failed BACKGROUND refresh (FIX-1) shows the existing refresh-failed notice, whose text starts "Save ho gaya, ..." although nothing was saved in that case. Keep it, or give that case its own wording? Unchanged until the owner decides.
+- ~~**Q-FIX1 (2026-11-03):** a failed BACKGROUND refresh showed the "Save ho gaya, ..." notice.~~ Resolved in FIX-1b (2026-11-03): it now has its own wording.
 
 The 8 questions from Phase 1 were answered on 2026-10-05 (Decisions Log, D1–D8).
 
@@ -574,6 +574,14 @@ Numbered as in the Phase 3 prompt; there is no D17. Details: [docs/ARCHITECTURE.
 - **Found, not changed:** `src/App.test.tsx` "a direct load of / shows its page" fails when that file runs ALONE (also on `1ccbb0b`): the first cold import of the Dashboard chunk can exceed the 1 s `findBy` default. It passes in the full suite.
 - **Commits:** `1319f3c` (code and tests), then this docs commit.
 - **Not live** until the owner deploys it (Maintenance → Deploy routine).
+
+### 2026-11-03 — FIX-1b: I-001 follow-up, a failed background refresh no longer says "Save ho gaya"
+- **Bug:** after FIX-1 a failed background revalidation (stale cache on a screen mount, or the tab visible again) set the same `refreshFailed` flag as a failed reload after a save, so the screens said "Save ho gaya, par ... refresh nahi ho payi." although nothing was saved.
+- **Fix:** the table store records why a quiet reload ran (`save` / `background` / `retry`). Only a save sets `refreshFailed` (copy unchanged); a background failure sets the new `backgroundRefreshFailed`; a failed retry leaves both as they are; any successful load clears both. The three hooks expose the new flag. Pani, Paisa, Kisan, Kisan ka Hisaab and Dashboard show one notice per screen with the same tables as before (list pages: their own table; Dashboard and profile: usage and payments); the save message wins when both are set; the retry still reloads quietly. Mahine had no refresh notice and still has none.
+- **New copy:** lists "Naya data abhi nahi aa paya. Jo list dikh rahi hai wo purani ho sakti hai."; profile "... Jo hisaab dikh raha hai wo purana ho sakta hai."; Dashboard "... Dashboard par jo dikh raha hai wo purana ho sakta hai."
+- **Tests:** 56 files / 3,868 tests (+10: 3 store cases and 7 app-level cases on the real tree, every screen, the visibility path, retry, save wins). One FIX-1 store test changed: it asserted the old shared flag. Mutation check: with the old behaviour 8 tests fail. Request counts unchanged; first load 188.4 → 188.6 kB gzip.
+- One line in `docs/ARCHITECTURE.md` (data-flow section) corrected to match the code.
+- **Not live** until the owner deploys it.
 
 ---
 

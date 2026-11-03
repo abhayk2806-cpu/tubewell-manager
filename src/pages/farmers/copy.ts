@@ -16,6 +16,7 @@ export const FARMERS_COPY = {
   loadError: 'Kisan ki list load nahi ho payi.',
   retry: 'Dobara try karo',
   refreshFailed: 'Save ho gaya, par list refresh nahi ho payi.',
+  backgroundRefreshFailed: 'Naya data abhi nahi aa paya. Jo list dikh rahi hai wo purani ho sakti hai.',
   empty: {
     active: "Abhi koi chalu kisan nahi hai. 'Naya Kisan' dabao.",
     disabled: 'Koi band kisan nahi hai.',

@@ -15,8 +15,10 @@ export interface RowStore<R, K extends string> {
   readonly status: LoadStatus;
   /** The error of a failed (initial or retried) load. */
   readonly error: DataError | null;
-  /** A quiet reload (after a save, or in the background) failed: the previous rows are still shown. */
+  /** The quiet reload after a save failed: the rows (with the saved one) are still shown. */
   readonly refreshFailed: boolean;
+  /** A background revalidation failed: the cached rows are still shown and may be old. */
+  readonly backgroundRefreshFailed: boolean;
   readonly pending: Pending<K> | null;
   /** Full reload: shows the loading state, and the error state if it fails. */
   reload(): Promise<void>;
@@ -42,6 +44,7 @@ export function useRowStore<R, K extends string>(store: TableStore<R>): RowStore
     status: snapshot.status,
     error: snapshot.error,
     refreshFailed: snapshot.refreshFailed,
+    backgroundRefreshFailed: snapshot.backgroundRefreshFailed,
     pending: snapshot.pending as Pending<K> | null,
     reload: store.reload,
     retryRefresh: store.retryRefresh,

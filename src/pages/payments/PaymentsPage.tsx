@@ -132,9 +132,10 @@ export function PaymentsPage() {
             {notice.text}
           </p>
         )}
-        {payments.refreshFailed && status === 'ready' && (
+        {(payments.refreshFailed || payments.backgroundRefreshFailed) && status === 'ready' && (
           <div className={cn('mt-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm', TONE[NOTICE_TONE.refreshFailed].notice)}>
-            <span>{PAYMENTS_COPY.refreshFailed}</span>
+            {/* After a save its own message wins; a failed background refresh never mentions saving. */}
+            <span>{payments.refreshFailed ? PAYMENTS_COPY.refreshFailed : PAYMENTS_COPY.backgroundRefreshFailed}</span>
             <Button variant="outline" className="h-11" disabled={busy} onClick={() => void payments.retryRefresh()}>
               {PAYMENTS_COPY.retry}
             </Button>

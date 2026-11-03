@@ -94,7 +94,7 @@ Format: `ID | date | what the owner saw | status | fix commit` (no real names or
 
 | ID | Date | What the owner saw | Status | Fix commit |
 |---|---|---|---|---|
-| I-001 | 2026-11-03 | The app is slow everywhere: slow to open, slow to show data, slow between sections | Fixed in the repo (FIX-1: shared data store, one-request paging, parallel start-up, memoized derivations; numbers in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md)); **live after the owner deploys** | `1319f3c` (code), docs in the next commit |
+| I-001 | 2026-11-03 | The app is slow everywhere: slow to open, slow to show data, slow between sections | Fixed in the repo (FIX-1: shared data store, one-request paging, parallel start-up, memoized derivations; numbers in [docs/PERFORMANCE.md](../docs/PERFORMANCE.md)). FIX-1b: a failed background refresh shows its own "Naya data abhi nahi aa paya" notice instead of "Save ho gaya". **Live after the owner deploys** | FIX-1 `1319f3c` + `0a25d9d` (docs); FIX-1b: see `git log --grep FIX-1b` |
 
 ### Open / optional items
 

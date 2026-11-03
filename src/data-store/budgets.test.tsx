@@ -16,6 +16,8 @@ const server = vi.hoisted(() => ({
   /** While true, reads wait until release() (to see what is asked before anything answers). */
   hold: false,
   waiting: [] as (() => void)[],
+  /** Reads that fail like a lost connection, counted down (FIX-1b). */
+  failReads: 0,
 }));
 
 vi.mock('@/lib/supabase', () => {
@@ -50,7 +52,10 @@ vi.mock('@/lib/supabase', () => {
         const call: Call = { table, op: state.insert === null ? 'read' : 'insert', count: state.count, from: state.from, to: state.to };
         server.calls.push(call);
         const ready = server.hold && call.op === 'read' ? new Promise<void>((r) => server.waiting.push(r)) : Promise.resolve();
-        return ready.then(() => answer(table, call, state.insert)).then(onFulfilled, onRejected);
+        const failed = call.op === 'read' && server.failReads > 0;
+        if (failed) server.failReads -= 1;
+        const result = () => (failed ? { data: null, error: { message: 'Failed to fetch' }, status: 0 } : answer(table, call, state.insert));
+        return ready.then(result).then(onFulfilled, onRejected);
       },
     };
     return query;
@@ -121,6 +126,7 @@ beforeEach(async () => {
   server.calls = [];
   server.hold = false;
   server.waiting = [];
+  server.failReads = 0;
   browser.downloads = [];
   offset = 0;
   const real = performance.now.bind(performance);
@@ -133,6 +139,7 @@ beforeEach(async () => {
     import('@/pages/farmers/FarmersPage'),
     import('@/pages/months/MonthsPage'),
     import('@/pages/backup/BackupPage'),
+    import('@/pages/farmers/FarmerProfilePage'),
   ]);
 });
 
@@ -265,5 +272,97 @@ describe('budget: sign-out clears the store', () => {
     expect(screen.queryByTestId('dash-charges')).not.toBeInTheDocument();
     act(release);
     await screen.findByTestId('dash-charges', {}, { timeout: 5000 });
+  });
+});
+
+// FIX-1b: a failed BACKGROUND refresh tells the owner the figures may be old; it never says "Save ho gaya".
+describe('notice: a failed background refresh is not a failed save', () => {
+  const LIST = 'Naya data abhi nahi aa paya. Jo list dikh rahi hai wo purani ho sakti hai.';
+  const PROFILE = 'Naya data abhi nahi aa paya. Jo hisaab dikh raha hai wo purana ho sakta hai.';
+  const DASHBOARD = 'Naya data abhi nahi aa paya. Dashboard par jo dikh raha hai wo purana ho sakta hai.';
+
+  /** The stale-cache revalidation on the next screen mount fails like a weak network. */
+  function goStaleAndOffline() {
+    offset += MAX_AGE_MS + 1000;
+    server.failReads = Number.POSITIVE_INFINITY;
+  }
+
+  async function expectBackgroundNotice(text: string) {
+    const notice = await screen.findByText(text);
+    expect(screen.queryByText(/Save ho gaya/)).not.toBeInTheDocument();
+    // Retry: the connection is back, the quiet reload clears the notice.
+    server.failReads = 0;
+    fireEvent.click(within(notice.parentElement as HTMLElement).getByRole('button', { name: 'Dobara try karo' }));
+    await waitFor(() => expect(screen.queryByText(text)).not.toBeInTheDocument());
+  }
+
+  it.each([
+    ['Pani', 'Pani Entry'],
+    ['Paisa', 'Paisa'],
+    ['Kisan', 'Kisan'],
+  ] as const)('%s: the cached list stays, with the "may be old" line and a working retry', async (label, title) => {
+    await coldOpen();
+    goStaleAndOffline();
+    nav(label);
+    await screen.findByRole('heading', { level: 1, name: title });
+    await screen.findByText(LIST);
+    // The cached rows are still on screen (a farmer name from the cache).
+    expect(screen.getAllByText(/Asha Test/).length).toBeGreaterThan(0);
+    await expectBackgroundNotice(LIST);
+  });
+
+  it('Dashboard: the cached figures stay, with the dashboard "may be old" line', async () => {
+    await coldOpen();
+    nav('Pani');
+    await screen.findByRole('heading', { level: 1, name: 'Pani Entry' });
+    goStaleAndOffline();
+    nav('Dashboard');
+    await screen.findByText(DASHBOARD);
+    expect(screen.getByTestId('dash-charges')).toBeInTheDocument();
+    await expectBackgroundNotice(DASHBOARD);
+  });
+
+  it('Kisan ka Hisaab: the cached hisaab stays, with the hisaab "may be old" line', async () => {
+    await coldOpen();
+    nav('Kisan');
+    await screen.findByRole('heading', { level: 1, name: 'Kisan' });
+    goStaleAndOffline();
+    fireEvent.click(screen.getByRole('link', { name: 'Asha Test ka hisaab kholo' }));
+    await screen.findByText(PROFILE);
+    expect(screen.getByTestId('total-charges')).toBeInTheDocument();
+    await expectBackgroundNotice(PROFILE);
+  });
+
+  it('the tab becoming visible again with a stale cache: same notice when the refresh fails', async () => {
+    await coldOpen();
+    goStaleAndOffline();
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await screen.findByText(DASHBOARD);
+    expect(screen.queryByText(/Save ho gaya/)).not.toBeInTheDocument();
+  });
+
+  it('a failed reload after a save keeps the save message, also when a background refresh fails after it', async () => {
+    await coldOpen();
+    nav('Pani');
+    await screen.findByRole('heading', { level: 1, name: 'Pani Entry' });
+    fireEvent.click(screen.getByRole('button', { name: 'Naya Pani Entry' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Kisan'), { target: { value: FARMER_A } });
+    fireEvent.change(within(dialog).getByLabelText('Ghante'), { target: { value: '1' } });
+    server.failReads = 1;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save karo' }));
+    await screen.findByText('Save ho gaya, par list refresh nahi ho payi.');
+    // Away and back with a stale cache while still offline: the save message stays, it is not replaced.
+    nav('Paisa');
+    await screen.findByRole('heading', { level: 1, name: 'Paisa' });
+    goStaleAndOffline();
+    nav('Pani');
+    await screen.findByRole('heading', { level: 1, name: 'Pani Entry' });
+    await waitFor(() => expect(server.calls.filter((c) => c.table === 'usage_entries' && c.op === 'read').length).toBeGreaterThanOrEqual(3));
+    expect(screen.getByText('Save ho gaya, par list refresh nahi ho payi.')).toBeInTheDocument();
+    expect(screen.queryByText(LIST)).not.toBeInTheDocument();
   });
 });

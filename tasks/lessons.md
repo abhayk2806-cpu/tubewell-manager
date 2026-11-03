@@ -170,6 +170,11 @@ Format: **Title** · Mistake · Rule · Impact · Date.
 - Rule: measure first (`scripts/perf/run.mjs`, fixed delay per mocked request, CPU throttling) and count requests and sequential stages, not only bytes. Data shared by several screens lives in ONE store (`src/data-store/`); a list read asks for an exact count instead of an extra empty page; start data loads where the session appears, not in a lazy page. Budgets are tests (`src/data-store/budgets.test.tsx`).
 - Impact: high (the owner felt it on every tap). Date: 2026-11-03.
 
+**One status flag, one cause (FIX-1b)**
+- Mistake: FIX-1 let a new cause (a failed background revalidation) set the existing `refreshFailed` flag, whose copy says "Save ho gaya, ...". The owner would have read a false message on every weak connection.
+- Rule: before reusing a state flag for a new situation, read the copy every screen shows for it. A different cause gets its own flag and its own words.
+- Impact: medium. Date: 2026-11-03.
+
 **A test that needs the Playwright browser does not need the Playwright package**
 - Finding (FIX-1): only Playwright's Chromium binaries are installed; adding the npm package would be a new dependency. Node 24 can drive Chromium over `--remote-debugging-pipe`; the WebSocket endpoint dropped Node's built-in WebSocket, and the sandboxed renderer crashed on this machine (`--no-sandbox` for the local measurement only).
 - Rule: reuse `scripts/perf/cdp.mjs`; keep every measurement on a mocked origin with a guard that aborts on a real `*.supabase.co` URL.

@@ -23,6 +23,7 @@ export const USAGE_COPY = {
   badData: 'Ek entry ka data theek nahi hai, isliye rakam nahi dikha sakte. Dobara load karke dekho.',
   retry: 'Dobara try karo',
   refreshFailed: 'Save ho gaya, par list refresh nahi ho payi.',
+  backgroundRefreshFailed: 'Naya data abhi nahi aa paya. Jo list dikh rahi hai wo purani ho sakti hai.',
   empty: {
     live: "Abhi koi pani entry nahi hai. 'Naya Pani Entry' dabao.",
     deleted: 'Koi deleted entry nahi hai.',

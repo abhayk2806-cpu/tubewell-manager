@@ -22,6 +22,7 @@ export const PAYMENTS_COPY = {
   loadError: 'Payments load nahi ho paye.',
   retry: 'Dobara try karo',
   refreshFailed: 'Save ho gaya, par list refresh nahi ho payi.',
+  backgroundRefreshFailed: 'Naya data abhi nahi aa paya. Jo list dikh rahi hai wo purani ho sakti hai.',
   empty: {
     live: "Abhi koi payment nahi hai. 'Naya Payment' dabao.",
     deleted: 'Koi deleted payment nahi hai.',
